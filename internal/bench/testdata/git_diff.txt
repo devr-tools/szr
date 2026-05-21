@@ -1,0 +1,28 @@
+diff --git a/cmd/szr/main.go b/cmd/szr/main.go
+index 51b3fc1..0d91a6f 100644
+--- a/cmd/szr/main.go
++++ b/cmd/szr/main.go
+@@ -1,7 +1,7 @@
+-package main
++package main
+ import "os"
+-func main() { runLegacy() }
++func main() { runBinary() }
+diff --git a/internal/engine/engine.go b/internal/engine/engine.go
+index 1f4a123..8d20ab1 100644
+--- a/internal/engine/engine.go
++++ b/internal/engine/engine.go
+@@ -18,6 +18,12 @@ type Engine struct {
+ 	profiles []Profile
+ }
++func (e *Engine) Bench() string {
++	return "bench"
++}
++
+ func (e *Engine) Execute() error {
+-	return nil
++	return run()
+ }
+ cmd/szr/main.go         |  6 +++---
+ internal/engine/engine.go | 11 +++++++++--
+ 2 files changed, 13 insertions(+), 4 deletions(-)

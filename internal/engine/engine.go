@@ -22,7 +22,7 @@ func New(cfg config.Config, paths config.Paths, store *history.Store, profiles [
 		config:   cfg,
 		paths:    paths,
 		history:  store,
-		profiles: profiles,
+		profiles: mergeProfiles(compileRuleProfiles(cfg), profiles),
 	}
 }
 

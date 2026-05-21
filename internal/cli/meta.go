@@ -74,6 +74,9 @@ func (a *App) runDoctor() int {
 	fmt.Printf("config: %s\n", a.paths.ConfigFile)
 	fmt.Printf("history: %s\n", a.paths.HistoryFile)
 	fmt.Printf("tee dir: %s\n", a.paths.TeeDir)
+	if a.paths.ProjectRuleFile != "" {
+		fmt.Printf("project rules: %s\n", a.paths.ProjectRuleFile)
+	}
 	for _, tool := range []string{"git", "go", "rg"} {
 		path, err := exec.LookPath(tool)
 		if err != nil {

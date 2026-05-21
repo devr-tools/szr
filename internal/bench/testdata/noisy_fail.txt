@@ -1,0 +1,27 @@
+> web:test
+> vitest run --reporter=verbose
+
+ RUN  v2.1.0 /workspace/web
+stdout | src/components/button.test.tsx > Button > renders primary state
+render start
+render finish
+stdout | src/components/modal.test.tsx > Modal > traps focus
+render start
+render finish
+ PASS  src/components/modal.test.tsx > Modal > traps focus
+ PASS  src/components/input.test.tsx > Input > keeps placeholder
+stdout | src/components/button.test.tsx > Button > renders primary state
+clicking button
+waiting for icon
+ FAIL  src/components/button.test.tsx > Button > renders primary state
+Error: expected primary button to be visible
+  at src/components/button.test.tsx:48:19
+  at processTicksAndRejections (node:internal/process/task_queues:95:5)
+stderr | src/components/button.test.tsx > Button > renders primary state
+Warning: received empty label from fixture
+ FAIL  src/components/card.test.tsx > Card > preserves spacing
+Error: snapshot mismatch for compact card spacing
+  at src/components/card.test.tsx:88:11
+Test Files  2 failed | 2 passed (4)
+     Tests  2 failed | 6 passed (8)
+error Command failed with exit code 1.

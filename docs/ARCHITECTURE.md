@@ -16,12 +16,15 @@
 pkg/szr
 cmd/szr
 cmd/szr-dev
+internal/bench
 internal/cli
 internal/config
 internal/engine
 internal/filters
 internal/history
+internal/installers
 internal/profiles
+internal/rules
 internal/szrdev
 ```
 
@@ -35,6 +38,7 @@ internal/szrdev
 6. The command runs and the selected renderer compresses the output.
 7. A local history record is appended for `szr spread`.
 8. On failures, raw output can be tee'd into the local data directory.
+9. Installer and benchmark commands reuse dedicated internal packages instead of embedding that logic in the core router.
 
 ## Built-in profile strategy
 
@@ -42,6 +46,8 @@ internal/szrdev
 - `git log`: prefer `--oneline -n 20` and keep a short commit preview.
 - `git diff`: prefer `--stat` and summarize file churn.
 - `go test`: force `-json` and collapse pass noise into package and failure summaries.
+- `npm test` / `pnpm test` / `yarn test`: inspect `package.json`, detect `jest` or `vitest`, and forward structured reporter flags.
+- `vitest` / `jest`: prefer JSON-capable output and summarize failing suites, assertions, and file paths.
 - `go build` / `go vet`: bias toward compiler diagnostics.
 - Generic test and summary wrappers: provide fallback compaction for unstructured tools.
 
@@ -52,12 +58,14 @@ internal/szrdev
 - The analytics store is deliberately simple JSONL first; it can be swapped for SQLite later without changing the CLI surface.
 - `szr explain` makes the filter decision visible, which is useful when the registry grows.
 - `pkg/szr` keeps the public embedding surface explicit, while `internal/szrdev` contains developer-only launcher wiring.
+- Project-local `.szr.json` rules compile into the same profile model, so local overrides stay deterministic and inspectable.
+- The benchmark harness lives beside embedded fixtures, which keeps compression measurements reproducible without polluting the core execution path.
 
 ## Next steps
 
-- Add package-manager aware JS/TS profiles.
-- Add hook and instruction installers for Codex, Claude Code, Cursor, and Gemini.
-- Add a custom rule DSL so users can define project-local profiles.
-- Add benchmark fixtures to measure compression quality and latency.
+- Add more semantic profiles for Python, Rust, Docker, Kubernetes, and GitHub CLI workflows.
+- Expand `szr bench` into a richer comparison surface with per-profile aggregates and failure indicators.
+- Grow the rule DSL carefully without turning local config into a second monolithic router.
+- Add editor- and agent-specific install refinements on top of the current repo-local bootstrap flow.
 
 The broader product plan now lives in [ROADMAP.md](/Users/alex/Documents/GitHub/szr/docs/ROADMAP.md).

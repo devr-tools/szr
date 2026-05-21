@@ -9,8 +9,8 @@ import (
 
 func TestBuiltInProfiles(t *testing.T) {
 	list := profiles.Builtins(3)
-	if len(list) != 7 {
-		t.Fatalf("expected 7 profiles, got %d", len(list))
+	if len(list) != 10 {
+		t.Fatalf("expected 10 profiles, got %d", len(list))
 	}
 
 	find := func(name string) engine.Profile {

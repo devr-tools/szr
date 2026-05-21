@@ -1,0 +1,4 @@
+# szr/internal/engine
+internal/engine/runner.go:18:2: error: undefined: missingSymbol
+internal/engine/runner.go:29:14: error: cannot use profile.Render(inv, exec) (value of type string) as []byte value in assignment
+warning: deprecated helper benchmarkHarness will be removed

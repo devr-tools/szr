@@ -15,7 +15,7 @@ help:
 		'make cover-func - print per-function coverage' \
 		'make cover-html - render HTML coverage report' \
 		'make build      - build ./bin/szr and ./bin/szr-dev' \
-		'make smoke      - run quick local CLI smoke checks for szr and szr-dev' \
+		'make smoke      - run quick local CLI smoke checks for szr and szr-dev, including bench/install flows' \
 		'make prepush    - fmt + test + cover + smoke' \
 		'make clean      - remove local build and coverage artifacts'
 
@@ -49,6 +49,8 @@ smoke:
 	env HOME=$(SMOKE_HOME) GOCACHE=$(GOCACHE) $(GO) run ./cmd/szr --help >/dev/null
 	env HOME=$(SMOKE_HOME) GOCACHE=$(GOCACHE) $(GO) run ./cmd/szr profiles >/dev/null
 	env HOME=$(SMOKE_HOME) GOCACHE=$(GOCACHE) $(GO) run ./cmd/szr explain git status >/dev/null
+	env HOME=$(SMOKE_HOME) GOCACHE=$(GOCACHE) $(GO) run ./cmd/szr bench clean-pass >/dev/null
+	env HOME=$(SMOKE_HOME) GOCACHE=$(GOCACHE) $(GO) run ./cmd/szr install codex --print >/dev/null
 	env HOME=$(SMOKE_HOME) GOCACHE=$(GOCACHE) $(GO) run ./cmd/szr-dev --version >/dev/null
 
 prepush: fmt test cover smoke

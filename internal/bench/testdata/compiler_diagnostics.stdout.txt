@@ -1,0 +1,4 @@
+go: downloading github.com/example/ansi v1.4.0
+go: downloading golang.org/x/tools v0.25.0
+go: found github.com/example/ansi in github.com/example/ansi v1.4.0
+build cache warmup complete

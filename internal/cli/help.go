@@ -8,6 +8,8 @@ func (a *App) printHelp() {
 Usage:
   szr git status
   szr go test ./...
+  szr install codex
+  szr bench
   szr grep "pattern" .
   szr read file.go --level aggressive
   szr spread --history
@@ -16,6 +18,6 @@ Usage:
 Core commands:
   git, go, run, test, summary, proxy, explain
   ls, read, grep, json, log
-  spread, profiles, doctor
+  spread, profiles, doctor, install, bench
 ` + "\n")
 }

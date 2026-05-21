@@ -81,6 +81,10 @@ func (a *App) Run(ctx context.Context, args []string) int {
 		return a.runProfiles()
 	case "doctor":
 		return a.runDoctor()
+	case "install":
+		return a.runInstall(rest[1:])
+	case "bench":
+		return a.runBench(rest[1:])
 	case "proxy":
 		return a.runExternal(ctx, flags, "proxy", rest[1:], true)
 	case "run":

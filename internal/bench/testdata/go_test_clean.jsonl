@@ -1,0 +1,18 @@
+{"Time":"2026-05-20T21:00:00Z","Action":"run","Package":"szr/internal/filters","Test":"TestCompactLines"}
+{"Time":"2026-05-20T21:00:00Z","Action":"output","Package":"szr/internal/filters","Test":"TestCompactLines","Output":"=== RUN   TestCompactLines\n"}
+{"Time":"2026-05-20T21:00:00Z","Action":"output","Package":"szr/internal/filters","Test":"TestCompactLines","Output":"--- PASS: TestCompactLines (0.00s)\n"}
+{"Time":"2026-05-20T21:00:00Z","Action":"pass","Package":"szr/internal/filters","Test":"TestCompactLines","Elapsed":0}
+{"Time":"2026-05-20T21:00:00Z","Action":"output","Package":"szr/internal/filters","Output":"ok  \tszr/internal/filters\t0.012s\n"}
+{"Time":"2026-05-20T21:00:00Z","Action":"pass","Package":"szr/internal/filters","Elapsed":0.012}
+{"Time":"2026-05-20T21:00:01Z","Action":"run","Package":"szr/internal/engine","Test":"TestExecute"}
+{"Time":"2026-05-20T21:00:01Z","Action":"output","Package":"szr/internal/engine","Test":"TestExecute","Output":"=== RUN   TestExecute\n"}
+{"Time":"2026-05-20T21:00:01Z","Action":"output","Package":"szr/internal/engine","Test":"TestExecute","Output":"--- PASS: TestExecute (0.01s)\n"}
+{"Time":"2026-05-20T21:00:01Z","Action":"pass","Package":"szr/internal/engine","Test":"TestExecute","Elapsed":0.01}
+{"Time":"2026-05-20T21:00:01Z","Action":"output","Package":"szr/internal/engine","Output":"ok  \tszr/internal/engine\t0.018s\n"}
+{"Time":"2026-05-20T21:00:01Z","Action":"pass","Package":"szr/internal/engine","Elapsed":0.018}
+{"Time":"2026-05-20T21:00:02Z","Action":"run","Package":"szr/internal/history","Test":"TestSummarize"}
+{"Time":"2026-05-20T21:00:02Z","Action":"output","Package":"szr/internal/history","Test":"TestSummarize","Output":"=== RUN   TestSummarize\n"}
+{"Time":"2026-05-20T21:00:02Z","Action":"output","Package":"szr/internal/history","Test":"TestSummarize","Output":"--- PASS: TestSummarize (0.00s)\n"}
+{"Time":"2026-05-20T21:00:02Z","Action":"pass","Package":"szr/internal/history","Test":"TestSummarize","Elapsed":0}
+{"Time":"2026-05-20T21:00:02Z","Action":"output","Package":"szr/internal/history","Output":"ok  \tszr/internal/history\t0.010s\n"}
+{"Time":"2026-05-20T21:00:02Z","Action":"pass","Package":"szr/internal/history","Elapsed":0.01}
