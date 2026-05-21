@@ -1,37 +1,37 @@
-package filters_test
+package git_test
 
 import (
 	"strings"
 	"testing"
 
-	"szr/internal/filters"
+	gitfilter "szr/internal/filters/git"
 )
 
 func TestGitSummaries(t *testing.T) {
-	if got := filters.SummarizeGitStatus(""); got != "clean" {
+	if got := gitfilter.SummarizeGitStatus(""); got != "clean" {
 		t.Fatalf("unexpected clean status: %q", got)
 	}
-	status := filters.SummarizeGitStatus("## main\nM  a\n A b\n?? c\nx\n")
+	status := gitfilter.SummarizeGitStatus("## main\nM  a\n A b\n?? c\nx\n")
 	if !strings.Contains(status, "staged=1 unstaged=1 untracked=1") {
 		t.Fatalf("unexpected status summary: %q", status)
 	}
-	status = filters.SummarizeGitStatus("M  a\nM  b\nM  c\nM  d\nM  e\nM  f\nM  g\n")
+	status = gitfilter.SummarizeGitStatus("M  a\nM  b\nM  c\nM  d\nM  e\nM  f\nM  g\n")
 	if strings.Count(status, "\n  ") != 6 {
 		t.Fatalf("expected file preview to cap at 6 entries: %q", status)
 	}
 
-	if got := filters.SummarizeGitLog(""); got != "no commits" {
+	if got := gitfilter.SummarizeGitLog(""); got != "no commits" {
 		t.Fatalf("unexpected empty git log: %q", got)
 	}
-	log := filters.SummarizeGitLog(strings.Repeat("hash subject\n", 12))
+	log := gitfilter.SummarizeGitLog(strings.Repeat("hash subject\n", 12))
 	if !strings.HasPrefix(log, "12 commits\n") {
 		t.Fatalf("unexpected git log summary: %q", log)
 	}
 
-	if got := filters.SummarizeGitDiff(""); got != "no diff" {
+	if got := gitfilter.SummarizeGitDiff(""); got != "no diff" {
 		t.Fatalf("unexpected empty diff: %q", got)
 	}
-	diffStat := filters.SummarizeGitDiff(strings.Join([]string{
+	diffStat := gitfilter.SummarizeGitDiff(strings.Join([]string{
 		"diff --git a/a.go b/a.go",
 		"+++ b/a.go",
 		"--- a/a.go",
@@ -43,11 +43,11 @@ func TestGitSummaries(t *testing.T) {
 	if !strings.Contains(diffStat, "files=1 +1 -1") || !strings.Contains(diffStat, "1 file changed") {
 		t.Fatalf("unexpected diff stat: %q", diffStat)
 	}
-	diffFallback := filters.SummarizeGitDiff("diff --git a/a b/a\n+foo\n-bar")
+	diffFallback := gitfilter.SummarizeGitDiff("diff --git a/a b/a\n+foo\n-bar")
 	if !strings.Contains(diffFallback, "... +") && !strings.Contains(diffFallback, "diff --git") {
 		t.Fatalf("unexpected diff fallback: %q", diffFallback)
 	}
-	diffLong := filters.SummarizeGitDiff(strings.Join([]string{
+	diffLong := gitfilter.SummarizeGitDiff(strings.Join([]string{
 		"diff --git a/a b/a",
 		" one | 1 +",
 		" two | 1 +",
@@ -63,7 +63,7 @@ func TestGitSummaries(t *testing.T) {
 		t.Fatalf("expected truncated diff summary, got %q", diffLong)
 	}
 
-	statusReducer := filters.NewGitStatusReducer(8, 0)
+	statusReducer := gitfilter.NewGitStatusReducer(8, 0)
 	statusReducer.ConsumeStdout([]byte("\x1b[32m## main\x1b[0m\nM  a\n"))
 	statusReducer.ConsumeStdout([]byte("?? b\n"))
 	statusStream := statusReducer.Result()
@@ -71,14 +71,14 @@ func TestGitSummaries(t *testing.T) {
 		t.Fatalf("unexpected git status stream: %q", statusStream)
 	}
 
-	logReducer := filters.NewGitLogReducer(4, 0)
+	logReducer := gitfilter.NewGitLogReducer(4, 0)
 	logReducer.ConsumeStdout([]byte("one\n"))
 	logReducer.ConsumeStdout([]byte("two\nthree\nfour\n"))
 	if got := logReducer.Result(); got != "4 commits\none\ntwo\nthree" {
 		t.Fatalf("unexpected git log stream: %q", got)
 	}
 
-	diffReducer := filters.NewGitDiffReducer(4, 0)
+	diffReducer := gitfilter.NewGitDiffReducer(4, 0)
 	diffReducer.ConsumeStdout([]byte("diff --git a/a.go b/a.go\n"))
 	diffReducer.ConsumeStdout([]byte(" a.go | 2 +-\n+foo\n-bar\n"))
 	diffStream := diffReducer.Result()

@@ -67,6 +67,18 @@ func (s *lineScanner) flush(emit func(string)) {
 	}
 }
 
+type LineScanner struct {
+	inner lineScanner
+}
+
+func (s *LineScanner) Consume(chunk []byte, emit func(string)) {
+	s.inner.Consume(chunk, emit)
+}
+
+func (s *LineScanner) Finish(emit func(string)) {
+	s.inner.Finish(emit)
+}
+
 type textBuffer struct {
 	stripper ansiStripper
 	builder  strings.Builder

@@ -5,6 +5,7 @@ import (
 
 	"szr/internal/engine"
 	containerprofiles "szr/internal/profiles/container"
+	gitprofiles "szr/internal/profiles/git"
 	githubprofiles "szr/internal/profiles/github"
 	javascriptprofiles "szr/internal/profiles/javascript"
 	kubernetesprofiles "szr/internal/profiles/kubernetes"
@@ -14,6 +15,7 @@ import (
 
 func Builtins(maxLines int) []engine.Profile {
 	list := coreProfiles(maxLines)
+	list = append(list, gitprofiles.Profiles(maxLines)...)
 	list = append(list, rustprofiles.Profiles(maxLines)...)
 	list = append(list, pythonprofiles.Profiles(maxLines)...)
 	list = append(list, containerprofiles.Profiles(maxLines)...)

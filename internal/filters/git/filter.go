@@ -1,8 +1,10 @@
-package filters
+package git
 
 import (
 	"fmt"
 	"strings"
+
+	shared "szr/internal/filters"
 )
 
 func SummarizeGitStatus(input string) string {
@@ -24,7 +26,7 @@ func SummarizeGitDiff(input string) string {
 }
 
 type GitStatusReducer struct {
-	scanner     lineScanner
+	scanner     scanner
 	maxPaths    int
 	bytesParsed int
 	branch      string
@@ -130,7 +132,7 @@ func (r *GitStatusReducer) recordLine(line string) {
 }
 
 type GitLogReducer struct {
-	scanner     lineScanner
+	scanner     scanner
 	maxEntries  int
 	bytesParsed int
 	total       int
@@ -192,14 +194,14 @@ func (r *GitLogReducer) recordLine(line string) {
 }
 
 type GitDiffReducer struct {
-	scanner     lineScanner
+	scanner     scanner
 	maxSummary  int
 	bytesParsed int
 	fileCount   int
 	additions   int
 	deletions   int
 	summary     []string
-	fallback    *CompactLineReducer
+	fallback    *shared.CompactLineReducer
 }
 
 func NewGitDiffReducer(maxLines, maxBytes int) *GitDiffReducer {
@@ -210,7 +212,7 @@ func NewGitDiffReducer(maxLines, maxBytes int) *GitDiffReducer {
 	return &GitDiffReducer{
 		maxSummary: maxSummary,
 		summary:    make([]string, 0, maxSummary),
-		fallback:   NewCompactLineReducer(12, maxBytes),
+		fallback:   shared.NewCompactLineReducer(12, maxBytes),
 	}
 }
 
@@ -278,4 +280,16 @@ func (r *GitDiffReducer) recordLine(line string) {
 	if strings.Contains(line, "|") || strings.Contains(line, "files changed") || strings.Contains(line, "file changed") {
 		r.summary = append(r.summary, line)
 	}
+}
+
+type scanner struct {
+	inner shared.LineScanner
+}
+
+func (s *scanner) Consume(chunk []byte, emit func(string)) {
+	s.inner.Consume(chunk, emit)
+}
+
+func (s *scanner) Finish(emit func(string)) {
+	s.inner.Finish(emit)
 }
