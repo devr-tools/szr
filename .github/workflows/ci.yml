@@ -13,6 +13,7 @@ permissions:
 
 env:
   GOCACHE: ${{ github.workspace }}/.gocache
+  GOVULNCHECK_VERSION: v1.1.1
   MIN_INTERNAL_COVERAGE: "80.0"
 
 concurrency:
@@ -181,7 +182,7 @@ jobs:
         run: git fetch origin "${{ github.base_ref }}" --depth=1
 
       - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+        run: go install golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }}
 
       - name: Dependency and code vulnerability scan
         shell: bash

@@ -42,7 +42,21 @@ func (a *App) runInstall(args []string) int {
 		return 0
 	}
 
-	cwd, _ := os.Getwd()
+	cwd, cwdErr := os.Getwd()
+	if cwdErr != nil {
+		fmt.Fprintf(os.Stderr, "szr: %v\n", cwdErr)
+		if allTargets {
+			return 1
+		}
+		return 2
+	}
+	if _, statErr := os.Stat(cwd); statErr != nil {
+		fmt.Fprintf(os.Stderr, "szr: %v\n", statErr)
+		if allTargets {
+			return 1
+		}
+		return 2
+	}
 
 	plans := make([]installers.Plan, 0, len(targets))
 	var err error
