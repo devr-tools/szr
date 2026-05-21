@@ -77,17 +77,9 @@ func jsProfiles(maxLines int) []engine.Profile {
 }
 
 func isPackageManagerTest(args []string) bool {
-	if len(args) < 2 {
-		return false
-	}
-
-	if args[0] != "npm" && args[0] != "pnpm" && args[0] != "yarn" {
-		return false
-	}
-	if args[1] == "test" {
-		return true
-	}
-	return len(args) >= 3 && args[1] == "run" && args[2] == "test"
+	return len(args) >= 2 &&
+		(args[0] == "npm" || args[0] == "pnpm" || args[0] == "yarn") &&
+		(args[1] == "test" || len(args) >= 3 && args[1] == "run" && args[2] == "test")
 }
 
 func appendPackageManagerArgs(command []string, extra ...string) []string {

@@ -288,7 +288,21 @@ func TestCLIInstallGetwdError(t *testing.T) {
 	}
 	code, stdout, stderr := runApp(t, app, "install", "codex")
 	restore()
-	if code != 1 || stdout != "" || !strings.Contains(stderr, "failed to resolve working directory") {
-		t.Fatalf("unexpected getwd failure stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	if code != 2 || stdout != "" || !strings.Contains(stderr, "no such file or directory") {
+		t.Fatalf("unexpected deleted-cwd install failure stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+
+	restore = chdirTemp(t, t.TempDir())
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd after chdir: %v", err)
+	}
+	if err := os.RemoveAll(cwd); err != nil {
+		t.Fatalf("remove second cwd: %v", err)
+	}
+	code, stdout, stderr = runApp(t, app, "install", "--all")
+	restore()
+	if code != 1 || stdout != "" || !strings.Contains(stderr, "no such file or directory") {
+		t.Fatalf("unexpected deleted-cwd install all failure stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
 }

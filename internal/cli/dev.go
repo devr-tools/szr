@@ -42,13 +42,10 @@ func (a *App) runInstall(args []string) int {
 		return 2
 	}
 
-	cwd, err := os.Getwd()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "szr: failed to resolve working directory: %v\n", err)
-		return 1
-	}
+	cwd, _ := os.Getwd()
 
 	plans := make([]installers.Plan, 0, len(targets))
+	var err error
 	if allTargets {
 		plans, err = installers.RenderAll(installers.Options{RepoRoot: cwd})
 	} else {

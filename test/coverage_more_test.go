@@ -133,6 +133,26 @@ func TestJSTextCoverageEdges(t *testing.T) {
 	if empty != "" {
 		t.Fatalf("expected empty js summary, got %q", empty)
 	}
+
+	statusOnly := filters.SummarizeJSTest(`{"numPassedTestSuites":0,"numFailedTestSuites":1,"numPassedTests":0,"numFailedTests":1,"numPendingTests":0,"numTodoTests":0,"numTotalTests":1,"success":false,"testResults":[{"name":"src/status-only.test.ts","status":"failed","message":"","assertionResults":[]}]}`, 1)
+	if !strings.Contains(statusOnly, "src/status-only.test.ts") {
+		t.Fatalf("expected status-only suite to survive summary, got %q", statusOnly)
+	}
+
+	unnamed := filters.SummarizeJSTest(`{"numPassedTestSuites":0,"numFailedTestSuites":1,"numPassedTests":0,"numFailedTests":1,"numPendingTests":0,"numTodoTests":0,"numTotalTests":1,"success":false,"testResults":[{"name":"src/unnamed.test.ts","status":"passed","message":"","assertionResults":[{"ancestorTitles":[],"fullName":"","title":"","status":"failed","failureMessages":["Error: unnamed failure"]}]}]}`, 4)
+	if !strings.Contains(unnamed, "Error: unnamed failure") {
+		t.Fatalf("expected unnamed failure detail to survive summary, got %q", unnamed)
+	}
+
+	mixed := filters.SummarizeJSTest(`{"numPassedTestSuites":0,"numFailedTestSuites":1,"numPassedTests":1,"numFailedTests":1,"numPendingTests":0,"numTodoTests":0,"numTotalTests":2,"success":false,"testResults":[{"name":"src/mixed.test.ts","status":"failed","message":"","assertionResults":[{"ancestorTitles":["mixed"],"fullName":"mixed passes","title":"passes","status":"passed","failureMessages":[]},{"ancestorTitles":["mixed"],"fullName":"mixed fails","title":"fails","status":"failed","failureMessages":["Error: mixed failure"]}]}]}`, 5)
+	if !strings.Contains(mixed, "mixed fails") || strings.Contains(mixed, "mixed passes") {
+		t.Fatalf("expected only failing assertion details in mixed suite summary, got %q", mixed)
+	}
+
+	noData := filters.SummarizeJSTest("{}", 2)
+	if noData != "{}" {
+		t.Fatalf("expected no-data report to fall back to compact output, got %q", noData)
+	}
 }
 
 func TestCLIBenchCoverageEdges(t *testing.T) {

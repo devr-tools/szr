@@ -73,32 +73,25 @@ func summarizeJSTestReport(report jsTestReport, maxLines int) string {
 		return strings.Join(out, "\n")
 	}
 
-	detailBudget := maxLines
-	if detailBudget < 4 {
-		detailBudget = 4
+	if maxLines < 4 {
+		maxLines = 4
 	}
 
+	details := []string{}
 	for _, suite := range report.TestResults {
 		if !jsSuiteFailed(suite) {
 			continue
 		}
-		out = append(out, suite.Name)
-		detailBudget--
-		if detailBudget <= 0 {
-			out = append(out, "... +more failures")
-			break
-		}
-
+		details = append(details, suite.Name)
 		for _, line := range jsSuiteDetails(suite) {
-			out = append(out, "  "+clip(line, 160))
-			detailBudget--
-			if detailBudget <= 0 {
-				out = append(out, "... +more failures")
-				return strings.Join(out, "\n")
-			}
+			details = append(details, "  "+clip(line, 160))
 		}
 	}
 
+	if len(details) >= maxLines {
+		details = append(details[:maxLines], "... +more failures")
+	}
+	out = append(out, details...)
 	return strings.Join(out, "\n")
 }
 
@@ -134,7 +127,7 @@ func jsSuiteDetails(suite jsTestSuite) []string {
 		}
 	}
 
-	if len(lines) == 0 && suite.Message != "" {
+	if len(lines) == 0 {
 		lines = append(lines, failureHighlights(suite.Message)...)
 	}
 
@@ -194,29 +187,9 @@ func summarizeJSTestText(input string, maxLines int) string {
 		return strings.Join(lines, "\n")
 	}
 
-	selected := make([]string, 0, maxLines)
-	remaining := maxLines
-
-	trailerCount := len(summaries)
-	if trailerCount > 2 {
-		trailerCount = 2
-	}
-	if len(details) >= remaining-1 {
-		trailerCount = 1
-	}
-	if trailerCount > remaining {
-		trailerCount = remaining
-	}
-	detailBudget := remaining - trailerCount
-	if detailBudget > len(details) {
-		detailBudget = len(details)
-	}
-	selected = append(selected, details[:detailBudget]...)
-	if trailerCount > 0 {
-		selected = append(selected, summaries[:trailerCount]...)
-	}
-	if len(selected) > maxLines {
-		selected = selected[:maxLines]
+	selected := lines[:maxLines]
+	if len(summaries) > 0 && len(details) >= maxLines && maxLines > 1 {
+		selected = append(details[:maxLines-1], summaries[0])
 	}
 	return strings.Join(selected, "\n") + fmt.Sprintf("\n... +%d more lines", len(lines)-len(selected))
 }
