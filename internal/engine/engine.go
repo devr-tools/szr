@@ -35,6 +35,15 @@ func (e *Engine) Explain(inv Invocation) Profile {
 }
 
 func (e *Engine) Execute(ctx context.Context, inv Invocation, passthrough bool) (Result, error) {
+	return e.ExecuteStreaming(ctx, inv, passthrough, nil)
+}
+
+func (e *Engine) ExecuteStreaming(
+	ctx context.Context,
+	inv Invocation,
+	passthrough bool,
+	onPartial func(PartialResult),
+) (Result, error) {
 	if len(inv.Command) == 0 {
 		return Result{}, fmt.Errorf("missing command")
 	}
@@ -51,6 +60,21 @@ func (e *Engine) Execute(ctx context.Context, inv Invocation, passthrough bool) 
 		streamReducer = profile.StreamRender(inv, budget)
 	}
 	options := buildRunOptions(inv, profile, passthrough, streamReducer != nil)
+	if onPartial != nil {
+		profileConfidence := profile.Confidence
+		if profileConfidence == "" {
+			profileConfidence = ConfidenceMedium
+		}
+		options.onPreview = func(text string, bytesParsed int, done bool) {
+			onPartial(PartialResult{
+				ProfileName:       profile.Name,
+				ProfileConfidence: profileConfidence,
+				Display:           strings.TrimRight(text, "\n"),
+				BytesParsed:       bytesParsed,
+				Final:             done,
+			})
+		}
+	}
 
 	start := time.Now()
 	options.command = command
@@ -163,6 +187,15 @@ func (e *Engine) Execute(ctx context.Context, inv Invocation, passthrough bool) 
 		RawBytesRead:      rawBytesRead,
 		BytesParsed:       bytesParsed,
 		BytesEmitted:      bytesEmitted,
+	}
+	if onPartial != nil {
+		onPartial(PartialResult{
+			ProfileName:       result.ProfileName,
+			ProfileConfidence: result.ProfileConfidence,
+			Display:           result.Display,
+			BytesParsed:       result.BytesParsed,
+			Final:             true,
+		})
 	}
 	if err != nil {
 		return result, err

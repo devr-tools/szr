@@ -155,6 +155,14 @@ func (r *CompactLineReducer) FallbackUsed() bool {
 	return false
 }
 
+func (r *CompactLineReducer) Preview() string {
+	out := append([]string{}, r.lines...)
+	if r.extraLines > 0 {
+		out = append(out, "... +more lines")
+	}
+	return strings.Join(out, "\n")
+}
+
 func (r *CompactLineReducer) consume(chunk []byte) {
 	r.bytesParsed += len(chunk)
 	r.scanner.Consume(chunk, r.recordLine)

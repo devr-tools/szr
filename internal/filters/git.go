@@ -80,6 +80,23 @@ func (r *GitStatusReducer) FallbackUsed() bool {
 	return false
 }
 
+func (r *GitStatusReducer) Preview() string {
+	summary := []string{}
+	if r.branch != "" {
+		summary = append(summary, r.branch)
+	}
+	if r.branch != "" || r.staged != 0 || r.unstaged != 0 || r.untracked != 0 {
+		summary = append(summary, fmt.Sprintf("staged=%d unstaged=%d untracked=%d", r.staged, r.unstaged, r.untracked))
+	}
+	for _, path := range r.paths {
+		if len(summary) == 2 {
+			summary = append(summary, "files:")
+		}
+		summary = append(summary, "  "+path)
+	}
+	return strings.Join(summary, "\n")
+}
+
 func (r *GitStatusReducer) consume(chunk []byte) {
 	r.bytesParsed += len(chunk)
 	r.scanner.Consume(chunk, r.recordLine)
@@ -155,6 +172,13 @@ func (r *GitLogReducer) FallbackUsed() bool {
 	return false
 }
 
+func (r *GitLogReducer) Preview() string {
+	if r.total == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%d commits\n%s", r.total, strings.Join(r.entries, "\n"))
+}
+
 func (r *GitLogReducer) consume(chunk []byte) {
 	r.bytesParsed += len(chunk)
 	r.scanner.Consume(chunk, r.recordLine)
@@ -218,6 +242,17 @@ func (r *GitDiffReducer) BytesParsed() int {
 
 func (r *GitDiffReducer) FallbackUsed() bool {
 	return len(r.summary) == 0
+}
+
+func (r *GitDiffReducer) Preview() string {
+	if r.fileCount == 0 && r.additions == 0 && r.deletions == 0 && len(r.summary) == 0 {
+		return ""
+	}
+	header := fmt.Sprintf("files=%d +%d -%d", r.fileCount, r.additions, r.deletions)
+	if len(r.summary) == 0 {
+		return header
+	}
+	return header + "\n" + strings.Join(r.summary, "\n")
 }
 
 func (r *GitDiffReducer) consume(chunk []byte) {

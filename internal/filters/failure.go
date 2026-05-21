@@ -69,6 +69,20 @@ func (r *GenericFailureReducer) FallbackUsed() bool {
 	return r.fallbackUsed
 }
 
+func (r *GenericFailureReducer) Done() bool {
+	return len(r.interesting) >= r.maxLines
+}
+
+func (r *GenericFailureReducer) Preview() string {
+	if len(r.interesting) > 0 {
+		return strings.Join(r.interesting, "\n")
+	}
+	if len(r.head) > 0 {
+		return strings.Join(r.head, "\n")
+	}
+	return ""
+}
+
 func (r *GenericFailureReducer) consume(chunk []byte) {
 	r.bytesParsed += len(chunk)
 	r.scanner.Consume(chunk, r.recordLine)

@@ -208,6 +208,100 @@ func TestVerboseCaptureKeepsRawCombined(t *testing.T) {
 	}
 }
 
+func TestExecuteStopsFeedingReducerAfterDone(t *testing.T) {
+	binDir := t.TempDir()
+	testutil.WriteExecutable(t, binDir, "manylines", "#!/bin/sh\nprintf 'FAIL one\\n'\nprintf 'FAIL two\\n'\nprintf 'FAIL three\\n'\nprintf 'FAIL four\\n'\n")
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	root := t.TempDir()
+	paths := testutil.Paths(root)
+	testutil.EnsurePaths(t, paths)
+
+	cfg := config.Default()
+	reducer := &doneReducer{}
+	e := engine.New(cfg, paths, history.New(paths.HistoryFile), []engine.Profile{{
+		Name:       "done-stream",
+		Confidence: engine.ConfidenceHigh,
+		Match: func(inv engine.Invocation) bool {
+			return len(inv.Display) > 0 && inv.Display[0] == "manylines"
+		},
+		StreamRender: func(engine.Invocation, engine.OutputBudget) engine.StreamReducer {
+			return reducer
+		},
+	}})
+
+	result, err := e.Execute(context.Background(), engine.Invocation{
+		Command: []string{"manylines"},
+		Display: []string{"manylines"},
+		Cwd:     root,
+	}, false)
+	if err != nil {
+		t.Fatalf("execute done reducer: %v", err)
+	}
+	if !strings.Contains(result.Display, "FAIL one") {
+		t.Fatalf("unexpected display: %#v", result)
+	}
+	if reducer.consumeCalls != 1 {
+		t.Fatalf("expected reducer to stop after first chunk, got %d calls", reducer.consumeCalls)
+	}
+	if result.RawBytesRead <= result.BytesParsed {
+		t.Fatalf("expected raw bytes to exceed parsed bytes after early stop, got %#v", result)
+	}
+}
+
+func TestExecuteStreamingPublishesPartialPreviewBeforeExit(t *testing.T) {
+	binDir := t.TempDir()
+	testutil.WriteExecutable(t, binDir, "delayedfail", "#!/bin/sh\nprintf 'FAIL first\\n'\nsleep 0.2\nprintf 'FAIL second\\n'\n")
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	root := t.TempDir()
+	paths := testutil.Paths(root)
+	testutil.EnsurePaths(t, paths)
+
+	cfg := config.Default()
+	e := engine.New(cfg, paths, history.New(paths.HistoryFile), []engine.Profile{{
+		Name:             "preview-stream",
+		Confidence:       engine.ConfidenceHigh,
+		StreamPreference: engine.StreamStdoutFirst,
+		Match: func(inv engine.Invocation) bool {
+			return len(inv.Display) > 0 && inv.Display[0] == "delayedfail"
+		},
+		StreamRender: func(engine.Invocation, engine.OutputBudget) engine.StreamReducer {
+			return &previewReducer{}
+		},
+	}})
+
+	partials := make(chan engine.PartialResult, 4)
+	_, err := e.ExecuteStreaming(context.Background(), engine.Invocation{
+		Command: []string{"delayedfail"},
+		Display: []string{"delayedfail"},
+		Cwd:     root,
+	}, false, func(partial engine.PartialResult) {
+		partials <- partial
+	})
+	close(partials)
+	if err != nil {
+		t.Fatalf("execute streaming preview: %v", err)
+	}
+
+	seenPartial := false
+	seenFinal := false
+	for partial := range partials {
+		if !partial.Final {
+			seenPartial = true
+			if !strings.Contains(partial.Display, "FAIL first") {
+				t.Fatalf("expected early partial to include first failure, got %#v", partial)
+			}
+		}
+		if partial.Final {
+			seenFinal = true
+		}
+	}
+	if !seenPartial || !seenFinal {
+		t.Fatalf("expected both partial and final updates, got partial=%t final=%t", seenPartial, seenFinal)
+	}
+}
+
 type diagnosticReducer struct {
 	stderr strings.Builder
 	parsed int
@@ -252,4 +346,66 @@ func (r *staticReducer) BytesParsed() int {
 
 func (r *staticReducer) FallbackUsed() bool {
 	return false
+}
+
+type doneReducer struct {
+	consumeCalls int
+	rendered     []string
+}
+
+func (r *doneReducer) ConsumeStdout(chunk []byte) {
+	r.consumeCalls++
+	r.rendered = append(r.rendered, strings.TrimSpace(string(chunk)))
+}
+
+func (r *doneReducer) ConsumeStderr([]byte) {}
+
+func (r *doneReducer) Result() string {
+	return strings.Join(r.rendered, "\n")
+}
+
+func (r *doneReducer) BytesParsed() int {
+	return len(strings.Join(r.rendered, "\n"))
+}
+
+func (r *doneReducer) FallbackUsed() bool {
+	return false
+}
+
+func (r *doneReducer) Done() bool {
+	return r.consumeCalls >= 1
+}
+
+func (r *doneReducer) Preview() string {
+	return r.Result()
+}
+
+type previewReducer struct {
+	lines []string
+}
+
+func (r *previewReducer) ConsumeStdout(chunk []byte) {
+	for _, line := range strings.Split(strings.TrimSpace(string(chunk)), "\n") {
+		if line != "" {
+			r.lines = append(r.lines, line)
+		}
+	}
+}
+
+func (r *previewReducer) ConsumeStderr([]byte) {}
+
+func (r *previewReducer) Result() string {
+	return strings.Join(r.lines, "\n")
+}
+
+func (r *previewReducer) BytesParsed() int {
+	return len(r.Result())
+}
+
+func (r *previewReducer) FallbackUsed() bool {
+	return false
+}
+
+func (r *previewReducer) Preview() string {
+	return r.Result()
 }

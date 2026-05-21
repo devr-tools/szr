@@ -30,7 +30,23 @@ type StreamReducer interface {
 	FallbackUsed() bool
 }
 
+type StreamReducerDone interface {
+	Done() bool
+}
+
+type StreamReducerPreview interface {
+	Preview() string
+}
+
 type StreamRenderFactory func(Invocation, OutputBudget) StreamReducer
+
+type PartialResult struct {
+	ProfileName       string
+	ProfileConfidence string
+	Display           string
+	BytesParsed       int
+	Final             bool
+}
 
 type Profile struct {
 	Name             string

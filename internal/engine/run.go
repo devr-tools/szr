@@ -22,6 +22,7 @@ type runOptions struct {
 	reduceStdoutLater  bool
 	reduceStderrLater  bool
 	reducer            StreamReducer
+	onPreview          func(text string, bytesParsed int, done bool)
 }
 
 type runResult struct {
@@ -77,8 +78,10 @@ func (c *outputCollector) TokenCount() int {
 }
 
 type synchronizedReducer struct {
-	mu    sync.Mutex
-	inner StreamReducer
+	mu            sync.Mutex
+	inner         StreamReducer
+	done          bool
+	lastPublished string
 }
 
 func newSynchronizedReducer(reducer StreamReducer) *synchronizedReducer {
@@ -91,13 +94,21 @@ func newSynchronizedReducer(reducer StreamReducer) *synchronizedReducer {
 func (r *synchronizedReducer) ConsumeStdout(chunk []byte) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.done {
+		return
+	}
 	r.inner.ConsumeStdout(chunk)
+	r.updateDoneLocked()
 }
 
 func (r *synchronizedReducer) ConsumeStderr(chunk []byte) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.done {
+		return
+	}
 	r.inner.ConsumeStderr(chunk)
+	r.updateDoneLocked()
 }
 
 func (r *synchronizedReducer) Result() string {
@@ -116,6 +127,37 @@ func (r *synchronizedReducer) FallbackUsed() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.inner.FallbackUsed()
+}
+
+func (r *synchronizedReducer) Done() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.done
+}
+
+func (r *synchronizedReducer) publishPreview(cb func(text string, bytesParsed int, done bool)) {
+	if cb == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	previewer, ok := r.inner.(StreamReducerPreview)
+	if !ok {
+		return
+	}
+	preview := previewer.Preview()
+	if preview == "" || preview == r.lastPublished {
+		return
+	}
+	r.lastPublished = preview
+	cb(preview, r.inner.BytesParsed(), r.done)
+}
+
+func (r *synchronizedReducer) updateDoneLocked() {
+	done, ok := r.inner.(StreamReducerDone)
+	if ok && done.Done() {
+		r.done = true
+	}
 }
 
 func runCommand(ctx context.Context, args []string, cwd string, options runOptions) (runResult, error) {
@@ -156,11 +198,11 @@ func runCommand(ctx context.Context, args []string, cwd string, options runOptio
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		errCh <- copyStream(stdoutPipe, &stdout, tee, reducer, options.reduceStdoutLive, true)
+		errCh <- copyStream(stdoutPipe, &stdout, tee, reducer, options.reduceStdoutLive, options.onPreview, true)
 	}()
 	go func() {
 		defer wg.Done()
-		errCh <- copyStream(stderrPipe, &stderr, tee, reducer, options.reduceStderrLive, false)
+		errCh <- copyStream(stderrPipe, &stderr, tee, reducer, options.reduceStderrLive, options.onPreview, false)
 	}()
 
 	waitErr := cmd.Wait()
@@ -172,9 +214,11 @@ func runCommand(ctx context.Context, args []string, cwd string, options runOptio
 	if reducer != nil {
 		if options.reduceStdoutLater {
 			reducer.ConsumeStdout([]byte(stdout.String()))
+			reducer.publishPreview(options.onPreview)
 		}
 		if options.reduceStderrLater {
 			reducer.ConsumeStderr([]byte(stderr.String()))
+			reducer.publishPreview(options.onPreview)
 		}
 	}
 
@@ -224,6 +268,7 @@ func copyStream(
 	tee *teeCapture,
 	reducer *synchronizedReducer,
 	reduceLive bool,
+	onPreview func(text string, bytesParsed int, done bool),
 	isStdout bool,
 ) error {
 	buf := make([]byte, 4096)
@@ -236,11 +281,15 @@ func copyStream(
 				tee.Write(chunk)
 			}
 			if reducer != nil && reduceLive {
+				if reducer.Done() {
+					continue
+				}
 				if isStdout {
 					reducer.ConsumeStdout(chunk)
 				} else {
 					reducer.ConsumeStderr(chunk)
 				}
+				reducer.publishPreview(onPreview)
 			}
 		}
 		if err == nil {

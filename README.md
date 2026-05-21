@@ -10,11 +10,25 @@
 
 ```mermaid
 flowchart LR
-  U[Developer or agent] --> C[Command]
-  C --> S[szr]
-  S -->|runs| T[CLI tool]
-  T -->|raw output| S
-  S -->|profiles + filters trim noise| L[LLM]
+  C["Run: `git diff`"]
+
+  subgraph W["Without szr"]
+    D[Send command output directly]
+    O1[Raw CLI output]
+    L1["LLM sees full output<br/>Higher token count"]
+    D --> O1 --> L1
+  end
+
+  subgraph S["With szr"]
+    Z[szr runs the command]
+    O2[Raw CLI output]
+    F[Profiles and filters trim noise]
+    L2["LLM sees compact output<br/>Lower token count"]
+    Z --> O2 --> F --> L2
+  end
+
+  C --> D
+  C --> Z
 ```
 
 
