@@ -158,6 +158,4 @@ For most code changes, the minimum bar is:
 - run `make fmt` and `make test`
 - explain the user-facing impact and verification steps in the PR
 
-## Architecture
 
-More detail lives in [docs/ARCHITECTURE.md](/Users/alex/Documents/GitHub/szr/docs/ARCHITECTURE.md).
