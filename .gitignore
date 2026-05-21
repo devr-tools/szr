@@ -33,3 +33,9 @@ go.work.sum
 
 # local build cache
 .gocache/
+
+# local build artifacts
+bin/
+coverage.html
+.coverage.internal.out
+.tmp-home/

@@ -185,7 +185,7 @@ func SummarizeGitDiff(input string) string {
 		} else if strings.HasPrefix(line, "-") {
 			deletions++
 		}
-		if strings.Contains(line, "|") || strings.Contains(line, "files changed") {
+		if strings.Contains(line, "|") || strings.Contains(line, "files changed") || strings.Contains(line, "file changed") {
 			summary = append(summary, line)
 		}
 	}
@@ -315,6 +315,10 @@ func RenderJSONStructure(data []byte) string {
 	if err := json.Unmarshal(data, &value); err != nil {
 		return "invalid json"
 	}
+	return RenderValueStructure(value)
+}
+
+func RenderValueStructure(value any) string {
 	return renderNode(value, 0)
 }
 
@@ -393,14 +397,10 @@ func BuildTree(paths []string, root string) string {
 	}
 	rootNode := &node{Name: filepath.Base(root), Children: map[string]*node{}}
 	for _, path := range paths {
-		rel, err := filepath.Rel(root, path)
-		if err != nil {
-			continue
-		}
-		parts := strings.Split(rel, string(filepath.Separator))
+		parts := splitTreeParts(root, path, filepath.Rel)
 		current := rootNode
 		for i, part := range parts {
-			if part == "." || part == "" {
+			if shouldSkipTreePart(part) {
 				continue
 			}
 			child, ok := current.Children[part]
@@ -437,6 +437,26 @@ func BuildTree(paths []string, root string) string {
 	return strings.Join(render(rootNode, 0), "\n")
 }
 
+func splitTreeParts(root, path string, relFn func(string, string) (string, error)) []string {
+	return SplitTreeParts(root, path, relFn)
+}
+
+func SplitTreeParts(root, path string, relFn func(string, string) (string, error)) []string {
+	rel, err := relFn(root, path)
+	if err != nil {
+		return nil
+	}
+	return strings.Split(rel, string(filepath.Separator))
+}
+
+func shouldSkipTreePart(part string) bool {
+	return ShouldSkipTreePart(part)
+}
+
+func ShouldSkipTreePart(part string) bool {
+	return part == "." || part == ""
+}
+
 func ScannerDedupe(data []byte) string {
 	return DedupeLines(string(data), 20)
 }
@@ -455,6 +475,10 @@ func nonEmptyLines(input string) []string {
 }
 
 func collapseBlock(line string) string {
+	return CollapseBlock(line)
+}
+
+func CollapseBlock(line string) string {
 	start := strings.Index(line, "{")
 	end := strings.LastIndex(line, "}")
 	if start < 0 || end <= start {
@@ -464,6 +488,10 @@ func collapseBlock(line string) string {
 }
 
 func clip(input string, max int) string {
+	return Clip(input, max)
+}
+
+func Clip(input string, max int) string {
 	runes := []rune(input)
 	if len(runes) <= max {
 		return input
@@ -472,6 +500,10 @@ func clip(input string, max int) string {
 }
 
 func uniqueStrings(values []string) []string {
+	return UniqueStrings(values)
+}
+
+func UniqueStrings(values []string) []string {
 	seen := map[string]struct{}{}
 	out := []string{}
 	for _, value := range values {

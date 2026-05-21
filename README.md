@@ -37,6 +37,17 @@ szr gain --history
 szr explain go test ./...
 ```
 
+## Local Development
+
+The test suite now lives under `test/`, with coverage enforced against `./internal/...`.
+
+```bash
+make test
+make cover
+make smoke
+make prepush
+```
+
 ## Architecture
 
 The codebase is organized around a small execution engine:
@@ -53,7 +64,10 @@ More detail lives in [docs/ARCHITECTURE.md](/Users/alex/Documents/GitHub/szr/doc
 
 ## Roadmap
 
-- Add JS/TS, Python, Docker, and GitHub CLI profiles.
-- Add profile benchmarking and compression-quality fixtures.
-- Add agent hook installers and project instruction generation.
-- Add project-local custom rules so teams can teach `szr` their own command patterns.
+The current roadmap is organized around three goals:
+
+- lower wrapper latency so `szr` stays on the hot path
+- expand parser-first profiles for the noisiest developer commands
+- improve compression quality without hiding actionable failure lines
+
+The detailed plan lives in [docs/ROADMAP.md](/Users/alex/Documents/GitHub/szr/docs/ROADMAP.md).

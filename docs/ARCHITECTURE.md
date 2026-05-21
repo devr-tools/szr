@@ -54,3 +54,5 @@ internal/profiles
 - Add hook and instruction installers for Codex, Claude Code, Cursor, and Gemini.
 - Add a custom rule DSL so users can define project-local profiles.
 - Add benchmark fixtures to measure compression quality and latency.
+
+The broader product plan now lives in [ROADMAP.md](/Users/alex/Documents/GitHub/szr/docs/ROADMAP.md).
