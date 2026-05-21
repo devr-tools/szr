@@ -15,8 +15,11 @@ flowchart LR
   C --> Z["szr"]
   Z --> L["LLM<br/>lower tokens"]
 
+  classDef base fill:#F3F4F6,stroke:#9CA3AF,color:#374151;
   classDef blue fill:#31A9F3,stroke:#31A9F3,color:#ffffff;
+  class C,W base;
   class Z,L blue;
+  linkStyle 0 stroke:#9CA3AF,stroke-width:2px;
   linkStyle 1,2 stroke:#31A9F3,stroke-width:2px;
 ```
 
