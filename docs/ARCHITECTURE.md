@@ -51,21 +51,5 @@ internal/szrdev
 - `go build` / `go vet`: bias toward compiler diagnostics.
 - Generic test and summary wrappers: provide fallback compaction for unstructured tools.
 
-## Why this is better than cloning the Rust layout
-
-- The Go version is profile-driven from the start, so adding new tools does not require expanding a single mega-enum.
-- Local file helpers like `read`, `json`, and `log` are implemented directly in Go instead of always shelling out.
-- The analytics store is deliberately simple JSONL first; it can be swapped for SQLite later without changing the CLI surface.
-- `szr explain` makes the filter decision visible, which is useful when the registry grows.
-- `pkg/szr` keeps the public embedding surface explicit, while `internal/szrdev` contains developer-only launcher wiring.
-- Project-local `.szr.json` and `.szr.yaml` rules compile into the same profile model, and can also apply deterministic command preferences before profile selection.
-- The benchmark harness lives beside embedded fixtures, which keeps compression measurements reproducible without polluting the core execution path.
-
-## Next steps
-
-- Add more semantic profiles for Python, Rust, Docker, Kubernetes, and GitHub CLI workflows.
-- Expand `szr bench` into a richer comparison surface with per-profile aggregates and failure indicators.
-- Grow the rule DSL carefully without turning local config into a second monolithic router.
-- Add editor- and agent-specific install refinements on top of the current repo-local bootstrap flow.
 
 The broader product plan now lives in [ROADMAP.md](/Users/alex/Documents/GitHub/szr/docs/ROADMAP.md).
