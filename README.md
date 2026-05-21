@@ -12,7 +12,7 @@
 flowchart LR
   C["Run: `git diff`"]
   C --> W["LLM<br/>higher tokens"]
-  C --> Z["szr"]
+  C --> Z["szr<br/>less tokens""]
   Z --> L["LLM<br/>lower tokens"]
 
   classDef base fill:#F3F4F6,stroke:#9CA3AF,color:#374151;
