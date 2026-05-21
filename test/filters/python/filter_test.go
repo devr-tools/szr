@@ -77,3 +77,24 @@ func TestSummarizePytestPass(t *testing.T) {
 		t.Fatalf("unexpected pytest pass summary: %q", got)
 	}
 }
+
+func TestSummarizePythonTooling(t *testing.T) {
+	input := strings.Join([]string{
+		"src/app.py:12: error: Name \"missing\" is not defined  [name-defined]",
+		"src/app.py:18:5: F401 `os` imported but unused",
+		"ERROR: Could not find a version that satisfies the requirement missing-pkg",
+		"Found 2 errors in 1 file (checked 4 source files)",
+	}, "\n")
+
+	got := pyfilter.SummarizePythonTooling(input, 5)
+	for _, want := range []string{
+		"src/app.py:12: error: Name \"missing\" is not defined  [name-defined]",
+		"src/app.py:18:5: F401 `os` imported but unused",
+		"Could not find a version that satisfies the requirement missing-pkg",
+		"Found 2 errors in 1 file",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in python tooling summary:\n%s", want, got)
+		}
+	}
+}

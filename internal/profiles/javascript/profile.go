@@ -46,6 +46,33 @@ func Profiles(maxLines int) []engine.Profile {
 			},
 		},
 		{
+			Name:             "js-workspace",
+			Description:      "Summarizes JavaScript package-manager, workspace, and Vite output around failed tasks and actionable file errors.",
+			Confidence:       engine.ConfidenceMedium,
+			StreamPreference: engine.StreamStdoutFirst,
+			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 10)),
+			LatencyBudget:    profilekit.LatencyBudget(30),
+			Match: func(inv engine.Invocation) bool {
+				return isJSWorkspaceCommand(inv.Display)
+			},
+			Prepare: func(inv engine.Invocation) []string {
+				return inv.Command
+			},
+			Render: func(_ engine.Invocation, exec engine.Execution) string {
+				return jsfilter.SummarizeJSTooling(exec.Stdout+"\n"+exec.Stderr, maxLines)
+			},
+			StreamRender: func(_ engine.Invocation, _ engine.OutputBudget) engine.StreamReducer {
+				return shared.NewBufferedTextReducer(true, true, func(input string) string {
+					return jsfilter.SummarizeJSTooling(input, maxLines)
+				})
+			},
+			ParseBytes: profilekit.ParseCombined,
+			Explain: []string{
+				"Matches general JavaScript package-manager and workspace-tool commands outside the dedicated test-runner profiles.",
+				"Surfaces failed tasks, Vite build errors, package-manager failures, and file anchors instead of long install or build chatter.",
+			},
+		},
+		{
 			Name:             "vitest-json",
 			Description:      "Requests the Vitest JSON reporter and preserves failing suite details.",
 			Confidence:       engine.ConfidenceHigh,
@@ -112,6 +139,20 @@ func isPackageManagerTest(args []string) bool {
 	return len(args) >= 2 &&
 		(args[0] == "npm" || args[0] == "pnpm" || args[0] == "yarn") &&
 		(args[1] == "test" || len(args) >= 3 && args[1] == "run" && args[2] == "test")
+}
+
+func isJSWorkspaceCommand(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	switch args[0] {
+	case "npm", "pnpm", "yarn":
+		return !isPackageManagerTest(args)
+	case "turbo", "nx", "vite":
+		return true
+	default:
+		return false
+	}
 }
 
 func appendPackageManagerArgs(command []string, extra ...string) []string {

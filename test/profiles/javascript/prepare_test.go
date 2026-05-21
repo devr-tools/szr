@@ -152,3 +152,28 @@ func TestStructuredJSProfilesPrepare(t *testing.T) {
 		t.Fatalf("expected jest output file to be preserved, got %#v", got)
 	}
 }
+
+func TestJSWorkspaceProfilePrepare(t *testing.T) {
+	list := profiles.Builtins(6)
+	workspace := testutil.FindProfile(t, list, "js-workspace")
+
+	for _, display := range [][]string{
+		{"npm", "install"},
+		{"pnpm", "lint"},
+		{"yarn", "build"},
+		{"turbo", "run", "build"},
+		{"nx", "test", "web"},
+		{"vite", "build"},
+	} {
+		if !workspace.Match(engine.Invocation{Display: display}) {
+			t.Fatalf("expected %#v to match js-workspace", display)
+		}
+	}
+
+	if workspace.Match(engine.Invocation{Display: []string{"npm", "test"}}) {
+		t.Fatal("did not expect npm test to match js-workspace")
+	}
+	if got := workspace.Prepare(engine.Invocation{Command: []string{"turbo", "run", "build"}}); !reflect.DeepEqual(got, []string{"turbo", "run", "build"}) {
+		t.Fatalf("expected js-workspace prepare passthrough, got %#v", got)
+	}
+}

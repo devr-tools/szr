@@ -2,7 +2,7 @@
 
 This document tracks the builtin profiles currently registered by `internal/profiles.Builtins()`.
 
-Current coverage: `21` builtin profiles across `9` categories.
+Current coverage: `27` builtin profiles across `12` categories.
 
 Anything not listed here does not currently have a dedicated builtin profile in `szr`.
 
@@ -14,8 +14,11 @@ Anything not listed here does not currently have a dedicated builtin profile in 
 | Generic fallback | 2 | wrapped `test` commands, shallow `summary` commands |
 | Git | 3 | `git status`, `git log`, `git diff` |
 | GitHub CLI | 3 | `gh pr view`, `gh run view`, GitHub Actions logs |
-| JavaScript test runners | 3 | `npm/pnpm/yarn test`, `vitest`, `jest` |
-| Python | 1 | `pytest`, `python -m pytest`, `uv run pytest` |
+| JavaScript | 4 | `npm`, `pnpm`, `yarn`, `turbo`, `nx`, `vite`, `vitest`, `jest` |
+| Python | 2 | `uv`, `poetry`, `pip`, `pytest`, `ruff`, `mypy` |
+| Build systems | 1 | `make`, `just`, `task`, `bazel`, `ninja`, `cmake` |
+| C/C++ tooling | 2 | `ctest`, `clang-tidy`, `clang-format`, `bear` |
+| Patch and diff | 1 | `diff`, `patch`, `git apply` |
 | Rust | 2 | `cargo test`, `cargo build`, `cargo clippy` |
 | Containers | 2 | `docker ps`, `docker logs`, `docker compose ps`, `docker compose logs` |
 | Kubernetes | 3 | `kubectl get`, `kubectl describe`, `kubectl logs` |
@@ -64,11 +67,14 @@ Anything not listed here does not currently have a dedicated builtin profile in 
   - Matches: `gh run view`
   - Focus: workflow status, branch or event context, failed jobs, and failed steps
 
-### JavaScript test runners
+### JavaScript
 
 - `js-package-test`
   - Matches: `npm test`, `pnpm test`, `yarn test`, plus `run test` variants
   - Focus: detects `vitest` or `jest` behind package scripts and forwards structured reporter flags
+- `js-workspace`
+  - Matches: non-test `npm`, `pnpm`, and `yarn` commands plus `turbo`, `nx`, and `vite`
+  - Focus: package-manager failures, workspace task failures, and file-anchored Vite or build diagnostics
 - `vitest-json`
   - Matches: direct `vitest` commands
   - Focus: requests JSON reporter output and preserves failing suite details
@@ -81,6 +87,30 @@ Anything not listed here does not currently have a dedicated builtin profile in 
 - `pytest`
   - Matches: `pytest`, `python -m pytest`, `uv run pytest`
   - Focus: low-noise pytest output with failing test ids, assertion lines, and short summaries
+- `python-tooling`
+  - Matches: `uv`, `poetry`, `pip`, `pip3`, `ruff`, `mypy`, plus `python -m pip|ruff|mypy`
+  - Focus: package resolution, lint, and type-check errors with file anchors and rule codes
+
+### Build systems
+
+- `build-system`
+  - Matches: `make`, `just`, `task`, `bazel`, `ninja`, `cmake`
+  - Focus: failing targets, orchestration errors, and source-file diagnostics
+
+### C/C++ tooling
+
+- `ctest`
+  - Matches: `ctest`
+  - Focus: failing test names, output-on-failure bodies, and assertion locations
+- `clang-tooling`
+  - Matches: `clang-tidy`, `clang-format`, `bear`
+  - Focus: file-level warnings and errors plus compilation-database generation signal
+
+### Patch and diff
+
+- `patch-diff`
+  - Matches: `diff`, `patch`, `git apply`
+  - Focus: touched files, hunk counts, and patch-application failures
 
 ### Rust
 
@@ -117,7 +147,8 @@ Anything not listed here does not currently have a dedicated builtin profile in 
 The current builtin set is strongest in:
 
 - local dev and test loops
+- build and lint orchestration
 - source control and PR inspection
 - container and Kubernetes operational output
 
-The main expansion surface is everything outside those command families. If we want broader coverage next, the cleanest candidates are additional language ecosystems, build tools, CI systems, and infra CLIs that are not listed above.
+The main expansion surface is now deeper structured handling inside the covered ecosystems rather than missing first-pass command families. The next clean expansion path is more tool-specific machine-readable modes, richer domain grouping, and better reducers for commands that still share broad category profiles.

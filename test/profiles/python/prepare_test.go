@@ -46,3 +46,40 @@ func TestPytestProfilePrepare(t *testing.T) {
 		t.Fatalf("unexpected partial pytest prepare: %#v", partial)
 	}
 }
+
+func TestPythonToolingProfilePrepare(t *testing.T) {
+	list := profiles.Builtins(6)
+	profile := testutil.FindProfile(t, list, "python-tooling")
+
+	for _, display := range [][]string{
+		{"uv", "sync"},
+		{"poetry", "install"},
+		{"pip", "install", "foo"},
+		{"pip3", "install", "foo"},
+		{"ruff", "check", "."},
+		{"mypy", "src"},
+		{"python", "-m", "pip", "install", "foo"},
+		{"python", "-m", "ruff", "check", "."},
+		{"python", "-m", "mypy", "src"},
+	} {
+		if !profile.Match(engine.Invocation{Display: display}) {
+			t.Fatalf("expected %#v to match python-tooling", display)
+		}
+	}
+	if profile.Match(engine.Invocation{Display: []string{"uv", "run", "pytest"}}) {
+		t.Fatal("did not expect uv run pytest to match python-tooling")
+	}
+
+	if got := profile.Prepare(engine.Invocation{Command: []string{"ruff", "check", "."}}); !reflect.DeepEqual(got, []string{"ruff", "check", ".", "--output-format", "concise"}) {
+		t.Fatalf("unexpected ruff prepare: %#v", got)
+	}
+	if got := profile.Prepare(engine.Invocation{Command: []string{"mypy", "src"}}); !reflect.DeepEqual(got, []string{"mypy", "src", "--show-error-codes", "--hide-error-context", "--no-color-output"}) {
+		t.Fatalf("unexpected mypy prepare: %#v", got)
+	}
+	if got := profile.Prepare(engine.Invocation{Command: []string{"python", "-m", "ruff", "check", "."}}); !reflect.DeepEqual(got, []string{"python", "-m", "ruff", "check", ".", "--output-format", "concise"}) {
+		t.Fatalf("unexpected python -m ruff prepare: %#v", got)
+	}
+	if got := profile.Prepare(engine.Invocation{Command: []string{"poetry", "install"}}); !reflect.DeepEqual(got, []string{"poetry", "install"}) {
+		t.Fatalf("expected poetry passthrough, got %#v", got)
+	}
+}

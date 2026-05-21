@@ -39,6 +39,33 @@ func Profiles(maxLines int) []engine.Profile {
 				"Collapses passing chatter while keeping failing test ids, fixture errors, assertion lines, and repair-relevant file anchors.",
 			},
 		},
+		{
+			Name:             "python-tooling",
+			Description:      "Summarizes Python package, lint, and type-check tooling around actionable diagnostics.",
+			Confidence:       engine.ConfidenceMedium,
+			StreamPreference: engine.StreamStdoutFirst,
+			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 10)),
+			LatencyBudget:    profilekit.LatencyBudget(30),
+			Match: func(inv engine.Invocation) bool {
+				return isPythonToolingCommand(inv.Display)
+			},
+			Prepare: func(inv engine.Invocation) []string {
+				return preparePythonToolingCommand(inv.Command)
+			},
+			Render: func(_ engine.Invocation, exec engine.Execution) string {
+				return pyfilter.SummarizePythonTooling(exec.Stdout+"\n"+exec.Stderr, maxLines)
+			},
+			StreamRender: func(_ engine.Invocation, _ engine.OutputBudget) engine.StreamReducer {
+				return shared.NewBufferedTextReducer(true, true, func(input string) string {
+					return pyfilter.SummarizePythonTooling(input, maxLines)
+				})
+			},
+			ParseBytes: profilekit.ParseCombined,
+			Explain: []string{
+				"Matches Python package-management, lint, and type-check tooling such as `uv`, `poetry`, `pip`, `ruff`, and `mypy`.",
+				"Prefers concise linter and type-check output when safe, and preserves actionable file, rule, and package-resolution failures.",
+			},
+		},
 	}
 }
 
@@ -53,6 +80,71 @@ func isPytestCommand(args []string) bool {
 	default:
 		return false
 	}
+}
+
+func isPythonToolingCommand(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	switch args[0] {
+	case "uv":
+		return !(len(args) >= 3 && args[1] == "run" && args[2] == "pytest")
+	case "poetry", "pip", "pip3", "ruff", "mypy":
+		return true
+	case "python":
+		return len(args) >= 3 && args[1] == "-m" && args[2] != "pytest" && (args[2] == "pip" || args[2] == "ruff" || args[2] == "mypy")
+	default:
+		return false
+	}
+}
+
+func preparePythonToolingCommand(command []string) []string {
+	if len(command) == 0 {
+		return command
+	}
+
+	switch detectPythonTool(command) {
+	case "ruff":
+		if profilekit.ContainsAny(command, "--output-format") || profilekit.ContainsPrefix(command, "--output-format=") {
+			return command
+		}
+		return append(command, "--output-format", "concise")
+	case "mypy":
+		out := append([]string{}, command...)
+		if !profilekit.ContainsAny(command, "--show-error-codes") {
+			out = append(out, "--show-error-codes")
+		}
+		if !profilekit.ContainsAny(command, "--hide-error-context") {
+			out = append(out, "--hide-error-context")
+		}
+		if !profilekit.ContainsAny(command, "--no-color-output") {
+			out = append(out, "--no-color-output")
+		}
+		return out
+	default:
+		return command
+	}
+}
+
+func detectPythonTool(command []string) string {
+	if len(command) == 0 {
+		return ""
+	}
+	switch command[0] {
+	case "ruff", "mypy", "uv", "poetry", "pip", "pip3":
+		if command[0] == "python" && len(command) >= 3 {
+			return command[2]
+		}
+		if command[0] == "uv" && len(command) >= 3 && command[1] == "run" {
+			return command[2]
+		}
+		return command[0]
+	case "python":
+		if len(command) >= 3 && command[1] == "-m" {
+			return command[2]
+		}
+	}
+	return ""
 }
 
 func preparePytestCommand(command []string) []string {

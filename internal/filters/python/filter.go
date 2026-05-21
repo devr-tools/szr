@@ -38,6 +38,57 @@ func SummarizePytest(input string, maxLines int) string {
 	return joinLimitedLines(out, maxLines)
 }
 
+func SummarizePythonTooling(input string, maxLines int) string {
+	if maxLines <= 0 {
+		maxLines = 12
+	}
+
+	clean := StripANSI(input)
+	lines := []string{}
+	summaries := []string{}
+	for _, line := range nonEmptyLines(clean) {
+		trimmed := strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(trimmed, "error:"),
+			strings.HasPrefix(trimmed, "warning:"),
+			strings.HasPrefix(trimmed, "note:"),
+			strings.HasPrefix(trimmed, "Found "),
+			strings.HasPrefix(trimmed, "Success:"),
+			strings.HasPrefix(trimmed, "All checks passed"),
+			strings.HasPrefix(trimmed, "No issues found"),
+			strings.Contains(trimmed, "ResolutionImpossible"),
+			strings.Contains(trimmed, "SolverProblemError"),
+			strings.Contains(trimmed, "No matching distribution found"),
+			strings.Contains(trimmed, "Could not find a version"),
+			strings.Contains(trimmed, "PackagesNotFoundError"):
+			summaries = append(summaries, clip(trimmed, 160))
+		case strings.Contains(trimmed, ".py:"),
+			strings.Contains(trimmed, " error:"),
+			strings.Contains(trimmed, " warning:"),
+			strings.Contains(trimmed, "Undefined name"),
+			strings.Contains(trimmed, "Incompatible types"),
+			strings.Contains(trimmed, "["),
+			strings.Contains(trimmed, "F401"),
+			strings.Contains(trimmed, "E501"),
+			strings.Contains(trimmed, "RUF"),
+			strings.Contains(trimmed, "Traceback"),
+			strings.Contains(trimmed, "ModuleNotFoundError"),
+			strings.Contains(trimmed, "ImportError"):
+			lines = append(lines, clip(trimmed, 160))
+		}
+	}
+
+	lines = uniqueStrings(lines)
+	summaries = uniqueStrings(summaries)
+	if len(lines) == 0 && len(summaries) == 0 {
+		return shared.SummarizeGenericFailure(clean, maxLines)
+	}
+
+	out := append([]string{}, lines...)
+	out = append(out, summaries...)
+	return joinLimitedLines(out, maxLines)
+}
+
 func collectPytestSummaries(lines []string) []string {
 	out := []string{}
 	for _, line := range lines {

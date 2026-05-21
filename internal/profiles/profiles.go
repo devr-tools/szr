@@ -4,11 +4,14 @@ import (
 	"time"
 
 	"szr/internal/engine"
+	buildprofiles "szr/internal/profiles/build"
 	containerprofiles "szr/internal/profiles/container"
+	cppprofiles "szr/internal/profiles/cpp"
 	gitprofiles "szr/internal/profiles/git"
 	githubprofiles "szr/internal/profiles/github"
 	javascriptprofiles "szr/internal/profiles/javascript"
 	kubernetesprofiles "szr/internal/profiles/kubernetes"
+	patchprofiles "szr/internal/profiles/patch"
 	pythonprofiles "szr/internal/profiles/python"
 	rustprofiles "szr/internal/profiles/rust"
 )
@@ -16,6 +19,9 @@ import (
 func Builtins(maxLines int) []engine.Profile {
 	list := coreProfiles(maxLines)
 	list = append(list, gitprofiles.Profiles(maxLines)...)
+	list = append(list, buildprofiles.Profiles(maxLines)...)
+	list = append(list, cppprofiles.Profiles(maxLines)...)
+	list = append(list, patchprofiles.Profiles(maxLines)...)
 	list = append(list, rustprofiles.Profiles(maxLines)...)
 	list = append(list, pythonprofiles.Profiles(maxLines)...)
 	list = append(list, containerprofiles.Profiles(maxLines)...)

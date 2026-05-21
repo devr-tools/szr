@@ -10,8 +10,8 @@ import (
 
 func TestBuiltInProfiles(t *testing.T) {
 	list := profiles.Builtins(3)
-	if len(list) != 21 {
-		t.Fatalf("expected 21 profiles, got %d", len(list))
+	if len(list) != 27 {
+		t.Fatalf("expected 27 profiles, got %d", len(list))
 	}
 
 	goTest := testutil.FindProfile(t, list, "go-test-json")
@@ -85,6 +85,44 @@ func TestBuiltInProfiles(t *testing.T) {
 	}
 	if cargoBuild.StreamPreference != engine.StreamStderrFirst || cargoBuild.StreamRender == nil {
 		t.Fatalf("unexpected cargo-build stream metadata: %#v", cargoBuild)
+	}
+
+	buildSystem := testutil.FindProfile(t, list, "build-system")
+	if !buildSystem.Match(engine.Invocation{Display: []string{"make", "test"}}) || !buildSystem.Match(engine.Invocation{Display: []string{"ninja"}}) {
+		t.Fatal("build-system should match build orchestrators")
+	}
+	if got := buildSystem.Render(engine.Invocation{}, engine.Execution{Stdout: "FAILED: app\nninja: error: subcommand failed\n"}); got == "" {
+		t.Fatal("expected build-system render output")
+	}
+	if buildSystem.StreamPreference != engine.StreamStdoutFirst || buildSystem.StreamRender == nil {
+		t.Fatalf("unexpected build-system stream metadata: %#v", buildSystem)
+	}
+
+	ctest := testutil.FindProfile(t, list, "ctest")
+	if !ctest.Match(engine.Invocation{Display: []string{"ctest"}}) {
+		t.Fatal("ctest should match ctest")
+	}
+	if got := ctest.Prepare(engine.Invocation{Command: []string{"ctest"}}); len(got) != 2 || got[1] != "--output-on-failure" {
+		t.Fatalf("expected ctest prepare to add --output-on-failure, got %#v", got)
+	}
+	if got := ctest.Render(engine.Invocation{}, engine.Execution{Stdout: "The following tests FAILED:\n2 - api_smoke (Failed)\n"}); got == "" {
+		t.Fatal("expected ctest render output")
+	}
+
+	clangTooling := testutil.FindProfile(t, list, "clang-tooling")
+	if !clangTooling.Match(engine.Invocation{Display: []string{"clang-tidy", "src/main.cpp"}}) || !clangTooling.Match(engine.Invocation{Display: []string{"bear", "--", "make"}}) {
+		t.Fatal("clang-tooling should match clang tooling and bear")
+	}
+	if got := clangTooling.Render(engine.Invocation{}, engine.Execution{Stderr: "src/main.cpp:10:5: warning: boom [modernize-use-nullptr]\n"}); got == "" {
+		t.Fatal("expected clang-tooling render output")
+	}
+
+	patchDiff := testutil.FindProfile(t, list, "patch-diff")
+	if !patchDiff.Match(engine.Invocation{Display: []string{"diff", "-u", "a", "b"}}) || !patchDiff.Match(engine.Invocation{Display: []string{"git", "apply", "fix.patch"}}) {
+		t.Fatal("patch-diff should match diff and git apply")
+	}
+	if got := patchDiff.Render(engine.Invocation{}, engine.Execution{Stdout: "diff --git a/a.txt b/a.txt\n@@ -1 +1 @@\n"}); got == "" {
+		t.Fatal("expected patch-diff render output")
 	}
 
 	dockerPS := testutil.FindProfile(t, list, "docker-ps")
@@ -173,6 +211,22 @@ func TestBuiltInProfiles(t *testing.T) {
 	}
 	if ghRunLog.StreamPreference != engine.StreamStdoutFirst || ghRunLog.StreamRender == nil {
 		t.Fatalf("unexpected gh-run-log stream metadata: %#v", ghRunLog)
+	}
+
+	jsWorkspace := testutil.FindProfile(t, list, "js-workspace")
+	if !jsWorkspace.Match(engine.Invocation{Display: []string{"turbo", "run", "build"}}) || !jsWorkspace.Match(engine.Invocation{Display: []string{"npm", "install"}}) {
+		t.Fatal("js-workspace should match workspace tooling commands")
+	}
+	if got := jsWorkspace.Render(engine.Invocation{}, engine.Execution{Stderr: "npm ERR! missing script: build\n"}); got == "" {
+		t.Fatal("expected js-workspace render output")
+	}
+
+	pythonTooling := testutil.FindProfile(t, list, "python-tooling")
+	if !pythonTooling.Match(engine.Invocation{Display: []string{"poetry", "install"}}) || !pythonTooling.Match(engine.Invocation{Display: []string{"mypy", "src"}}) {
+		t.Fatal("python-tooling should match python tooling commands")
+	}
+	if got := pythonTooling.Render(engine.Invocation{}, engine.Execution{Stderr: "src/app.py:3: error: Name \"x\" is not defined  [name-defined]\n"}); got == "" {
+		t.Fatal("expected python-tooling render output")
 	}
 
 	genericTest := testutil.FindProfile(t, list, "generic-test")

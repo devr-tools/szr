@@ -31,11 +31,14 @@ The first working scaffold is in place:
 - `szr git status`, `szr git log`, and `szr git diff` use dedicated profiles.
 - `szr go test` forces `-json` and summarizes package-level failures.
 - `szr cargo test`, `szr cargo build`, and `szr cargo clippy` now use Rust-aware reducers.
-- `szr pytest`, `szr python -m pytest`, and `szr uv run pytest` now use a pytest-aware reducer.
+- `szr uv`, `szr poetry`, `szr pip`, `szr pytest`, `szr ruff`, and `szr mypy` now use Python-aware reducers.
+- `szr make`, `szr just`, `szr task`, `szr bazel`, `szr ninja`, and `szr cmake` now use build-system reducers.
+- `szr ctest`, `szr clang-tidy`, `szr clang-format`, and `szr bear` now use C/C++ tooling reducers.
 - `szr docker ps`, `szr docker compose ps`, `szr docker logs`, and `szr docker compose logs` now use container-aware reducers.
 - `szr kubectl get`, `szr kubectl describe`, and `szr kubectl logs` now use Kubernetes-aware reducers.
 - `szr gh pr view`, `szr gh run view`, and `szr gh run view --log` now use GitHub-aware reducers.
-- `szr npm test`, `szr pnpm test`, `szr yarn test`, `szr vitest`, and `szr jest` now use JS/TS-aware profiles.
+- `szr npm`, `szr pnpm`, `szr yarn`, `szr turbo`, `szr nx`, `szr vite`, `szr vitest`, and `szr jest` now use JS/TS-aware profiles.
+- `szr diff`, `szr patch`, and `szr git apply` now use patch-aware reducers.
 - `szr read`, `szr grep`, `szr json`, `szr log`, and `szr ls` are implemented directly in Go.
 - `szr spread` tracks token savings in local JSONL history.
 - `szr explain <cmd...>` shows which profile the engine would use and why.
@@ -58,11 +61,17 @@ szr git diff
 szr go test ./...
 szr cargo test
 szr pytest -k failing_case
+szr ruff check .
+szr mypy src
+szr make test
+szr ctest
 szr docker logs api
 szr kubectl get pods
 szr gh run view 123
 szr gh run view 123 --log
 szr npm test
+szr turbo run build
+szr git apply fix.patch
 szr grep "TODO" .
 szr read internal/cli/app.go --level aggressive
 szr spread --history
@@ -108,7 +117,7 @@ More detail lives in [docs/ARCHITECTURE.md](/Users/alex/Documents/GitHub/szr/doc
 The current roadmap is organized around three goals:
 
 - lower wrapper latency so `szr` stays on the hot path
-- expand parser-first coverage beyond the current Go, Git, Rust, Python, JS/TS, container, Kubernetes, and GitHub command families
+- expand parser-first coverage beyond the current Go, Git, Rust, Python, JS/TS, build, C/C++, patch, container, Kubernetes, and GitHub command families
 - improve compression quality without hiding actionable failure lines, and extend the bench harness as profiles grow
 
 The detailed plan lives in [docs/ROADMAP.md](/Users/alex/Documents/GitHub/szr/docs/ROADMAP.md).

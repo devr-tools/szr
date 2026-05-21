@@ -82,4 +82,21 @@ func TestJSProfilesCoverageEdges(t *testing.T) {
 	if jest.StreamPreference != engine.StreamStdoutFirst || jest.StreamRender == nil {
 		t.Fatalf("unexpected jest stream metadata: %#v", jest)
 	}
+
+	workspace := testutil.FindProfile(t, list, "js-workspace")
+	rendered := workspace.Render(engine.Invocation{}, engine.Execution{
+		Stderr: strings.Join([]string{
+			"vite v5.4.0 building for production...",
+			"src/app.ts:14:7: error: Cannot find module 'x'",
+			"npm ERR! code ELIFECYCLE",
+		}, "\n"),
+	})
+	for _, want := range []string{"src/app.ts:14:7: error: Cannot find module 'x'", "npm ERR! code ELIFECYCLE"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected %q in js-workspace render output:\n%s", want, rendered)
+		}
+	}
+	if workspace.StreamPreference != engine.StreamStdoutFirst || workspace.StreamRender == nil {
+		t.Fatalf("unexpected js-workspace stream metadata: %#v", workspace)
+	}
 }

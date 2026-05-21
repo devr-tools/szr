@@ -56,3 +56,28 @@ func TestPytestProfileRender(t *testing.T) {
 		}
 	}
 }
+
+func TestPythonToolingProfileRender(t *testing.T) {
+	list := profiles.Builtins(6)
+	profile := testutil.FindProfile(t, list, "python-tooling")
+
+	rendered := profile.Render(engine.Invocation{}, engine.Execution{
+		Stdout: strings.Join([]string{
+			"src/app.py:12: error: Name \"missing\" is not defined  [name-defined]",
+			"src/app.py:18:5: F401 `os` imported but unused",
+			"Found 2 errors in 1 file (checked 4 source files)",
+		}, "\n"),
+	})
+	for _, want := range []string{
+		"src/app.py:12: error: Name \"missing\" is not defined  [name-defined]",
+		"src/app.py:18:5: F401 `os` imported but unused",
+		"Found 2 errors in 1 file",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected %q in python-tooling render output:\n%s", want, rendered)
+		}
+	}
+	if profile.StreamPreference != engine.StreamStdoutFirst || profile.StreamRender == nil {
+		t.Fatalf("unexpected python-tooling stream metadata: %#v", profile)
+	}
+}

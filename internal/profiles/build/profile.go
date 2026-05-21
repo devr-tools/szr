@@ -1,0 +1,52 @@
+package build
+
+import (
+	"szr/internal/engine"
+	shared "szr/internal/filters"
+	buildfilter "szr/internal/filters/build"
+	"szr/internal/profilekit"
+)
+
+func Profiles(maxLines int) []engine.Profile {
+	return []engine.Profile{
+		{
+			Name:             "build-system",
+			Description:      "Summarizes common build-orchestration tools around failing targets and actionable diagnostics.",
+			Confidence:       engine.ConfidenceMedium,
+			StreamPreference: engine.StreamStdoutFirst,
+			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 12)),
+			LatencyBudget:    profilekit.LatencyBudget(30),
+			Match: func(inv engine.Invocation) bool {
+				return isBuildSystemCommand(inv.Display)
+			},
+			Prepare: func(inv engine.Invocation) []string {
+				return inv.Command
+			},
+			Render: func(_ engine.Invocation, exec engine.Execution) string {
+				return buildfilter.SummarizeBuildSystem(exec.Stdout+"\n"+exec.Stderr, maxLines)
+			},
+			StreamRender: func(_ engine.Invocation, _ engine.OutputBudget) engine.StreamReducer {
+				return shared.NewBufferedTextReducer(true, true, func(input string) string {
+					return buildfilter.SummarizeBuildSystem(input, maxLines)
+				})
+			},
+			ParseBytes: profilekit.ParseCombined,
+			Explain: []string{
+				"Matches common build-system entrypoints such as `make`, `just`, `task`, `bazel`, `ninja`, and `cmake`.",
+				"Keeps failing targets, build-system error lines, and source file anchors instead of raw parallel build chatter.",
+			},
+		},
+	}
+}
+
+func isBuildSystemCommand(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	switch args[0] {
+	case "make", "just", "task", "bazel", "ninja", "cmake":
+		return true
+	default:
+		return false
+	}
+}
