@@ -58,12 +58,19 @@ Homebrew is also wired up through this repo's tap:
 ```bash
 # From a local checkout
 brew tap devr-tools/szr "$(pwd)"
-brew install devr-tools/szr/szr
+brew install szr
 szr self doctor
 ```
 
 ```bash
 # From GitHub
+brew tap devr-tools/szr
+brew install szr
+szr self doctor
+```
+
+```bash
+# One-line direct install from the tap
 brew install devr-tools/szr/szr
 szr self doctor
 ```
