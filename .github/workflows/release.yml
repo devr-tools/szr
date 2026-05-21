@@ -4,80 +4,134 @@ on:
   push:
     tags:
       - "v*"
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag to build from.
+        required: true
+        type: string
+      prerelease:
+        description: Whether this release should stay in the prerelease channel.
+        required: true
+        type: boolean
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to create or publish.
+        required: true
+        type: string
+      prerelease:
+        description: Mark the release as a prerelease.
+        required: true
+        type: boolean
 
 permissions:
   contents: write
 
 jobs:
-  build:
+  build-release:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - goos: darwin
-            goarch: amd64
-          - goos: darwin
-            goarch: arm64
-          - goos: linux
-            goarch: amd64
-          - goos: linux
-            goarch: arm64
-
     steps:
-      - uses: actions/checkout@v4
+      - name: Resolve release context
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
 
-      - uses: actions/setup-go@v5
+          if [ "${{ github.event_name }}" = "push" ]; then
+            tag="${GITHUB_REF_NAME}"
+            if [[ "$tag" == *-* ]]; then
+              prerelease="true"
+            else
+              prerelease="false"
+            fi
+          else
+            tag="${{ inputs.tag }}"
+            prerelease="${{ inputs.prerelease }}"
+          fi
+
+          echo "tag=$tag" >>"$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >>"$GITHUB_OUTPUT"
+
+      - name: Validate inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="${{ steps.release.outputs.tag }}"
+          prerelease="${{ steps.release.outputs.prerelease }}"
+
+          if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "tag must look like v1.2.3 or v1.2.3-rc.4"
+            exit 1
+          fi
+
+          if [ "$prerelease" = "true" ] && [[ "$tag" != *-* ]]; then
+            echo "prerelease tags must include a prerelease suffix, for example -rc.4"
+            exit 1
+          fi
+
+          if [ "$prerelease" != "true" ] && [[ "$tag" == *-* ]]; then
+            echo "stable releases must use a stable semantic version tag"
+            exit 1
+          fi
+
+      - name: Check out code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Ensure requested tag exists
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="${{ steps.release.outputs.tag }}"
+
+          git fetch --tags --force
+
+          if git rev-parse "$tag" >/dev/null 2>&1; then
+            :
+          elif git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            git fetch origin "refs/tags/$tag:refs/tags/$tag"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$tag" -m "Release $tag" "$GITHUB_SHA"
+            git push origin "refs/tags/$tag"
+          fi
+
+          git checkout "$tag"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
 
-      - name: Build release artifacts
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean --config .goreleaser.yaml
         env:
-          CGO_ENABLED: 0
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-        run: |
-          mkdir -p dist
-          version="${GITHUB_REF_NAME#v}"
-          base="szr_${version}_${GOOS}_${GOARCH}"
-          ext=""
-          if [ "$GOOS" = "windows" ]; then
-            ext=".exe"
-          fi
-          go build \
-            -trimpath \
-            -ldflags="-s -w -X main.version=${version}" \
-            -o "dist/szr${ext}" \
-            ./cmd/szr
-          tar -czf "dist/${base}.tar.gz" -C dist "szr${ext}"
-          rm -f "dist/szr${ext}"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload artifacts
+      - name: Upload release bundle
         uses: actions/upload-artifact@v4
         with:
-          name: release-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: dist/*.tar.gz
+          name: dist-${{ steps.release.outputs.tag }}
+          path: dist/*
 
-  publish:
-    runs-on: ubuntu-latest
-    needs: build
-
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: dist
-          pattern: release-*
-          merge-multiple: true
-
-      - name: Generate checksums
+      - name: Notify Discord for stable releases
+        if: ${{ steps.release.outputs.prerelease == 'false' && secrets.DISCORD_WEBHOOK != '' }}
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        shell: bash
         run: |
-          cd dist
-          shasum -a 256 *.tar.gz > checksums.txt
+          set -euo pipefail
 
-      - name: Publish GitHub release
-        uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
-          files: |
-            dist/*.tar.gz
-            dist/checksums.txt
+          curl -sS \
+            -H "Content-Type: application/json" \
+            -d "{\"content\":\"szr ${{ steps.release.outputs.tag }} is live: https://github.com/${{ github.repository }}/releases/tag/${{ steps.release.outputs.tag }}\"}" \
+            "$DISCORD_WEBHOOK"

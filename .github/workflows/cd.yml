@@ -1,0 +1,130 @@
+name: cd
+
+on:
+  push:
+    branches:
+      - develop
+      - master
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cd-${{ github.ref_name }}
+  cancel-in-progress: ${{ github.ref_name == 'develop' }}
+
+jobs:
+  guard-manual-stable:
+    if: github.event_name == 'workflow_dispatch' && (github.ref_name == 'main' || github.ref_name == 'master')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Stop manual stable runs here
+        run: |
+          echo "Use .github/workflows/release.yml for manual stable releases."
+          exit 1
+
+  prepare-prerelease:
+    if: |
+      (github.event_name == 'push' && github.ref_name == 'develop') ||
+      (github.event_name == 'workflow_dispatch' && github.ref_name != 'main' && github.ref_name != 'master')
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Compute prerelease tag
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          manifest_version="$(sed -n 's/.*"\\." *: *"\\([0-9][0-9.]*\\)".*/\\1/p' .release-please-manifest.json)"
+          bootstrap_sha="$(sed -n 's/.*"bootstrap-sha" *: *"\\([0-9a-f]\\{40\\}\\)".*/\\1/p' .github/release-please-config.json)"
+          latest_tag="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-version:refname | head -n 1)"
+
+          if [ -n "$latest_tag" ]; then
+            base_version="${latest_tag#v}"
+            commit_range="${latest_tag}..HEAD"
+          else
+            base_version="${manifest_version:-0.1.0}"
+            if [ -n "$bootstrap_sha" ]; then
+              commit_range="${bootstrap_sha}..HEAD"
+            else
+              commit_range="HEAD"
+            fi
+          fi
+
+          subjects="$(git log --format='%s' "$commit_range" 2>/dev/null || true)"
+          bodies="$(git log --format='%b' "$commit_range" 2>/dev/null || true)"
+
+          bump="patch"
+          if printf '%s\n%s\n' "$subjects" "$bodies" | grep -Eq 'BREAKING CHANGE|^[^[:space:]]+(\([^)]+\))?!:'; then
+            bump="major"
+          elif printf '%s\n' "$subjects" | grep -Eq '^feat(\([^)]+\))?:'; then
+            bump="minor"
+          fi
+
+          IFS=. read -r major minor patch <<<"$base_version"
+
+          case "$bump" in
+            major)
+              major=$((major + 1))
+              minor=0
+              patch=0
+              ;;
+            minor)
+              minor=$((minor + 1))
+              patch=0
+              ;;
+            patch)
+              patch=$((patch + 1))
+              ;;
+          esac
+
+          next_version="${major}.${minor}.${patch}"
+          tag="v${next_version}-rc.${GITHUB_RUN_NUMBER}"
+
+          echo "tag=$tag" >>"$GITHUB_OUTPUT"
+          echo "Using prerelease tag $tag"
+
+  prerelease:
+    needs: prepare-prerelease
+    if: needs.prepare-prerelease.result == 'success'
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.prepare-prerelease.outputs.tag }}
+      prerelease: true
+    secrets: inherit
+
+  release-please:
+    if: github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - name: Run release-please
+        id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          config-file: .github/release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  stable-release:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
+      prerelease: false
+    secrets: inherit

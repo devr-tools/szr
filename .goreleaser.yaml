@@ -1,0 +1,59 @@
+version: 2
+
+project_name: szr
+
+builds:
+  - id: szr
+    main: ./cmd/szr
+    binary: szr
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
+archives:
+  - ids:
+      - szr
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+
+checksum:
+  name_template: checksums.txt
+
+source:
+  enabled: true
+  name_template: "{{ .ProjectName }}_{{ .Version }}_source"
+  format: tar.gz
+
+nfpms:
+  - id: szr-linux-packages
+    ids:
+      - szr
+    package_name: szr
+    formats:
+      - deb
+      - rpm
+    description: Token-aware CLI proxy that trims noisy command output for LLM workflows.
+    homepage: https://github.com/devr-tools/szr
+    maintainer: devr-tools
+
+release:
+  prerelease: auto
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
