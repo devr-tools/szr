@@ -1,15 +1,15 @@
-package filters_test
+package container_test
 
 import (
 	"strings"
 	"testing"
 
-	"szr/internal/filters"
+	containerfilter "szr/internal/filters/container"
 )
 
 func TestSummarizeDockerPS(t *testing.T) {
 	tabular := "api\tUp 3 minutes\tapp:latest\nworker\tExited (1) 10 seconds ago\tworker:latest\n"
-	got := filters.SummarizeDockerPS(tabular, 4)
+	got := containerfilter.SummarizeDockerPS(tabular, 4)
 	for _, want := range []string{
 		"containers: running=1 exited=1 other=0",
 		"api: Up 3 minutes [app:latest]",
@@ -21,7 +21,7 @@ func TestSummarizeDockerPS(t *testing.T) {
 	}
 
 	json := `[{"Service":"api","State":"running","Health":"healthy","Image":"app:latest"},{"Service":"worker","State":"exited","Image":"worker:latest"}]`
-	got = filters.SummarizeDockerPS(json, 4)
+	got = containerfilter.SummarizeDockerPS(json, 4)
 	for _, want := range []string{
 		"containers: running=1 exited=1 other=0",
 		"api: running (healthy) [app:latest]",
@@ -42,7 +42,7 @@ func TestSummarizeDockerLogs(t *testing.T) {
 		"worker-1  | panic: bad queue state",
 	}, "\n")
 
-	got := filters.SummarizeDockerLogs(input, 5)
+	got := containerfilter.SummarizeDockerLogs(input, 5)
 	for _, want := range []string{
 		"sources: 2",
 		"api-1: ERROR failed to connect to db (x2)",

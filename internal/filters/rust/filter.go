@@ -1,6 +1,10 @@
-package filters
+package rust
 
-import "strings"
+import (
+	"strings"
+
+	shared "szr/internal/filters"
+)
 
 func SummarizeCargoTest(input string, maxLines int) string {
 	if maxLines <= 0 {
@@ -55,7 +59,7 @@ func SummarizeCargoTest(input string, maxLines int) string {
 		if len(summaries) > 0 {
 			return joinLimitedLines(summaries, maxLines)
 		}
-		return CompactLines(input, maxLines)
+		return shared.CompactLines(input, maxLines)
 	}
 
 	out := append([]string{}, summaries...)
@@ -100,7 +104,7 @@ func SummarizeCargoBuild(input string, maxLines int) string {
 		if len(summaries) > 0 {
 			return joinLimitedLines(summaries, maxLines)
 		}
-		return CompactLines(input, maxLines)
+		return shared.CompactLines(input, maxLines)
 	}
 
 	out := append([]string{}, diagnostics...)
@@ -156,4 +160,28 @@ func isCargoInterestingDetail(line string) bool {
 	default:
 		return false
 	}
+}
+
+func StripANSI(input string) string {
+	return shared.StripANSI(input)
+}
+
+func clip(input string, max int) string {
+	return shared.Clip(input, max)
+}
+
+func uniqueStrings(values []string) []string {
+	return shared.UniqueStrings(values)
+}
+
+func nonEmptyLines(input string) []string {
+	return shared.NonEmptyLines(input)
+}
+
+func joinLimitedLines(lines []string, maxLines int) string {
+	return shared.JoinLimitedLines(lines, maxLines)
+}
+
+func isDividerLine(line string) bool {
+	return strings.Trim(line, "=-_ ") == ""
 }

@@ -205,9 +205,9 @@ func runCommand(ctx context.Context, args []string, cwd string, options runOptio
 		errCh <- copyStream(stderrPipe, &stderr, tee, reducer, options.reduceStderrLive, options.onPreview, false)
 	}()
 
-	waitErr := cmd.Wait()
 	wg.Wait()
 	close(errCh)
+	waitErr := cmd.Wait()
 
 	streamErr := firstStreamError(errCh)
 

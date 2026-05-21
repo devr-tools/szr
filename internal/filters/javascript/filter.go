@@ -1,9 +1,11 @@
-package filters
+package javascript
 
 import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	shared "szr/internal/filters"
 )
 
 type jsTestReport struct {
@@ -41,58 +43,28 @@ func SummarizeJSTest(input string, maxLines int) string {
 	return summarizeJSTestText(clean, maxLines)
 }
 
-type BufferedTextReducer struct {
-	stdoutEnabled bool
-	stderrEnabled bool
-	render        func(string) string
-	bytesParsed   int
-	stdout        textBuffer
-	stderr        textBuffer
+func StripANSI(input string) string {
+	return shared.StripANSI(input)
 }
 
-func NewBufferedTextReducer(stdoutEnabled, stderrEnabled bool, render func(string) string) *BufferedTextReducer {
-	return &BufferedTextReducer{
-		stdoutEnabled: stdoutEnabled,
-		stderrEnabled: stderrEnabled,
-		render:        render,
-	}
+func CompactLines(input string, maxLines int) string {
+	return shared.CompactLines(input, maxLines)
 }
 
-func (r *BufferedTextReducer) ConsumeStdout(chunk []byte) {
-	if !r.stdoutEnabled {
-		return
-	}
-	r.bytesParsed += len(chunk)
-	r.stdout.Consume(chunk)
+func clip(input string, max int) string {
+	return shared.Clip(input, max)
 }
 
-func (r *BufferedTextReducer) ConsumeStderr(chunk []byte) {
-	if !r.stderrEnabled {
-		return
-	}
-	r.bytesParsed += len(chunk)
-	r.stderr.Consume(chunk)
+func uniqueStrings(values []string) []string {
+	return shared.UniqueStrings(values)
 }
 
-func (r *BufferedTextReducer) Result() string {
-	return r.render(strings.TrimSpace(r.stdout.String() + joinReducerStreams(r.stdout.String(), r.stderr.String())))
+func nonEmptyLines(input string) []string {
+	return shared.NonEmptyLines(input)
 }
 
-func (r *BufferedTextReducer) BytesParsed() int {
-	return r.bytesParsed
-}
-
-func (r *BufferedTextReducer) FallbackUsed() bool {
-	return false
-}
-
-func joinReducerStreams(stdout, stderr string) string {
-	switch {
-	case stdout == "" || stderr == "":
-		return stderr
-	default:
-		return "\n" + stderr
-	}
+func NewBufferedTextReducer(stdoutEnabled, stderrEnabled bool, render func(string) string) *shared.BufferedTextReducer {
+	return shared.NewBufferedTextReducer(stdoutEnabled, stderrEnabled, render)
 }
 
 func parseJSTestReport(input string) (jsTestReport, bool) {

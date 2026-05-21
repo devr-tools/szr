@@ -1,10 +1,12 @@
-package filters
+package container
 
 import (
 	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
+
+	shared "szr/internal/filters"
 )
 
 func SummarizeDockerPS(input string, maxLines int) string {
@@ -12,12 +14,12 @@ func SummarizeDockerPS(input string, maxLines int) string {
 		maxLines = 10
 	}
 
-	clean := StripANSI(input)
+	clean := shared.StripANSI(input)
 	if services := parseComposePSJSON(clean); len(services) > 0 {
 		return summarizeDockerServices(services, maxLines)
 	}
 
-	lines := nonEmptyLines(clean)
+	lines := shared.NonEmptyLines(clean)
 	if len(lines) == 0 {
 		return "ok"
 	}
@@ -38,7 +40,7 @@ func SummarizeDockerPS(input string, maxLines int) string {
 	if len(services) > 0 {
 		return summarizeDockerServices(services, maxLines)
 	}
-	return CompactLines(clean, maxLines)
+	return shared.CompactLines(clean, maxLines)
 }
 
 func SummarizeDockerLogs(input string, maxLines int) string {
@@ -46,7 +48,7 @@ func SummarizeDockerLogs(input string, maxLines int) string {
 		maxLines = 12
 	}
 
-	lines := nonEmptyLines(StripANSI(input))
+	lines := shared.NonEmptyLines(shared.StripANSI(input))
 	if len(lines) == 0 {
 		return "ok"
 	}
@@ -75,12 +77,12 @@ func SummarizeDockerLogs(input string, maxLines int) string {
 		entry := getSource(source)
 		entry.count++
 		if entry.headLine == "" {
-			entry.headLine = clip(strings.TrimSpace(message), 160)
+			entry.headLine = shared.Clip(strings.TrimSpace(message), 160)
 		}
 		if !isInterestingLogLine(message) {
 			continue
 		}
-		normalized := clip(strings.TrimSpace(message), 160)
+		normalized := shared.Clip(strings.TrimSpace(message), 160)
 		if _, ok := entry.seen[normalized]; !ok {
 			entry.order = append(entry.order, normalized)
 		}
@@ -105,7 +107,7 @@ func SummarizeDockerLogs(input string, maxLines int) string {
 			out = append(out, line)
 		}
 	}
-	return joinLimitedLines(out, maxLines)
+	return shared.JoinLimitedLines(out, maxLines)
 }
 
 type dockerServiceState struct {
@@ -177,10 +179,10 @@ func summarizeDockerServices(services []dockerServiceState, maxLines int) string
 		if service.Image != "" {
 			line += " [" + service.Image + "]"
 		}
-		out = append(out, clip(line, 160))
+		out = append(out, shared.Clip(line, 160))
 	}
 	header := fmt.Sprintf("containers: running=%d exited=%d other=%d", running, exited, other)
-	return joinLimitedLines(append([]string{header}, out...), maxLines)
+	return shared.JoinLimitedLines(append([]string{header}, out...), maxLines)
 }
 
 func splitDockerLogLine(line string) (string, string) {

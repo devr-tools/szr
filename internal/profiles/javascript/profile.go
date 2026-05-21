@@ -1,4 +1,4 @@
-package profiles
+package javascript
 
 import (
 	"encoding/json"
@@ -7,18 +7,20 @@ import (
 	"strings"
 
 	"szr/internal/engine"
-	"szr/internal/filters"
+	shared "szr/internal/filters"
+	jsfilter "szr/internal/filters/javascript"
+	"szr/internal/profilekit"
 )
 
-func jsProfiles(maxLines int) []engine.Profile {
+func Profiles(maxLines int) []engine.Profile {
 	return []engine.Profile{
 		{
 			Name:             "js-package-test",
 			Description:      "Detects Jest and Vitest behind package-manager test scripts and forwards structured reporter flags.",
 			Confidence:       engine.ConfidenceMedium,
 			StreamPreference: engine.StreamStdoutFirst,
-			Budget:           outputBudget(atLeast(maxLines, 12)),
-			LatencyBudget:    latencyBudget(35),
+			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 12)),
+			LatencyBudget:    profilekit.LatencyBudget(35),
 			Match: func(inv engine.Invocation) bool {
 				return isPackageManagerTest(inv.Display)
 			},
@@ -30,14 +32,14 @@ func jsProfiles(maxLines int) []engine.Profile {
 				return appendPackageManagerArgs(inv.Command, runnerArgs(runner)...)
 			},
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
-				return filters.SummarizeJSTest(exec.Stdout+"\n"+exec.Stderr, maxLines)
+				return jsfilter.SummarizeJSTest(exec.Stdout+"\n"+exec.Stderr, maxLines)
 			},
 			StreamRender: func(_ engine.Invocation, _ engine.OutputBudget) engine.StreamReducer {
-				return filters.NewBufferedTextReducer(true, true, func(input string) string {
-					return filters.SummarizeJSTest(input, maxLines)
+				return shared.NewBufferedTextReducer(true, true, func(input string) string {
+					return jsfilter.SummarizeJSTest(input, maxLines)
 				})
 			},
-			ParseBytes: parseCombined,
+			ParseBytes: profilekit.ParseCombined,
 			Explain: []string{
 				"Inspects the local `package.json` test script to detect `vitest` or `jest` behind `npm`, `pnpm`, and `yarn` wrappers.",
 				"Uses package-manager-specific argument forwarding so structured runner output is requested without changing the user-facing command family.",
@@ -48,8 +50,8 @@ func jsProfiles(maxLines int) []engine.Profile {
 			Description:      "Requests the Vitest JSON reporter and preserves failing suite details.",
 			Confidence:       engine.ConfidenceHigh,
 			StreamPreference: engine.StreamStdoutFirst,
-			Budget:           outputBudget(atLeast(maxLines, 12)),
-			LatencyBudget:    latencyBudget(35),
+			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 12)),
+			LatencyBudget:    profilekit.LatencyBudget(35),
 			Match: func(inv engine.Invocation) bool {
 				return len(inv.Display) > 0 && inv.Display[0] == "vitest"
 			},
@@ -60,14 +62,14 @@ func jsProfiles(maxLines int) []engine.Profile {
 				return append(inv.Command, runnerArgs("vitest")...)
 			},
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
-				return filters.SummarizeJSTest(exec.Stdout+"\n"+exec.Stderr, maxLines)
+				return jsfilter.SummarizeJSTest(exec.Stdout+"\n"+exec.Stderr, maxLines)
 			},
 			StreamRender: func(_ engine.Invocation, _ engine.OutputBudget) engine.StreamReducer {
-				return filters.NewBufferedTextReducer(true, true, func(input string) string {
-					return filters.SummarizeJSTest(input, maxLines)
+				return shared.NewBufferedTextReducer(true, true, func(input string) string {
+					return jsfilter.SummarizeJSTest(input, maxLines)
 				})
 			},
-			ParseBytes: parseCombined,
+			ParseBytes: profilekit.ParseCombined,
 			Explain: []string{
 				"Prefers Vitest's JSON reporter when the command did not already request another structured mode.",
 				"Condenses passing noise and keeps failed suites, test names, assertion lines, and file paths.",
@@ -78,8 +80,8 @@ func jsProfiles(maxLines int) []engine.Profile {
 			Description:      "Requests Jest JSON output and condenses the report into failing suite signal.",
 			Confidence:       engine.ConfidenceHigh,
 			StreamPreference: engine.StreamStdoutFirst,
-			Budget:           outputBudget(atLeast(maxLines, 12)),
-			LatencyBudget:    latencyBudget(35),
+			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 12)),
+			LatencyBudget:    profilekit.LatencyBudget(35),
 			Match: func(inv engine.Invocation) bool {
 				return len(inv.Display) > 0 && inv.Display[0] == "jest"
 			},
@@ -90,14 +92,14 @@ func jsProfiles(maxLines int) []engine.Profile {
 				return append(inv.Command, runnerArgs("jest")...)
 			},
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
-				return filters.SummarizeJSTest(exec.Stdout+"\n"+exec.Stderr, maxLines)
+				return jsfilter.SummarizeJSTest(exec.Stdout+"\n"+exec.Stderr, maxLines)
 			},
 			StreamRender: func(_ engine.Invocation, _ engine.OutputBudget) engine.StreamReducer {
-				return filters.NewBufferedTextReducer(true, true, func(input string) string {
-					return filters.SummarizeJSTest(input, maxLines)
+				return shared.NewBufferedTextReducer(true, true, func(input string) string {
+					return jsfilter.SummarizeJSTest(input, maxLines)
 				})
 			},
-			ParseBytes: parseCombined,
+			ParseBytes: profilekit.ParseCombined,
 			Explain: []string{
 				"Adds Jest's `--json` mode unless the user already asked for JSON or an alternate reporter.",
 				"Summarizes failed suites and assertions while collapsing passing chatter.",
@@ -172,4 +174,24 @@ func detectPackageTestRunner(cwd string) string {
 	default:
 		return ""
 	}
+}
+
+func containsAny(args []string, needles ...string) bool {
+	for _, arg := range args {
+		for _, needle := range needles {
+			if arg == needle {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func containsPrefix(args []string, prefix string) bool {
+	for _, arg := range args {
+		if strings.HasPrefix(arg, prefix) {
+			return true
+		}
+	}
+	return false
 }

@@ -1,6 +1,10 @@
-package filters
+package python
 
-import "strings"
+import (
+	"strings"
+
+	shared "szr/internal/filters"
+)
 
 func SummarizePytest(input string, maxLines int) string {
 	if maxLines <= 0 {
@@ -21,7 +25,7 @@ func SummarizePytest(input string, maxLines int) string {
 		if len(summaries) > 0 {
 			return joinLimitedLines(summaries, maxLines)
 		}
-		return CompactLines(clean, maxLines)
+		return shared.CompactLines(clean, maxLines)
 	}
 
 	out := append([]string{}, summaries...)
@@ -171,4 +175,24 @@ func normalizePytestDetail(line string) string {
 	default:
 		return line
 	}
+}
+
+func StripANSI(input string) string {
+	return shared.StripANSI(input)
+}
+
+func clip(input string, max int) string {
+	return shared.Clip(input, max)
+}
+
+func uniqueStrings(values []string) []string {
+	return shared.UniqueStrings(values)
+}
+
+func nonEmptyLines(input string) []string {
+	return shared.NonEmptyLines(input)
+}
+
+func joinLimitedLines(lines []string, maxLines int) string {
+	return shared.JoinLimitedLines(lines, maxLines)
 }

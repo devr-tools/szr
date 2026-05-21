@@ -1,21 +1,23 @@
-package profiles
+package python
 
 import (
 	"strings"
 
 	"szr/internal/engine"
-	"szr/internal/filters"
+	shared "szr/internal/filters"
+	pyfilter "szr/internal/filters/python"
+	"szr/internal/profilekit"
 )
 
-func pythonProfiles(maxLines int) []engine.Profile {
+func Profiles(maxLines int) []engine.Profile {
 	return []engine.Profile{
 		{
 			Name:             "pytest",
 			Description:      "Normalizes pytest-family commands and preserves failing test identifiers, assertion lines, and short summaries.",
 			Confidence:       engine.ConfidenceHigh,
 			StreamPreference: engine.StreamStdoutFirst,
-			Budget:           outputBudget(atLeast(maxLines, 12)),
-			LatencyBudget:    latencyBudget(35),
+			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 12)),
+			LatencyBudget:    profilekit.LatencyBudget(35),
 			Match: func(inv engine.Invocation) bool {
 				return isPytestCommand(inv.Display)
 			},
@@ -23,14 +25,14 @@ func pythonProfiles(maxLines int) []engine.Profile {
 				return preparePytestCommand(inv.Command)
 			},
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
-				return filters.SummarizePytest(exec.Stdout+"\n"+exec.Stderr, maxLines)
+				return pyfilter.SummarizePytest(exec.Stdout+"\n"+exec.Stderr, maxLines)
 			},
 			StreamRender: func(_ engine.Invocation, _ engine.OutputBudget) engine.StreamReducer {
-				return filters.NewBufferedTextReducer(true, true, func(input string) string {
-					return filters.SummarizePytest(input, maxLines)
+				return shared.NewBufferedTextReducer(true, true, func(input string) string {
+					return pyfilter.SummarizePytest(input, maxLines)
 				})
 			},
-			ParseBytes: parseCombined,
+			ParseBytes: profilekit.ParseCombined,
 			Explain: []string{
 				"Recognizes direct `pytest`, `python -m pytest`, and `uv run pytest` invocations.",
 				"Adds low-noise flags when the user did not already choose verbosity, traceback, color, or report-char behavior.",
@@ -62,10 +64,10 @@ func preparePytestCommand(command []string) []string {
 	if !hasPytestVerbosityArg(command) {
 		out = append(out, "-q")
 	}
-	if !containsPrefix(command[1:], "--tb=") {
+	if !profilekit.ContainsPrefix(command[1:], "--tb=") {
 		out = append(out, "--tb=short")
 	}
-	if !containsPrefix(command[1:], "--color=") {
+	if !profilekit.ContainsPrefix(command[1:], "--color=") {
 		out = append(out, "--color=no")
 	}
 	if !hasPytestReportChars(command) {

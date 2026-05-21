@@ -70,6 +70,10 @@ func nonEmptyLines(input string) []string {
 	return lines
 }
 
+func NonEmptyLines(input string) []string {
+	return nonEmptyLines(input)
+}
+
 func clip(input string, max int) string {
 	return Clip(input, max)
 }
@@ -120,6 +124,10 @@ func joinLimitedLines(lines []string, maxLines int) string {
 	selected := append([]string{}, lines[:maxLines]...)
 	selected = append(selected, fmt.Sprintf("... +%d more lines", len(lines)-maxLines))
 	return strings.Join(selected, "\n")
+}
+
+func JoinLimitedLines(lines []string, maxLines int) string {
+	return joinLimitedLines(lines, maxLines)
 }
 
 type CompactLineReducer struct {

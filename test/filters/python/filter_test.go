@@ -1,10 +1,10 @@
-package filters_test
+package python_test
 
 import (
 	"strings"
 	"testing"
 
-	"szr/internal/filters"
+	pyfilter "szr/internal/filters/python"
 )
 
 func TestSummarizePytestFailures(t *testing.T) {
@@ -27,7 +27,7 @@ func TestSummarizePytestFailures(t *testing.T) {
 		"========================= 1 failed, 2 passed in 0.12s =========================",
 	}, "\n")
 
-	got := filters.SummarizePytest(input, 6)
+	got := pyfilter.SummarizePytest(input, 6)
 	for _, want := range []string{
 		"collected 3 items",
 		"1 failed, 2 passed in 0.12s",
@@ -57,7 +57,7 @@ func TestSummarizePytestFixtureError(t *testing.T) {
 		"=============================== 1 error in 0.03s ===============================",
 	}, "\n")
 
-	got := filters.SummarizePytest(input, 8)
+	got := pyfilter.SummarizePytest(input, 8)
 	for _, want := range []string{
 		"collected 1 item",
 		"1 error in 0.03s",
@@ -73,7 +73,7 @@ func TestSummarizePytestFixtureError(t *testing.T) {
 
 func TestSummarizePytestPass(t *testing.T) {
 	input := "collected 2 items\n\n..\n============================== 2 passed in 0.04s ==============================\n"
-	if got := filters.SummarizePytest(input, 4); got != "collected 2 items\n2 passed in 0.04s" {
+	if got := pyfilter.SummarizePytest(input, 4); got != "collected 2 items\n2 passed in 0.04s" {
 		t.Fatalf("unexpected pytest pass summary: %q", got)
 	}
 }

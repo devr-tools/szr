@@ -1,10 +1,10 @@
-package filters_test
+package rust_test
 
 import (
 	"strings"
 	"testing"
 
-	"szr/internal/filters"
+	rustfilter "szr/internal/filters/rust"
 )
 
 func TestSummarizeCargoTest(t *testing.T) {
@@ -26,7 +26,7 @@ func TestSummarizeCargoTest(t *testing.T) {
 		"error: test failed, to rerun pass `--lib`",
 	}, "\n")
 
-	got := filters.SummarizeCargoTest(input, 7)
+	got := rustfilter.SummarizeCargoTest(input, 7)
 	for _, want := range []string{
 		"running 3 tests",
 		"test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out",
@@ -50,7 +50,7 @@ func TestSummarizeCargoBuild(t *testing.T) {
 		"error: could not compile `app` due to 1 previous error; 1 warning emitted",
 	}, "\n")
 
-	got := filters.SummarizeCargoBuild(input, 6)
+	got := rustfilter.SummarizeCargoBuild(input, 6)
 	for _, want := range []string{
 		"error[E0432]: unresolved import `missing::Thing`",
 		"--> src/lib.rs:4:5",

@@ -1,0 +1,99 @@
+package github
+
+import (
+	"szr/internal/engine"
+	ghfilter "szr/internal/filters/github"
+	"szr/internal/profilekit"
+)
+
+func Profiles(maxLines int) []engine.Profile {
+	return []engine.Profile{
+		{
+			Name:             "gh-pr-view",
+			Description:      "Requests structured pull request metadata and summarizes file churn plus review state.",
+			Confidence:       engine.ConfidenceMedium,
+			StreamPreference: engine.StreamStdoutOnly,
+			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 10)),
+			LatencyBudget:    profilekit.LatencyBudget(35),
+			Match: func(inv engine.Invocation) bool {
+				return isGHCommand(inv.Display, "pr", "view")
+			},
+			Prepare: func(inv engine.Invocation) []string {
+				if profilekit.ContainsAny(inv.Command, "--json", "--template", "--comments", "--web") || profilekit.ContainsPrefix(inv.Command, "--json=") || profilekit.ContainsPrefix(inv.Command, "--template=") {
+					return inv.Command
+				}
+				return append(inv.Command, "--json", "number,title,state,isDraft,headRefName,baseRefName,reviewDecision,files")
+			},
+			Render: func(_ engine.Invocation, exec engine.Execution) string {
+				return ghfilter.SummarizePRView(exec.Stdout, maxLines)
+			},
+			StreamRender: func(_ engine.Invocation, _ engine.OutputBudget) engine.StreamReducer {
+				return newBufferedStdoutReducer(func(input string) string {
+					return ghfilter.SummarizePRView(input, maxLines)
+				})
+			},
+			ParseBytes: profilekit.ParseStdout,
+			Explain: []string{
+				"Moves `gh pr view` into JSON mode unless the user already chose comments, web, or another formatter.",
+				"Surfaces PR title, branch direction, review decision, and changed files ahead of long prose sections.",
+			},
+		},
+		{
+			Name:             "gh-run-log",
+			Description:      "Summarizes GitHub Actions raw logs by failed job and step.",
+			Confidence:       engine.ConfidenceMedium,
+			StreamPreference: engine.StreamStdoutFirst,
+			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 12)),
+			LatencyBudget:    profilekit.LatencyBudget(35),
+			Match: func(inv engine.Invocation) bool {
+				return isGHCommand(inv.Display, "run", "view") && hasGHRunLogFlag(inv.Display)
+			},
+			Prepare: func(inv engine.Invocation) []string {
+				return inv.Command
+			},
+			Render: func(_ engine.Invocation, exec engine.Execution) string {
+				return ghfilter.SummarizeRunLog(exec.Stdout+"\n"+exec.Stderr, maxLines)
+			},
+			StreamRender: func(_ engine.Invocation, _ engine.OutputBudget) engine.StreamReducer {
+				return newBufferedCombinedReducer(func(input string) string {
+					return ghfilter.SummarizeRunLog(input, maxLines)
+				})
+			},
+			ParseBytes: profilekit.ParseCombined,
+			Explain: []string{
+				"Activates when `gh run view` is already in raw log mode such as `--log` or `--log-failed`.",
+				"Groups failures by job and step so long GitHub Actions logs collapse into repair-relevant signal.",
+			},
+		},
+		{
+			Name:             "gh-run-view",
+			Description:      "Summarizes GitHub Actions run state, failed jobs, and failing steps.",
+			Confidence:       engine.ConfidenceMedium,
+			StreamPreference: engine.StreamStdoutFirst,
+			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 12)),
+			LatencyBudget:    profilekit.LatencyBudget(35),
+			Match: func(inv engine.Invocation) bool {
+				return isGHCommand(inv.Display, "run", "view") && !hasGHRunLogFlag(inv.Display)
+			},
+			Prepare: func(inv engine.Invocation) []string {
+				if profilekit.ContainsAny(inv.Command, "--json", "--template", "--jq", "--web", "--log", "--log-failed") || profilekit.ContainsPrefix(inv.Command, "--json=") || profilekit.ContainsPrefix(inv.Command, "--template=") {
+					return inv.Command
+				}
+				return append(inv.Command, "--json", "name,displayTitle,workflowName,status,conclusion,event,headBranch,jobs,url")
+			},
+			Render: func(_ engine.Invocation, exec engine.Execution) string {
+				return ghfilter.SummarizeRunView(exec.Stdout+"\n"+exec.Stderr, maxLines)
+			},
+			StreamRender: func(_ engine.Invocation, _ engine.OutputBudget) engine.StreamReducer {
+				return newBufferedCombinedReducer(func(input string) string {
+					return ghfilter.SummarizeRunView(input, maxLines)
+				})
+			},
+			ParseBytes: profilekit.ParseCombined,
+			Explain: []string{
+				"Requests structured run metadata when the user did not explicitly ask for raw logs or another formatter.",
+				"Keeps workflow status, branch or event context, failed jobs, and failed step names visible for repair loops.",
+			},
+		},
+	}
+}

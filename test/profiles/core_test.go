@@ -10,8 +10,8 @@ import (
 
 func TestBuiltInProfiles(t *testing.T) {
 	list := profiles.Builtins(3)
-	if len(list) != 15 {
-		t.Fatalf("expected 15 profiles, got %d", len(list))
+	if len(list) != 21 {
+		t.Fatalf("expected 21 profiles, got %d", len(list))
 	}
 
 	gitStatus := testutil.FindProfile(t, list, "git-status")
@@ -165,6 +165,72 @@ func TestBuiltInProfiles(t *testing.T) {
 	}
 	if dockerLogs.StreamPreference != engine.StreamStdoutFirst || dockerLogs.StreamRender == nil {
 		t.Fatalf("unexpected docker-logs stream metadata: %#v", dockerLogs)
+	}
+
+	kubectlGet := testutil.FindProfile(t, list, "kubectl-get")
+	if !kubectlGet.Match(engine.Invocation{Display: []string{"kubectl", "get", "pods"}}) || !kubectlGet.Match(engine.Invocation{Display: []string{"kubectl", "-n", "default", "get", "pods"}}) {
+		t.Fatal("kubectl-get should match direct and namespaced kubectl get")
+	}
+	if got := kubectlGet.Render(engine.Invocation{}, engine.Execution{Stdout: `{"kind":"PodList","items":[{"kind":"Pod","metadata":{"name":"api","namespace":"default"},"status":{"phase":"Running"}}]}`}); got == "" {
+		t.Fatal("expected kubectl-get render output")
+	}
+	if kubectlGet.StreamPreference != engine.StreamStdoutOnly || kubectlGet.StreamRender == nil {
+		t.Fatalf("unexpected kubectl-get stream metadata: %#v", kubectlGet)
+	}
+
+	kubectlDescribe := testutil.FindProfile(t, list, "kubectl-describe")
+	if !kubectlDescribe.Match(engine.Invocation{Display: []string{"kubectl", "describe", "pod", "api"}}) {
+		t.Fatal("kubectl-describe should match kubectl describe")
+	}
+	if got := kubectlDescribe.Render(engine.Invocation{}, engine.Execution{Stdout: "Name: api\nNamespace: default\nStatus: Running\n"}); got == "" {
+		t.Fatal("expected kubectl-describe render output")
+	}
+	if kubectlDescribe.StreamPreference != engine.StreamStdoutOnly || kubectlDescribe.StreamRender == nil {
+		t.Fatalf("unexpected kubectl-describe stream metadata: %#v", kubectlDescribe)
+	}
+
+	kubectlLogs := testutil.FindProfile(t, list, "kubectl-logs")
+	if !kubectlLogs.Match(engine.Invocation{Display: []string{"kubectl", "logs", "api"}}) || !kubectlLogs.Match(engine.Invocation{Display: []string{"kubectl", "--namespace", "prod", "logs", "api"}}) {
+		t.Fatal("kubectl-logs should match direct and namespaced kubectl logs")
+	}
+	if got := kubectlLogs.Render(engine.Invocation{}, engine.Execution{Stdout: "api/api ERROR failed\n"}); got == "" {
+		t.Fatal("expected kubectl-logs render output")
+	}
+	if kubectlLogs.StreamPreference != engine.StreamStdoutFirst || kubectlLogs.StreamRender == nil {
+		t.Fatalf("unexpected kubectl-logs stream metadata: %#v", kubectlLogs)
+	}
+
+	ghPR := testutil.FindProfile(t, list, "gh-pr-view")
+	if !ghPR.Match(engine.Invocation{Display: []string{"gh", "pr", "view"}}) || !ghPR.Match(engine.Invocation{Display: []string{"gh", "-R", "owner/repo", "pr", "view", "1"}}) {
+		t.Fatal("gh-pr-view should match plain and repo-scoped invocations")
+	}
+	if got := ghPR.Render(engine.Invocation{}, engine.Execution{Stdout: `{"number":1,"title":"T","state":"OPEN","isDraft":false,"headRefName":"x","baseRefName":"main","files":[]}`}); got == "" {
+		t.Fatal("expected gh-pr-view render output")
+	}
+	if ghPR.StreamPreference != engine.StreamStdoutOnly || ghPR.StreamRender == nil {
+		t.Fatalf("unexpected gh-pr-view stream metadata: %#v", ghPR)
+	}
+
+	ghRun := testutil.FindProfile(t, list, "gh-run-view")
+	if !ghRun.Match(engine.Invocation{Display: []string{"gh", "run", "view", "1"}}) || !ghRun.Match(engine.Invocation{Display: []string{"gh", "--repo", "owner/repo", "run", "view", "1"}}) {
+		t.Fatal("gh-run-view should match plain and repo-scoped invocations")
+	}
+	if got := ghRun.Render(engine.Invocation{}, engine.Execution{Stdout: `{"workflowName":"CI","status":"completed","conclusion":"success","jobs":[]}`}); got == "" {
+		t.Fatal("expected gh-run-view render output")
+	}
+	if ghRun.StreamPreference != engine.StreamStdoutFirst || ghRun.StreamRender == nil {
+		t.Fatalf("unexpected gh-run-view stream metadata: %#v", ghRun)
+	}
+
+	ghRunLog := testutil.FindProfile(t, list, "gh-run-log")
+	if !ghRunLog.Match(engine.Invocation{Display: []string{"gh", "run", "view", "1", "--log"}}) {
+		t.Fatal("gh-run-log should match raw log mode")
+	}
+	if got := ghRunLog.Render(engine.Invocation{}, engine.Execution{Stdout: "test\tunit\terror: failed\n"}); got == "" {
+		t.Fatal("expected gh-run-log render output")
+	}
+	if ghRunLog.StreamPreference != engine.StreamStdoutFirst || ghRunLog.StreamRender == nil {
+		t.Fatalf("unexpected gh-run-log stream metadata: %#v", ghRunLog)
 	}
 
 	genericTest := testutil.FindProfile(t, list, "generic-test")
