@@ -4,16 +4,16 @@
 
 <p align="center">
   <a href="https://github.com/devr-tools/szr/actions/workflows/release.yml">
-    <img src="https://github.com/devr-tools/szr/actions/workflows/release.yml/badge.svg?branch=main&event=release" alt="release workflow" />
+    <img src="https://github.com/devr-tools/szr/actions/workflows/release.yml/badge.svg?branch=main&event=release" alt="release.yml" />
   </a>
   <a href="https://github.com/devr-tools/szr/actions/workflows/cd.yml">
-    <img src="https://github.com/devr-tools/szr/actions/workflows/cd.yml/badge.svg?branch=main" alt="cd workflow" />
+    <img src="https://github.com/devr-tools/szr/actions/workflows/cd.yml/badge.svg?branch=main" alt="cd.yml" />
   </a>
   <a href="https://github.com/devr-tools/szr/actions/workflows/ci.yml">
-    <img src="https://github.com/devr-tools/szr/actions/workflows/ci.yml/badge.svg" alt="ci workflow" />
+    <img src="https://github.com/devr-tools/szr/actions/workflows/ci.yml/badge.svg" alt="ci.yml" />
   </a>
-  <a href="https://github.com/devr-tools/szr/actions/workflows/homebrew.yml">
-    <img src="https://github.com/devr-tools/szr/actions/workflows/homebrew.yml/badge.svg" alt="homebrew workflow" />
+  <a href="https://github.com/devr-tools/szr/actions/workflows/homebrew-validation.yml">
+    <img src="https://github.com/devr-tools/szr/actions/workflows/homebrew-validation.yml/badge.svg" alt="homebrew-validation.yml" />
   </a>
 </p>
 

@@ -1088,7 +1088,7 @@ profiles:
     render:
       mode: failure
       max_lines: 12
-`, name)
+`, name, name)
 }
 
 func builtinProfileStub(name string) string {
