@@ -96,7 +96,7 @@ brew install --HEAD devr-tools/szr/szr
 szr self doctor
 ```
 
-The first stable formula release is `v0.1.0`. Future tagged releases are documented in [docs/RELEASING.md](/szr/docs/RELEASING.md).
+The first stable formula release is `v0.1.0`. Future tagged releases are documented in [docs/RELEASING.md](/docs/RELEASING.md).
 
 ### Repo bootstrap
 
@@ -160,4 +160,4 @@ For most code changes, the minimum bar is:
 
 ## Architecture
 
-More detail lives in [docs/ARCHITECTURE.md](/szr/docs/ARCHITECTURE.md).
+More detail lives in [docs/ARCHITECTURE.md](/docs/ARCHITECTURE.md).
