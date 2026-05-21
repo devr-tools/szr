@@ -5,7 +5,10 @@ import (
 	"context"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
+	"sync"
 	"testing"
 
 	"szr/internal/cli"
@@ -36,15 +39,24 @@ func CaptureOutput(t *testing.T, fn func()) (string, string) {
 		os.Stderr = oldStderr
 	}()
 
+	var stdoutBuf bytes.Buffer
+	var stderrBuf bytes.Buffer
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		_, _ = io.Copy(&stdoutBuf, stdoutR)
+	}()
+	go func() {
+		defer wg.Done()
+		_, _ = io.Copy(&stderrBuf, stderrR)
+	}()
+
 	fn()
 
 	_ = stdoutW.Close()
 	_ = stderrW.Close()
-
-	var stdoutBuf bytes.Buffer
-	var stderrBuf bytes.Buffer
-	_, _ = io.Copy(&stdoutBuf, stdoutR)
-	_, _ = io.Copy(&stderrBuf, stderrR)
+	wg.Wait()
 	_ = stdoutR.Close()
 	_ = stderrR.Close()
 
@@ -74,6 +86,22 @@ func WithStdin(t *testing.T, input string, fn func()) {
 
 func WriteExecutable(t *testing.T, dir, name, body string) string {
 	t.Helper()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", dir, err)
+	}
+	if runtime.GOOS == "windows" {
+		scriptName := name + ".sh"
+		scriptPath := filepath.Join(dir, scriptName)
+		if err := os.WriteFile(scriptPath, []byte(body), 0o755); err != nil {
+			t.Fatalf("write executable %s: %v", scriptName, err)
+		}
+		wrapperPath := filepath.Join(dir, name+".cmd")
+		wrapper := "@echo off\r\n\"" + windowsBashPath() + "\" \"%~dp0" + scriptName + "\" %*\r\n"
+		if err := os.WriteFile(wrapperPath, []byte(wrapper), 0o755); err != nil {
+			t.Fatalf("write wrapper %s: %v", filepath.Base(wrapperPath), err)
+		}
+		return wrapperPath
+	}
 	path := filepath.Join(dir, name)
 	if err := os.WriteFile(path, []byte(body), 0o755); err != nil {
 		t.Fatalf("write executable %s: %v", name, err)
@@ -177,4 +205,28 @@ func FindProfile(t *testing.T, list []engine.Profile, name string) engine.Profil
 	}
 	t.Fatalf("missing profile %s", name)
 	return engine.Profile{}
+}
+
+func windowsBashPath() string {
+	if runtime.GOOS != "windows" {
+		return "bash"
+	}
+	if path, err := exec.LookPath("bash"); err == nil && path != "" {
+		return path
+	}
+	candidates := []string{
+		filepath.Join(os.Getenv("ProgramFiles"), "Git", "bin", "bash.exe"),
+		filepath.Join(os.Getenv("ProgramFiles(x86)"), "Git", "bin", "bash.exe"),
+		`C:\Program Files\Git\bin\bash.exe`,
+		`C:\Program Files (x86)\Git\bin\bash.exe`,
+	}
+	for _, candidate := range candidates {
+		if candidate == "" {
+			continue
+		}
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+	return "bash"
 }

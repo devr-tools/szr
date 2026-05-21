@@ -11,6 +11,8 @@ import (
 
 func TestDetectPathsVariants(t *testing.T) {
 	t.Run("prefers go run for source repo", func(t *testing.T) {
+		t.Parallel()
+
 		root := t.TempDir()
 		testutil.MustWriteFile(t, filepath.Join(root, "go.mod"), "module szr\n")
 		testutil.MustWriteFile(t, filepath.Join(root, "cmd", "szr", "main.go"), "package main\n")
@@ -28,6 +30,8 @@ func TestDetectPathsVariants(t *testing.T) {
 	})
 
 	t.Run("prefers local binary", func(t *testing.T) {
+		t.Parallel()
+
 		root := t.TempDir()
 		testutil.MustWriteExecutable(t, filepath.Join(root, "bin", "szr"), "#!/bin/sh\n")
 
@@ -41,6 +45,8 @@ func TestDetectPathsVariants(t *testing.T) {
 	})
 
 	t.Run("falls back to repo executable", func(t *testing.T) {
+		t.Parallel()
+
 		root := t.TempDir()
 		testutil.MustWriteExecutable(t, filepath.Join(root, "szr"), "#!/bin/sh\n")
 
@@ -54,6 +60,8 @@ func TestDetectPathsVariants(t *testing.T) {
 	})
 
 	t.Run("falls back to shell binary name", func(t *testing.T) {
+		t.Parallel()
+
 		root := t.TempDir()
 
 		paths, err := installers.DetectPaths(root)
@@ -66,6 +74,8 @@ func TestDetectPathsVariants(t *testing.T) {
 	})
 
 	t.Run("rejects invalid roots", func(t *testing.T) {
+		t.Parallel()
+
 		if _, err := installers.DetectPaths(""); err == nil {
 			t.Fatal("expected empty root error")
 		}

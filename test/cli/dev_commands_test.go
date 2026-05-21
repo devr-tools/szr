@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -183,13 +184,18 @@ func TestSelfInstallCommands(t *testing.T) {
 	t.Setenv("SHELL", "/bin/zsh")
 	t.Setenv("PATH", "/usr/bin")
 
+	binaryName := "szr"
+	if runtime.GOOS == "windows" {
+		binaryName = "szr.exe"
+	}
+
 	code, stdout, stderr := testutil.RunApp(t, app, "self", "install", "--print")
 	if code != 0 || stderr != "" {
 		t.Fatalf("unexpected self install print stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
 	for _, want := range []string{
 		"plan: self install",
-		filepath.Join(home, ".local", "bin", "szr"),
+		filepath.Join(home, ".local", "bin", binaryName),
 		"path: missing",
 		`export PATH="$HOME/.local/bin:$PATH"`,
 	} {
@@ -202,7 +208,7 @@ func TestSelfInstallCommands(t *testing.T) {
 	if code != 0 || stderr != "" {
 		t.Fatalf("unexpected self install stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
-	target := filepath.Join(home, ".local", "bin", "szr")
+	target := filepath.Join(home, ".local", "bin", binaryName)
 	if _, err := os.Stat(target); err != nil {
 		t.Fatalf("expected installed szr binary at %s: %v", target, err)
 	}

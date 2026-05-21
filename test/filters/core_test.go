@@ -8,6 +8,8 @@ import (
 )
 
 func TestLineHelpers(t *testing.T) {
+	t.Parallel()
+
 	if got := filters.CompactLines("a\nb\nc", 2); got != "a\nb\n... +1 more lines" {
 		t.Fatalf("unexpected compact lines: %q", got)
 	}
@@ -36,6 +38,8 @@ func TestLineHelpers(t *testing.T) {
 }
 
 func TestFailureHelpers(t *testing.T) {
+	t.Parallel()
+
 	if got := filters.SummarizeGenericFailure("", 3); got != "ok" {
 		t.Fatalf("unexpected empty generic failure: %q", got)
 	}
@@ -80,6 +84,8 @@ func TestFailureHelpers(t *testing.T) {
 }
 
 func TestUtilityHelpers(t *testing.T) {
+	t.Parallel()
+
 	if got := filters.CollapseBlock("plain text"); got != "plain text" {
 		t.Fatalf("unexpected collapse fallback: %q", got)
 	}

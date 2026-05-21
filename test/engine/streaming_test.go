@@ -13,9 +13,10 @@ import (
 )
 
 func TestExecuteUsesStreamReducerAndStreamsTeeOnFailure(t *testing.T) {
+	t.Parallel()
+
 	binDir := t.TempDir()
-	testutil.WriteExecutable(t, binDir, "streamfail", "#!/bin/sh\nprintf 'stdout-one\\n'\nsleep 0.05\nprintf 'stderr-one\\n' >&2\nsleep 0.05\nprintf 'stderr-two\\n' >&2\nexit 7\n")
-	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	streamFailPath := testutil.WriteExecutable(t, binDir, "streamfail", "#!/bin/sh\nprintf 'stdout-one\\n'\nprintf 'stderr-one\\n' >&2\nprintf 'stderr-two\\n' >&2\nexit 7\n")
 
 	root := t.TempDir()
 	paths := testutil.Paths(root)
@@ -33,7 +34,7 @@ func TestExecuteUsesStreamReducerAndStreamsTeeOnFailure(t *testing.T) {
 
 	e := engine.New(cfg, paths, store, []engine.Profile{profile})
 	result, err := e.Execute(context.Background(), engine.Invocation{
-		Command: []string{"streamfail"},
+		Command: []string{streamFailPath},
 		Display: []string{"streamfail"},
 		Cwd:     root,
 	}, false)
@@ -61,9 +62,10 @@ func TestExecuteUsesStreamReducerAndStreamsTeeOnFailure(t *testing.T) {
 }
 
 func TestExecuteBypassesTinyStreamOutput(t *testing.T) {
+	t.Parallel()
+
 	binDir := t.TempDir()
-	testutil.WriteExecutable(t, binDir, "tinyout", "#!/bin/sh\nprintf 'tiny\\n'\n")
-	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	tinyOutPath := testutil.WriteExecutable(t, binDir, "tinyout", "#!/bin/sh\nprintf 'tiny\\n'\n")
 
 	root := t.TempDir()
 	paths := testutil.Paths(root)
@@ -78,7 +80,7 @@ func TestExecuteBypassesTinyStreamOutput(t *testing.T) {
 	}})
 
 	result, err := e.Execute(context.Background(), engine.Invocation{
-		Command: []string{"tinyout"},
+		Command: []string{tinyOutPath},
 		Display: []string{"tinyout"},
 		Cwd:     root,
 	}, false)
@@ -94,9 +96,10 @@ func TestExecuteBypassesTinyStreamOutput(t *testing.T) {
 }
 
 func TestExecuteRemovesIncrementalTeeOnSuccess(t *testing.T) {
+	t.Parallel()
+
 	binDir := t.TempDir()
-	testutil.WriteExecutable(t, binDir, "streamok", "#!/bin/sh\nprintf 'ok\\n'\nprintf 'warn\\n' >&2\n")
-	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	streamOKPath := testutil.WriteExecutable(t, binDir, "streamok", "#!/bin/sh\nprintf 'ok\\n'\nprintf 'warn\\n' >&2\n")
 
 	root := t.TempDir()
 	paths := testutil.Paths(root)
@@ -106,7 +109,7 @@ func TestExecuteRemovesIncrementalTeeOnSuccess(t *testing.T) {
 	e := engine.New(cfg, paths, history.New(paths.HistoryFile), nil)
 
 	result, err := e.Execute(context.Background(), engine.Invocation{
-		Command: []string{"streamok"},
+		Command: []string{streamOKPath},
 		Display: []string{"streamok"},
 		Cwd:     root,
 	}, false)
@@ -126,9 +129,10 @@ func TestExecuteRemovesIncrementalTeeOnSuccess(t *testing.T) {
 }
 
 func TestExecuteCountsTokensWithoutFullyCapturingIgnoredStream(t *testing.T) {
+	t.Parallel()
+
 	binDir := t.TempDir()
-	testutil.WriteExecutable(t, binDir, "mixedout", "#!/bin/sh\nprintf 'ok\\n'\nprintf 'very noisy ignored stderr line\\n' >&2\n")
-	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	mixedOutPath := testutil.WriteExecutable(t, binDir, "mixedout", "#!/bin/sh\nprintf 'ok\\n'\nprintf 'very noisy ignored stderr line\\n' >&2\n")
 
 	root := t.TempDir()
 	paths := testutil.Paths(root)
@@ -149,7 +153,7 @@ func TestExecuteCountsTokensWithoutFullyCapturingIgnoredStream(t *testing.T) {
 	}})
 
 	result, err := e.Execute(context.Background(), engine.Invocation{
-		Command: []string{"mixedout"},
+		Command: []string{mixedOutPath},
 		Display: []string{"mixedout"},
 		Cwd:     root,
 	}, false)
@@ -173,9 +177,10 @@ func TestExecuteCountsTokensWithoutFullyCapturingIgnoredStream(t *testing.T) {
 }
 
 func TestVerboseCaptureKeepsRawCombined(t *testing.T) {
+	t.Parallel()
+
 	binDir := t.TempDir()
-	testutil.WriteExecutable(t, binDir, "mixedverbose", "#!/bin/sh\nprintf 'ok\\n'\nprintf 'stderr detail\\n' >&2\n")
-	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	mixedVerbosePath := testutil.WriteExecutable(t, binDir, "mixedverbose", "#!/bin/sh\nprintf 'ok\\n'\nprintf 'stderr detail\\n' >&2\n")
 
 	root := t.TempDir()
 	paths := testutil.Paths(root)
@@ -195,7 +200,7 @@ func TestVerboseCaptureKeepsRawCombined(t *testing.T) {
 	}})
 
 	result, err := e.Execute(context.Background(), engine.Invocation{
-		Command: []string{"mixedverbose"},
+		Command: []string{mixedVerbosePath},
 		Display: []string{"mixedverbose"},
 		Cwd:     root,
 		Verbose: 3,
@@ -209,9 +214,10 @@ func TestVerboseCaptureKeepsRawCombined(t *testing.T) {
 }
 
 func TestExecuteStopsFeedingReducerAfterDone(t *testing.T) {
+	t.Parallel()
+
 	binDir := t.TempDir()
-	testutil.WriteExecutable(t, binDir, "manylines", "#!/bin/sh\nprintf 'FAIL one\\n'\nprintf 'FAIL two\\n'\nprintf 'FAIL three\\n'\nprintf 'FAIL four\\n'\n")
-	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	manyLinesPath := testutil.WriteExecutable(t, binDir, "manylines", "#!/bin/sh\nprintf 'FAIL one\\n'\nprintf 'FAIL two\\n'\nprintf 'FAIL three\\n'\nprintf 'FAIL four\\n'\n")
 
 	root := t.TempDir()
 	paths := testutil.Paths(root)
@@ -231,7 +237,7 @@ func TestExecuteStopsFeedingReducerAfterDone(t *testing.T) {
 	}})
 
 	result, err := e.Execute(context.Background(), engine.Invocation{
-		Command: []string{"manylines"},
+		Command: []string{manyLinesPath},
 		Display: []string{"manylines"},
 		Cwd:     root,
 	}, false)
@@ -250,9 +256,10 @@ func TestExecuteStopsFeedingReducerAfterDone(t *testing.T) {
 }
 
 func TestExecuteStreamingPublishesPartialPreviewBeforeExit(t *testing.T) {
+	t.Parallel()
+
 	binDir := t.TempDir()
-	testutil.WriteExecutable(t, binDir, "delayedfail", "#!/bin/sh\nprintf 'FAIL first\\n'\nsleep 0.2\nprintf 'FAIL second\\n'\n")
-	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	delayedFailPath := testutil.WriteExecutable(t, binDir, "delayedfail", "#!/bin/sh\nprintf 'FAIL first\\n'\nprintf 'FAIL second\\n'\n")
 
 	root := t.TempDir()
 	paths := testutil.Paths(root)
@@ -273,7 +280,7 @@ func TestExecuteStreamingPublishesPartialPreviewBeforeExit(t *testing.T) {
 
 	partials := make(chan engine.PartialResult, 4)
 	_, err := e.ExecuteStreaming(context.Background(), engine.Invocation{
-		Command: []string{"delayedfail"},
+		Command: []string{delayedFailPath},
 		Display: []string{"delayedfail"},
 		Cwd:     root,
 	}, false, func(partial engine.PartialResult) {
@@ -303,9 +310,10 @@ func TestExecuteStreamingPublishesPartialPreviewBeforeExit(t *testing.T) {
 }
 
 func TestExecuteUsesFailureEscapeForLowConfidenceFallback(t *testing.T) {
+	t.Parallel()
+
 	binDir := t.TempDir()
-	testutil.WriteExecutable(t, binDir, "lowconf", "#!/bin/sh\nprintf 'line1\\nline2\\nline3\\nline4\\nline5\\nline6\\n' >&2\nexit 9\n")
-	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	lowConfPath := testutil.WriteExecutable(t, binDir, "lowconf", "#!/bin/sh\nprintf 'line1\\nline2\\nline3\\nline4\\nline5\\nline6\\n' >&2\nexit 9\n")
 
 	root := t.TempDir()
 	paths := testutil.Paths(root)
@@ -325,7 +333,7 @@ func TestExecuteUsesFailureEscapeForLowConfidenceFallback(t *testing.T) {
 	}})
 
 	result, err := e.Execute(context.Background(), engine.Invocation{
-		Command: []string{"lowconf"},
+		Command: []string{lowConfPath},
 		Display: []string{"lowconf"},
 		Cwd:     root,
 	}, false)

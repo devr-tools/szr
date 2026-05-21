@@ -8,6 +8,8 @@ import (
 )
 
 func TestSummarizeGHPRView(t *testing.T) {
+	t.Parallel()
+
 	input := `{"number":42,"title":"Tighten reducers","state":"OPEN","isDraft":false,"headRefName":"feature/reducers","baseRefName":"main","reviewDecision":"CHANGES_REQUESTED","files":[{"path":"internal/filters/github.go","additions":80,"deletions":0},{"path":"internal/profiles/github.go","additions":60,"deletions":0}]}`
 	got := ghfilter.SummarizeGHPRView(input, 5)
 	for _, want := range []string{
@@ -23,6 +25,8 @@ func TestSummarizeGHPRView(t *testing.T) {
 }
 
 func TestSummarizeGHRunView(t *testing.T) {
+	t.Parallel()
+
 	input := `{"workflowName":"CI","status":"completed","conclusion":"failure","event":"push","headBranch":"main","url":"https://example.test/run/1","jobs":[{"name":"test","status":"completed","conclusion":"failure","steps":[{"name":"setup","conclusion":"success"},{"name":"unit","conclusion":"failure"}]},{"name":"lint","status":"completed","conclusion":"success","steps":[{"name":"eslint","conclusion":"success"}]}]}`
 	got := ghfilter.SummarizeGHRunView(input, 6)
 	for _, want := range []string{
@@ -38,6 +42,8 @@ func TestSummarizeGHRunView(t *testing.T) {
 }
 
 func TestSummarizeGHRunLog(t *testing.T) {
+	t.Parallel()
+
 	input := strings.Join([]string{
 		"test\tSet up job\tRunner provisioning failed",
 		"test\tUnit\tError: assertion failed",

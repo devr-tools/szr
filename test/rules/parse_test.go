@@ -8,6 +8,8 @@ import (
 )
 
 func TestParseJSONAndValidate(t *testing.T) {
+	t.Parallel()
+
 	file, err := rules.ParseJSON([]byte(`{
 		"version": 1,
 		"preferences": [
@@ -63,6 +65,8 @@ func TestParseJSONAndValidate(t *testing.T) {
 }
 
 func TestParseFileAndJSONErrors(t *testing.T) {
+	t.Parallel()
+
 	file, err := rules.ParseFile(".szr.yaml", []byte(`version: 1
 preferences:
   - name: internal-cli-json
@@ -115,6 +119,8 @@ profiles:
 }
 
 func TestValidationErrors(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name    string
 		body    string
@@ -132,6 +138,8 @@ func TestValidationErrors(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			if _, err := rules.ParseJSON([]byte(tc.body)); err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 				t.Fatalf("expected %q error, got %v", tc.wantErr, err)
 			}

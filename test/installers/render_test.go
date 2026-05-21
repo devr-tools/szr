@@ -11,6 +11,8 @@ import (
 )
 
 func TestRenderTargets(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	testutil.MustWriteFile(t, filepath.Join(root, "go.mod"), "module szr\n")
 	testutil.MustWriteFile(t, filepath.Join(root, "cmd", "szr", "main.go"), "package main\n")
@@ -91,6 +93,8 @@ func TestRenderTargets(t *testing.T) {
 }
 
 func TestRenderAndDetectEdgeErrors(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 
 	if _, err := installers.DetectPathsWith(filepath.Join(root, "missing"), os.Stat); err == nil {

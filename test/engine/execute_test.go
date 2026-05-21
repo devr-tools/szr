@@ -15,10 +15,11 @@ import (
 )
 
 func TestExecuteAndHistory(t *testing.T) {
+	t.Parallel()
+
 	binDir := t.TempDir()
-	testutil.WriteExecutable(t, binDir, "succeed", "#!/bin/sh\necho stdout\n")
-	testutil.WriteExecutable(t, binDir, "failcmd", "#!/bin/sh\necho stderr >&2\nexit 3\n")
-	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	succeedPath := testutil.WriteExecutable(t, binDir, "succeed", "#!/bin/sh\necho stdout\n")
+	failPath := testutil.WriteExecutable(t, binDir, "failcmd", "#!/bin/sh\necho stderr >&2\nexit 3\n")
 
 	root := t.TempDir()
 	paths := testutil.Paths(root)
@@ -47,7 +48,7 @@ func TestExecuteAndHistory(t *testing.T) {
 			return ""
 		},
 	}
-	testutil.WriteExecutable(t, binDir, "blankout", "#!/bin/sh\necho raw-only\n")
+	blankOutPath := testutil.WriteExecutable(t, binDir, "blankout", "#!/bin/sh\necho raw-only\n")
 
 	e := engine.New(cfg, paths, store, []engine.Profile{profile, blankProfile})
 	if len(e.Profiles()) != 2 {
@@ -63,7 +64,7 @@ func TestExecuteAndHistory(t *testing.T) {
 	}
 
 	result, err := e.Execute(context.Background(), engine.Invocation{
-		Command: []string{"succeed"},
+		Command: []string{succeedPath},
 		Display: []string{"succeed"},
 		Cwd:     root,
 	}, false)
@@ -72,7 +73,7 @@ func TestExecuteAndHistory(t *testing.T) {
 	}
 
 	result, err = e.Execute(context.Background(), engine.Invocation{
-		Command: []string{"blankout"},
+		Command: []string{blankOutPath},
 		Display: []string{"blankout"},
 		Cwd:     root,
 	}, false)
@@ -81,7 +82,7 @@ func TestExecuteAndHistory(t *testing.T) {
 	}
 
 	result, err = e.Execute(context.Background(), engine.Invocation{
-		Command: []string{"succeed"},
+		Command: []string{succeedPath},
 		Display: []string{"succeed"},
 		Cwd:     root,
 	}, true)
@@ -90,7 +91,7 @@ func TestExecuteAndHistory(t *testing.T) {
 	}
 
 	failResult, err := e.Execute(context.Background(), engine.Invocation{
-		Command: []string{"failcmd"},
+		Command: []string{failPath},
 		Display: []string{"failcmd", strings.Repeat("x", 60)},
 		Cwd:     root,
 	}, false)
@@ -112,7 +113,7 @@ func TestExecuteAndHistory(t *testing.T) {
 	cfgNoTee.TeeOnFailure = false
 	eNoTee := engine.New(cfgNoTee, paths, history.New(filepath.Join(root, "data", "other.jsonl")), nil)
 	noTeeResult, err := eNoTee.Execute(context.Background(), engine.Invocation{
-		Command: []string{"failcmd"},
+		Command: []string{failPath},
 		Display: []string{"failcmd"},
 		Cwd:     root,
 	}, false)
