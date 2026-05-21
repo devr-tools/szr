@@ -125,6 +125,17 @@ make smoke
 make prepush
 ```
 
+## Contributing
+
+Public contributions are welcome. Start with [CONTRIBUTING.md](/Users/alex/Documents/GitHub/szr/CONTRIBUTING.md) for local setup, test expectations, commit hygiene, and PR etiquette.
+
+For most code changes, the minimum bar is:
+
+- keep the scope tight
+- add or update tests with the behavior change
+- run `make fmt` and `make test`
+- explain the user-facing impact and verification steps in the PR
+
 ## Architecture
 
 More detail lives in [docs/ARCHITECTURE.md](/Users/alex/Documents/GitHub/szr/docs/ARCHITECTURE.md).

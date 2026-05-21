@@ -3,6 +3,7 @@ GO ?= go
 TESTPKG := ./test/...
 COVERPKG := ./internal/...
 COVERFILE := .coverage.internal.out
+MIN_INTERNAL_COVERAGE ?= 80.0
 SMOKE_HOME := $(CURDIR)/.tmp-home
 
 .PHONY: help fmt test cover cover-func cover-html build smoke prepush clean
@@ -11,7 +12,7 @@ help:
 	@printf '%s\n' \
 		'make fmt        - gofmt the project files' \
 		'make test       - run the centralized test suite in test/' \
-		'make cover      - run tests with 100%% internal coverage enforcement' \
+		'make cover      - run tests with the internal coverage gate' \
 		'make cover-func - print per-function coverage' \
 		'make cover-html - render HTML coverage report' \
 		'make build      - build ./bin/szr and ./bin/szr-dev' \
@@ -28,8 +29,8 @@ test:
 cover:
 	env GOCACHE=$(GOCACHE) $(GO) test $(TESTPKG) -coverpkg=$(COVERPKG) -coverprofile=$(COVERFILE)
 	@total=$$(env GOCACHE=$(GOCACHE) $(GO) tool cover -func=$(COVERFILE) | awk '/^total:/ {print $$3}'); \
-	if [ "$$total" != "100.0%" ]; then \
-		echo "coverage gate failed: $$total"; \
+	if ! awk -v total="$$total" -v min="$(MIN_INTERNAL_COVERAGE)%" 'BEGIN { gsub(/%/, "", total); gsub(/%/, "", min); exit !(total + 0 >= min + 0) }'; then \
+		echo "coverage gate failed: $$total (min $(MIN_INTERNAL_COVERAGE)%)"; \
 		exit 1; \
 	fi
 

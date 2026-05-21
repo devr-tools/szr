@@ -38,4 +38,4 @@ go.work.sum
 bin/
 coverage.html
 .coverage.internal.out
-.tmp-home/
+.tmp*/

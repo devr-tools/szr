@@ -26,24 +26,28 @@ func SummarizeGitDiff(input string) string {
 }
 
 type GitStatusReducer struct {
-	scanner     scanner
-	maxPaths    int
-	bytesParsed int
-	branch      string
-	staged      int
-	unstaged    int
-	untracked   int
-	paths       []string
+	scanner        scanner
+	maxPreview     int
+	bytesParsed    int
+	branch         string
+	staged         int
+	unstaged       int
+	untracked      int
+	stagedPaths    []string
+	unstagedPaths  []string
+	untrackedPaths []string
 }
 
 func NewGitStatusReducer(maxLines, _ int) *GitStatusReducer {
-	maxPaths := maxLines - 2
-	if maxPaths <= 0 {
-		maxPaths = 6
+	maxPreview := maxLines - 2
+	if maxPreview <= 0 {
+		maxPreview = 4
 	}
 	return &GitStatusReducer{
-		maxPaths: maxPaths,
-		paths:    make([]string, 0, maxPaths),
+		maxPreview:     maxPreview,
+		stagedPaths:    make([]string, 0, maxPreview),
+		unstagedPaths:  make([]string, 0, maxPreview),
+		untrackedPaths: make([]string, 0, maxPreview),
 	}
 }
 
@@ -57,7 +61,7 @@ func (r *GitStatusReducer) ConsumeStderr(chunk []byte) {
 
 func (r *GitStatusReducer) Result() string {
 	r.scanner.Finish(r.recordLine)
-	if r.branch == "" && r.staged == 0 && r.unstaged == 0 && r.untracked == 0 && len(r.paths) == 0 {
+	if r.branch == "" && r.staged == 0 && r.unstaged == 0 && r.untracked == 0 && len(r.stagedPaths) == 0 && len(r.unstagedPaths) == 0 && len(r.untrackedPaths) == 0 {
 		return "clean"
 	}
 	summary := []string{}
@@ -65,11 +69,14 @@ func (r *GitStatusReducer) Result() string {
 		summary = append(summary, r.branch)
 	}
 	summary = append(summary, fmt.Sprintf("staged=%d unstaged=%d untracked=%d", r.staged, r.unstaged, r.untracked))
-	if len(r.paths) > 0 {
-		summary = append(summary, "files:")
-		for _, path := range r.paths {
-			summary = append(summary, "  "+path)
-		}
+	if line := previewSection("staged", r.stagedPaths, r.staged, 2); line != "" {
+		summary = append(summary, line)
+	}
+	if line := previewSection("unstaged", r.unstagedPaths, r.unstaged, 2); line != "" {
+		summary = append(summary, line)
+	}
+	if line := previewSection("untracked", r.untrackedPaths, r.untracked, 2); line != "" {
+		summary = append(summary, line)
 	}
 	return strings.Join(summary, "\n")
 }
@@ -90,11 +97,14 @@ func (r *GitStatusReducer) Preview() string {
 	if r.branch != "" || r.staged != 0 || r.unstaged != 0 || r.untracked != 0 {
 		summary = append(summary, fmt.Sprintf("staged=%d unstaged=%d untracked=%d", r.staged, r.unstaged, r.untracked))
 	}
-	for _, path := range r.paths {
-		if len(summary) == 2 {
-			summary = append(summary, "files:")
-		}
-		summary = append(summary, "  "+path)
+	if line := previewSection("staged", r.stagedPaths, r.staged, 2); line != "" {
+		summary = append(summary, line)
+	}
+	if line := previewSection("unstaged", r.unstagedPaths, r.unstaged, 2); line != "" {
+		summary = append(summary, line)
+	}
+	if line := previewSection("untracked", r.untrackedPaths, r.untracked, 2); line != "" {
+		summary = append(summary, line)
 	}
 	return strings.Join(summary, "\n")
 }
@@ -115,18 +125,18 @@ func (r *GitStatusReducer) recordLine(line string) {
 	x := line[0]
 	y := line[1]
 	path := strings.TrimSpace(line[3:])
-	if path != "" && len(r.paths) < r.maxPaths {
-		r.paths = append(r.paths, path)
-	}
 	switch {
 	case x == '?' && y == '?':
 		r.untracked++
+		r.untrackedPaths = appendPreview(r.untrackedPaths, path, r.maxPreview)
 	default:
 		if x != ' ' {
 			r.staged++
+			r.stagedPaths = appendPreview(r.stagedPaths, path, r.maxPreview)
 		}
 		if y != ' ' {
 			r.unstaged++
+			r.unstagedPaths = appendPreview(r.unstagedPaths, path, r.maxPreview)
 		}
 	}
 }
@@ -136,17 +146,17 @@ type GitLogReducer struct {
 	maxEntries  int
 	bytesParsed int
 	total       int
-	entries     []string
+	entries     []gitLogEntry
 }
 
 func NewGitLogReducer(maxLines, _ int) *GitLogReducer {
-	maxEntries := maxLines - 1
+	maxEntries := 2
 	if maxEntries <= 0 {
-		maxEntries = 10
+		maxEntries = 2
 	}
 	return &GitLogReducer{
 		maxEntries: maxEntries,
-		entries:    make([]string, 0, maxEntries),
+		entries:    make([]gitLogEntry, 0, maxEntries),
 	}
 }
 
@@ -163,7 +173,7 @@ func (r *GitLogReducer) Result() string {
 	if r.total == 0 {
 		return "no commits"
 	}
-	return fmt.Sprintf("%d commits\n%s", r.total, strings.Join(r.entries, "\n"))
+	return formatGitLog(r.entries, r.total)
 }
 
 func (r *GitLogReducer) BytesParsed() int {
@@ -178,7 +188,7 @@ func (r *GitLogReducer) Preview() string {
 	if r.total == 0 {
 		return ""
 	}
-	return fmt.Sprintf("%d commits\n%s", r.total, strings.Join(r.entries, "\n"))
+	return formatGitLog(r.entries, r.total)
 }
 
 func (r *GitLogReducer) consume(chunk []byte) {
@@ -188,9 +198,136 @@ func (r *GitLogReducer) consume(chunk []byte) {
 
 func (r *GitLogReducer) recordLine(line string) {
 	r.total++
-	if len(r.entries) < r.maxEntries {
-		r.entries = append(r.entries, line)
+	hash, subject := splitGitCommit(line)
+	if len(r.entries) > 0 && r.entries[len(r.entries)-1].Subject == subject {
+		r.entries[len(r.entries)-1].Count++
+		return
 	}
+	if len(r.entries) < r.maxEntries {
+		r.entries = append(r.entries, gitLogEntry{
+			Hash:    hash,
+			Subject: subject,
+			Count:   1,
+		})
+	}
+}
+
+func appendPreview(paths []string, path string, max int) []string {
+	if path == "" || len(paths) >= max {
+		return paths
+	}
+	for _, existing := range paths {
+		if existing == path {
+			return paths
+		}
+	}
+	return append(paths, path)
+}
+
+func previewSection(label string, paths []string, total, limit int) string {
+	if total == 0 || len(paths) == 0 {
+		return ""
+	}
+	if total == 1 {
+		return fmt.Sprintf("%s: %s", label, paths[0])
+	}
+	if limit <= 0 {
+		limit = 2
+	}
+	buckets := summarizePathBuckets(paths)
+	preview := buckets
+	if len(preview) > limit {
+		preview = append([]string{}, preview[:limit]...)
+	}
+	line := fmt.Sprintf("%s: %s", label, strings.Join(preview, ", "))
+	if len(buckets) > len(preview) {
+		line += fmt.Sprintf(", ... +%d more", len(buckets)-len(preview))
+	}
+	return line
+}
+
+func formatGitLog(entries []gitLogEntry, total int) string {
+	if total == 0 {
+		return "no commits"
+	}
+	out := make([]string, 0, len(entries)+1)
+	visible := 0
+	for _, entry := range entries {
+		visible += entry.Count
+		out = append(out, entry.Render())
+	}
+	if total > visible {
+		out = append(out, fmt.Sprintf("... +%d more commits", total-visible))
+	}
+	return strings.Join(out, "\n")
+}
+
+type gitLogEntry struct {
+	Hash    string
+	Subject string
+	Count   int
+}
+
+func (e gitLogEntry) Render() string {
+	line := strings.TrimSpace(strings.TrimSpace(e.Hash + " " + e.Subject))
+	if e.Count > 1 {
+		line += fmt.Sprintf(" (x%d)", e.Count)
+	}
+	return line
+}
+
+func splitGitCommit(line string) (string, string) {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return "", ""
+	}
+	parts := strings.SplitN(line, " ", 2)
+	if len(parts) == 1 {
+		return "", parts[0]
+	}
+	return parts[0], parts[1]
+}
+
+func summarizePathBuckets(paths []string) []string {
+	type bucket struct {
+		label string
+		count int
+	}
+	order := []*bucket{}
+	index := map[string]*bucket{}
+	for _, path := range paths {
+		if path == "" {
+			continue
+		}
+		label := bucketLabel(path)
+		item := index[label]
+		if item == nil {
+			item = &bucket{label: label}
+			index[label] = item
+			order = append(order, item)
+		}
+		item.count++
+	}
+	out := make([]string, 0, len(order))
+	for _, item := range order {
+		if item.count > 1 || strings.HasSuffix(item.label, "/...") {
+			out = append(out, fmt.Sprintf("%s (%d)", item.label, item.count))
+			continue
+		}
+		out = append(out, item.label)
+	}
+	return out
+}
+
+func bucketLabel(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return path
+	}
+	if idx := strings.Index(path, "/"); idx > 0 {
+		return path[:idx] + "/..."
+	}
+	return path
 }
 
 type GitDiffReducer struct {

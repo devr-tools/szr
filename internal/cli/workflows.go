@@ -1073,10 +1073,10 @@ func customProfileStub(name string) string {
 	return fmt.Sprintf(`version: 1
 profiles:
   - name: %s
-    description: TODO: describe this command family
+    description: Summarize the %s command family for agent-friendly review.
     explain:
       - Matches the target command family.
-      - TODO: document the structured rewrite or failure contract.
+      - Rewrites the command into a more structured form before rendering compact output.
     match:
       command_prefix:
         - your-cli
@@ -1099,7 +1099,7 @@ import "szr/internal/engine"
 func Profiles(maxLines int) []engine.Profile {
 	return []engine.Profile{{
 		Name:        %q,
-		Description: "TODO: describe this reducer",
+		Description: "Summarizes %s output into an agent-friendly preview.",
 		Confidence:  engine.ConfidenceHigh,
 		Match: func(inv engine.Invocation) bool {
 			return len(inv.Command) >= 2 && inv.Command[0] == "your-cli" && inv.Command[1] == "subcommand"
@@ -1111,12 +1111,12 @@ func Profiles(maxLines int) []engine.Profile {
 			return exec.Stdout
 		},
 		Explain: []string{
-			"TODO: document the match contract.",
-			"TODO: document the reducer behavior.",
+			"Matches the intended command family explicitly.",
+			"Preserves the minimum set of identifiers and failure details needed for follow-up actions.",
 		},
 	}}
 }
-`, name, name)
+`, name, name, name)
 }
 
 func builtinProfileTestStub(name string) string {

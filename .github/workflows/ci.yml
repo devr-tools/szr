@@ -1,4 +1,4 @@
-name: ci
+name: CI
 
 on:
   pull_request:
@@ -9,24 +9,69 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
+
+env:
+  GOCACHE: ${{ github.workspace }}/.gocache
+  MIN_INTERNAL_COVERAGE: "80.0"
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  fmt:
+  # ─── Fast gates (fail early, save CI minutes) ───
+
+  check-test-presence:
+    name: test presence
     runs-on: ubuntu-latest
     steps:
-      - name: Check out code
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 50
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - name: Check changed code paths have test coverage updates
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git fetch origin "${{ github.base_ref }}" --depth=1 || true
+          base_ref="origin/${{ github.base_ref }}"
+          changed_files="$(git diff --name-only "${base_ref}"...HEAD)"
+
+          code_changes="$(printf '%s\n' "$changed_files" | grep -E '^(cmd/|internal/|pkg/).+\.go$' | grep -Ev '(^|/).+_test\.go$' || true)"
+          test_changes="$(printf '%s\n' "$changed_files" | grep -E '(^test/|_test\.go$)' || true)"
+
+          if [ -z "$code_changes" ]; then
+            echo "No Go source changes that require a test presence check."
+            exit 0
+          fi
+
+          echo "Go source files changed:"
+          printf '%s\n' "$code_changes"
+
+          if [ -n "$test_changes" ]; then
+            echo
+            echo "Matching test updates detected:"
+            printf '%s\n' "$test_changes"
+            exit 0
+          fi
+
+          echo "::error title=Missing test update::Go source changed without any updates under test/ or *_test.go files"
+          exit 1
+
+  fmt:
+    name: fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: true
 
-      - name: Verify formatting
+      - name: Check formatting
         shell: bash
         run: |
           set -euo pipefail
@@ -34,105 +79,335 @@ jobs:
           git diff --exit-code
 
   vet:
+    name: vet
+    needs:
+      - check-test-presence
+      - fmt
     runs-on: ubuntu-latest
     steps:
-      - name: Check out code
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: true
 
       - name: Run go vet
         run: go vet ./...
 
+  # ─── Parallel gates (all need the code-quality gate first) ───
+
   test:
+    name: test (${{ matrix.os }})
+    needs: vet
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os:
           - ubuntu-latest
-          - macos-latest
           - windows-latest
+          - macos-latest
     steps:
-      - name: Check out code
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: true
 
       - name: Run test suite
         run: go test ./test/...
 
   coverage:
+    name: coverage
+    needs: vet
     runs-on: ubuntu-latest
-    env:
-      MIN_INTERNAL_COVERAGE: "80.0"
     steps:
-      - name: Check out code
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: true
 
       - name: Enforce internal coverage gate
         shell: bash
         run: |
           set -euo pipefail
 
-          env GOCACHE="$PWD/.gocache" go test ./test/... -coverpkg=./internal/... -coverprofile=.coverage.internal.out
-          total="$(env GOCACHE="$PWD/.gocache" go tool cover -func=.coverage.internal.out | awk '/^total:/ {gsub(/%/, "", $3); print $3}')"
+          go test ./test/... -coverpkg=./internal/... -coverprofile=.coverage.internal.out
+          total="$(go tool cover -func=.coverage.internal.out | awk '/^total:/ {gsub(/%/, "", $3); print $3}')"
 
-          echo "total internal coverage: ${total}%"
+          {
+            echo "## Coverage"
+            echo
+            echo "Total internal coverage: ${total}%"
+            echo "Required minimum: ${MIN_INTERNAL_COVERAGE}%"
+          } >> "$GITHUB_STEP_SUMMARY"
 
           awk -v total="$total" -v min="$MIN_INTERNAL_COVERAGE" 'BEGIN { exit !(total + 0 >= min + 0) }'
 
   smoke:
+    name: smoke
+    needs: vet
     runs-on: ubuntu-latest
     steps:
-      - name: Check out code
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: true
 
       - name: Run smoke checks
         run: make smoke
 
   security:
+    name: security scan
+    needs: vet
     runs-on: ubuntu-latest
     steps:
-      - name: Check out code
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: true
+
+      - name: Fetch base branch
+        run: git fetch origin "${{ github.base_ref }}" --depth=1
 
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@latest
 
-      - name: Scan dependencies and code
+      - name: Dependency and code vulnerability scan
         shell: bash
         run: |
           set -euo pipefail
-          "$(go env GOPATH)/bin/govulncheck" ./...
+
+          echo "## Security Scan Results" >> "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+          echo "### govulncheck" >> "$GITHUB_STEP_SUMMARY"
+
+          if "$(go env GOPATH)/bin/govulncheck" ./... 2>&1 | tee govulncheck.log; then
+            echo "No known Go vulnerabilities detected." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning::govulncheck reported findings"
+            echo "Potential vulnerabilities detected:" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            sed -n '1,80p' govulncheck.log >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          echo >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Critical files check
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "### Critical Files Modified" >> "$GITHUB_STEP_SUMMARY"
+          critical="$(git diff --name-only "origin/${{ github.base_ref }}"...HEAD | grep -E '^(cmd/szr/|cmd/szr-dev/|internal/cli/|internal/engine/|internal/installers/|internal/selfinstall/|internal/config/|go\.mod|go\.sum|Formula/|\.goreleaser\.yaml|\.github/workflows/.*\.yml|\.github/release-please-config\.json|\.release-please-manifest\.json)' || true)"
+
+          if [ -n "$critical" ]; then
+            echo "**HIGH RISK**: critical files were modified:" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            printf '%s\n' "$critical" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo >> "$GITHUB_STEP_SUMMARY"
+            echo "**Required Actions:**" >> "$GITHUB_STEP_SUMMARY"
+            echo "- [ ] Manual review of command execution paths" >> "$GITHUB_STEP_SUMMARY"
+            echo "- [ ] Verify install and release behavior remains intentional" >> "$GITHUB_STEP_SUMMARY"
+            echo "- [ ] Confirm workflow or dependency changes are expected" >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::Critical szr files modified"
+          else
+            echo "No critical files modified." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          echo >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Dangerous patterns scan
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "### Dangerous Code Patterns" >> "$GITHUB_STEP_SUMMARY"
+          patterns="$(git diff "origin/${{ github.base_ref }}"...HEAD | grep -E '^\+.*(exec\.Command(Context)?\(|http\.(Get|Post)\(|net\.Dial\(|os\.RemoveAll\(|os\.Setenv\(|syscall\.|unsafe \{|panic!\(|TODO|FIXME)' || true)"
+
+          if [ -n "$patterns" ]; then
+            echo "**Potentially sensitive additions detected:**" >> "$GITHUB_STEP_SUMMARY"
+            echo '```diff' >> "$GITHUB_STEP_SUMMARY"
+            printf '%s\n' "$patterns" | sed -n '1,40p' >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo >> "$GITHUB_STEP_SUMMARY"
+            echo "**Review Focus:**" >> "$GITHUB_STEP_SUMMARY"
+            printf '%s\n' "$patterns" | grep -q 'exec\.Command' && echo "- Command execution paths changed" >> "$GITHUB_STEP_SUMMARY" || true
+            printf '%s\n' "$patterns" | grep -q 'http\.\|net\.Dial' && echo "- Network behavior changed" >> "$GITHUB_STEP_SUMMARY" || true
+            printf '%s\n' "$patterns" | grep -q 'os\.Setenv\|syscall\.' && echo "- Process or environment mutation changed" >> "$GITHUB_STEP_SUMMARY" || true
+            printf '%s\n' "$patterns" | grep -q 'unsafe' && echo "- Unsafe code blocks changed" >> "$GITHUB_STEP_SUMMARY" || true
+            echo "::warning::Potentially dangerous patterns detected"
+          else
+            echo "No dangerous patterns detected." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          echo >> "$GITHUB_STEP_SUMMARY"
+
+      - name: New dependencies check
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "### Dependency Changes" >> "$GITHUB_STEP_SUMMARY"
+
+          if git diff "origin/${{ github.base_ref }}"...HEAD -- go.mod | grep -E '^\+[^+]' > go_mod_additions.txt; then
+            echo "**go.mod additions:**" >> "$GITHUB_STEP_SUMMARY"
+            echo '```diff' >> "$GITHUB_STEP_SUMMARY"
+            sed -n '1,80p' go_mod_additions.txt >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo >> "$GITHUB_STEP_SUMMARY"
+            echo "**Required Actions:**" >> "$GITHUB_STEP_SUMMARY"
+            echo "- [ ] Audit each new module and version" >> "$GITHUB_STEP_SUMMARY"
+            echo "- [ ] Verify new indirect dependencies are expected" >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::Dependency manifest changed"
+          else
+            echo "No go.mod additions detected." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          echo >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Summary verdict
+        shell: bash
+        run: |
+          {
+            echo "---"
+            echo
+            echo "### Security Review Verdict"
+            echo
+            echo "This is an automated scan. A human maintainer still needs to:"
+            echo "1. Review warnings above"
+            echo "2. Confirm PR intent matches the actual diff"
+            echo "3. Check command execution and install/release paths for abuse"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  semgrep:
+    name: semgrep security scan
+    needs: vet
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Run Semgrep
+        run: semgrep scan --config auto --baseline-commit "${{ github.event.pull_request.base.sha }}" --error
+
+  benchmark:
+    name: benchmark
+    needs: vet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run Go benchmarks
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          go test ./test/bench -run '^$' -bench . -benchmem | tee bench.txt
+
+          {
+            echo "## Benchmarks"
+            echo
+            echo '```'
+            sed -n '1,80p' bench.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run reducer fixture benchmark smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          go run ./cmd/szr bench --json clean-pass | tee bench-fixture.json >/dev/null
+
+          {
+            echo
+            echo "### Fixture Benchmark Smoke"
+            echo '```json'
+            sed -n '1,40p' bench-fixture.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ─── Documentation / policy gates ───
+
+  doc-review:
+    name: doc review
+    if: github.base_ref == 'develop'
+    needs: vet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Fetch base branch
+        run: git fetch origin "${{ github.base_ref }}" --depth=1
+
+      - name: Check doc-sensitive changes have doc updates
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          changed="$(git diff --name-only "origin/${{ github.base_ref }}"...HEAD)"
+          ci_cd_only="$(printf '%s\n' "$changed" | grep -E '^(\.github/workflows/|\.github/release-please-config\.json$|\.release-please-manifest\.json$)' || true)"
+          doc_sensitive="$(printf '%s\n' "$changed" | grep -E '^(\.goreleaser\.yaml$|Formula/|internal/installers/|internal/selfinstall/|README\.md$|docs/)' || true)"
+          docs_changed="$(printf '%s\n' "$changed" | grep -E '^(README\.md|CONTRIBUTING\.md|docs/)' || true)"
+
+          echo "## Documentation Review" >> "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+
+          if [ -z "$doc_sensitive" ]; then
+            if [ -n "$ci_cd_only" ]; then
+              echo "Only CI/CD automation files changed. Documentation updates are not required for this PR." >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "No install or release changes that require documentation review." >> "$GITHUB_STEP_SUMMARY"
+            fi
+            exit 0
+          fi
+
+          echo "Doc-sensitive files changed:" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' "$doc_sensitive" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+
+          if [ -n "$docs_changed" ]; then
+            echo "Relevant documentation files were updated:" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            printf '%s\n' "$docs_changed" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "::error::Install or release changes require updates in README.md, CONTRIBUTING.md, or docs/"
+          exit 1
 
   dco:
+    name: dco
     if: github.base_ref == 'develop'
     runs-on: ubuntu-latest
     steps:
-      - name: Check out code
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 

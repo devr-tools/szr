@@ -15,17 +15,30 @@ func TestGitSummaries(t *testing.T) {
 	if !strings.Contains(status, "staged=1 unstaged=1 untracked=1") {
 		t.Fatalf("unexpected status summary: %q", status)
 	}
+	if !strings.Contains(status, "staged: a") || !strings.Contains(status, "unstaged: b") || !strings.Contains(status, "untracked: c") {
+		t.Fatalf("expected grouped status previews, got %q", status)
+	}
+	grouped := gitfilter.SummarizeGitStatus(" M internal/cli/app.go\n M internal/cli/help.go\n?? docs/bench/one.md\n?? docs/bench/two.md\n")
+	for _, want := range []string{"unstaged: internal/... (2)", "untracked: docs/... (2)"} {
+		if !strings.Contains(grouped, want) {
+			t.Fatalf("expected %q in grouped status preview %q", want, grouped)
+		}
+	}
 	status = gitfilter.SummarizeGitStatus("M  a\nM  b\nM  c\nM  d\nM  e\nM  f\nM  g\n")
-	if strings.Count(status, "\n  ") != 6 {
-		t.Fatalf("expected file preview to cap at 6 entries: %q", status)
+	if !strings.Contains(status, "... +4 more") {
+		t.Fatalf("expected grouped status preview truncation: %q", status)
 	}
 
 	if got := gitfilter.SummarizeGitLog(""); got != "no commits" {
 		t.Fatalf("unexpected empty git log: %q", got)
 	}
 	log := gitfilter.SummarizeGitLog(strings.Repeat("hash subject\n", 12))
-	if !strings.HasPrefix(log, "12 commits\n") {
+	if !strings.Contains(log, "hash subject (x12)") {
 		t.Fatalf("unexpected git log summary: %q", log)
+	}
+	log = gitfilter.SummarizeGitLog("a1 save\na2 save\na3 feat\n")
+	if log != "a1 save (x2)\na3 feat" {
+		t.Fatalf("expected repeated git subjects to fold, got %q", log)
 	}
 
 	if got := gitfilter.SummarizeGitDiff(""); got != "no diff" {
@@ -74,7 +87,7 @@ func TestGitSummaries(t *testing.T) {
 	logReducer := gitfilter.NewGitLogReducer(4, 0)
 	logReducer.ConsumeStdout([]byte("one\n"))
 	logReducer.ConsumeStdout([]byte("two\nthree\nfour\n"))
-	if got := logReducer.Result(); got != "4 commits\none\ntwo\nthree" {
+	if got := logReducer.Result(); got != "one\ntwo\n... +2 more commits" {
 		t.Fatalf("unexpected git log stream: %q", got)
 	}
 

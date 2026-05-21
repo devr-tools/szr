@@ -1,0 +1,48 @@
+name: homebrew
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - master
+      - main
+  push:
+    branches:
+      - develop
+      - master
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  formula:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v5
+
+      - name: Tap current repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew tap devr-tools/szr "$GITHUB_WORKSPACE"
+
+      - name: Build formula from source
+        shell: bash
+        run: |
+          set -euo pipefail
+          HOMEBREW_NO_AUTO_UPDATE=1 brew install --build-from-source devr-tools/szr/szr
+
+      - name: Run formula test
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew test devr-tools/szr/szr
