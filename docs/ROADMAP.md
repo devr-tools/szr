@@ -1,64 +1,83 @@
 # szr Roadmap
 
-`szr` should win on three axes at the same time:
+`szr` should become the default execution layer between developer tools and AI systems. That means it has to do more than truncate output. It needs to be fast enough to sit in the hot path, smart enough to preserve what matters, and disciplined enough to cut token usage aggressively without making failures harder to diagnose.
 
-- Fast enough to stay in the critical path of everyday terminal use.
-- Smart enough to preserve the exact lines an agent or user needs next.
-- Cheap enough to materially reduce LLM context spend without hiding failures.
-
-This roadmap is biased toward deterministic, parser-first compression. The core rule is simple: `szr` should not spend model tokens in order to save model tokens.
+The design bias remains the same: deterministic, parser-first, low-latency compression. `szr` should not spend model tokens in order to save model tokens.
 
 ## North-Star Targets
 
-- Keep wrapper overhead under `10ms` p50 and `35ms` p95 for common commands where no heavy parsing is needed.
-- Reach `60%+` token savings across mixed real-world usage and `80%+` on noisy commands like tests, logs, and diffs.
-- Keep specialized-profile match coverage above `75%` for commands recorded in `szr gain`.
-- Keep false-compaction risk low enough that users rarely need `proxy` or tee fallbacks.
+- Keep wrapper overhead under `10ms` p50 and `35ms` p95 for common commands.
+- Reach `60%+` token savings across mixed usage and `80%+` on noisy workloads like tests, logs, and diffs.
+- Push specialized-profile coverage above `75%` of commands seen in `szr gain`.
+- Keep low-confidence fallbacks rare enough that `proxy` and tee files are exception paths, not routine escapes.
+- Make every compression decision inspectable so users and agents can trust what was dropped.
 
 ## Product Principles
 
-- Prefer structured output over raw text whenever the underlying tool supports JSON, NDJSON, porcelain, or stats modes.
-- Prefer streaming reducers over full-buffer post-processing on large outputs.
-- Prefer deterministic summarization over LLM summarization in the hot path.
-- Preserve exit codes and failure visibility even when output is heavily compressed.
-- Make compression decisions inspectable so users can trust the tool.
+- Prefer structured output over raw text whenever the tool supports JSON, NDJSON, porcelain, stats, or machine-readable modes.
+- Prefer streaming reducers over whole-buffer post-processing on large output.
+- Preserve identifiers first: package names, test names, file paths, line numbers, symbols, exit codes.
+- Optimize for next action, not for pretty summaries.
+- Keep the default path local, deterministic, and cheap.
 
-## Phase 1: Measurement First
+## Phase 1: Instrumentation And Proof
 
-Before expanding the command surface, `szr` needs better proof that a profile is both fast and safe.
+`szr` should measure itself before it tries to become more ambitious. Compression without instrumentation turns into guesswork.
 
-### Deliverables
+### Goals
 
-- Add a benchmark harness for profile latency and byte/token reduction.
-- Add golden fixtures for representative outputs: clean pass, noisy fail, giant diff, repeated logs, and compiler errors.
-- Extend `szr gain` with per-profile savings, p50/p95 duration, fallback rate, and failure rate.
-- Add a `szr bench` command to compare profiles against fixtures.
-
-### Why this matters
-
-Without measurement, it is too easy to optimize for compression ratio while degrading fidelity or latency.
-
-## Phase 2: Make The Hot Path Extremely Fast
-
-The engine is already small and profile-driven. The next step is reducing avoidable work.
+- Prove which profiles are actually saving tokens.
+- Measure latency overhead with enough resolution to protect the hot path.
+- Detect regressions in fidelity before expanding the profile surface.
 
 ### Deliverables
 
-- Move large-output reducers toward streaming scanners instead of buffering entire stdout and stderr before compaction.
-- Add an early-bypass path for tiny outputs where compaction overhead is larger than the token savings.
-- Introduce output budgets per profile so the renderer can stop collecting once enough signal has been captured.
-- Separate `raw bytes read` from `bytes emitted` in metrics to expose expensive profiles.
-- Add a profile capability for stderr-first tools so the engine avoids unnecessary merging work in common failure cases.
+- Add a benchmark harness for profile latency, output size reduction, and token reduction.
+- Add golden fixtures for representative command classes: clean pass, noisy fail, giant diff, repeated logs, compiler output, and mixed stdout/stderr failures.
+- Extend `szr gain` with per-profile savings, p50/p95 duration, fallback rate, tee rate, and failure rate.
+- Add `szr bench` so profile changes can be compared against stable fixtures.
+- Add a compression quality score that flags suspicious cases such as zero actionable lines, missing failure identifiers, or excessive fallback usage.
 
-### Candidate engineering changes
+### Boundary-pushing direction
 
-- Add optional `RenderStream` or reducer interfaces alongside the current `Render` function.
-- Replace generic line splitting in hot reducers with scanner-based state machines.
-- Keep ANSI stripping and token estimation cheap and incremental.
+- Track command fingerprints so `szr` can learn which commands still have poor savings.
+- Separate `raw bytes read`, `bytes parsed`, and `bytes emitted` to expose expensive reducers.
+- Add profile confidence reporting so future heuristics can fail open instead of hiding signal.
 
-## Phase 3: Expand High-Value Profiles
+## Phase 2: Ultra-Fast Execution Engine
 
-The biggest user savings will come from covering the tools that generate the most noise.
+Once measurement exists, the next constraint is speed. `szr` should feel invisible on small commands and disciplined on large ones.
+
+### Goals
+
+- Remove avoidable buffering.
+- Stop doing work after enough signal has been captured.
+- Make the engine profile-aware without making it complicated.
+
+### Deliverables
+
+- Introduce streaming reducer interfaces alongside the existing buffered render path.
+- Add early-bypass logic for tiny outputs where compaction would cost more than it saves.
+- Add output budgets per profile so reducers can stop once they have captured the actionable core.
+- Add stderr-first and stdout-first profile hints so the engine avoids unnecessary merging work.
+- Keep ANSI stripping, line scanning, and token estimation incremental and cheap.
+
+### Boundary-pushing direction
+
+- Add incremental tee capture so the engine can preserve full failure logs without keeping all raw output in memory.
+- Support fast-path reducers built as state machines instead of generic split-and-trim helpers.
+- Add command-class latency budgets and surface warnings when a profile exceeds them.
+- Explore partial-result streaming so agents can see the compacted summary before the wrapped command has fully flushed.
+
+## Phase 3: Semantic Profiles And Domain Compaction
+
+The largest savings will come from understanding the tools that generate the most waste. `szr` should move from line trimming to domain-aware reduction.
+
+### Goals
+
+- Expand coverage across the noisiest command families.
+- Compress by structure, not by arbitrary line count.
+- Preserve the exact identifiers an agent needs to act.
 
 ### Priority profiles
 
@@ -69,74 +88,88 @@ The biggest user savings will come from covering the tools that generate the mos
 5. `kubectl get`, `kubectl describe`, and `kubectl logs`
 6. `gh pr view`, `gh run view`, and GitHub Actions output
 
-### Profile strategy
+### Deliverables
 
-- Force structured modes where possible.
-- Fold repeated stacktrace frames and duplicate failure bodies.
-- Collapse pass noise to package, suite, and failing-test summaries.
-- Keep the first actionable remediation lines near the top.
+- Force structured modes where possible and normalize the results into profile-specific reducers.
+- Collapse pass noise to suite, package, and failing-test summaries.
+- Fold duplicate stack frames, repeated warnings, and retried failure bodies.
+- Group matches, diffs, and failures by file, package, service, or container instead of raw line order.
+- Add symbol-aware diff summaries that surface touched files, churn, hotspots, and likely behavioral impact before raw hunks.
+- Add test reducers that preserve failing test names, panic lines, assertion diffs, and the first repair-relevant stack frames.
 
-## Phase 4: Advanced Token Reduction
+### Boundary-pushing direction
 
-Once the profile surface is broader, `szr` should compress more intelligently inside each profile.
+- Add AST-aware or symbol-aware compaction where the underlying tool can expose enough structure.
+- Extract likely next actions such as missing import, broken package, bad flag, missing file, failing migration, or unhealthy container.
+- Add profile chaining so a command can be rewritten into a machine-readable mode and then passed through multiple reducers.
+
+## Phase 4: Adaptive Token Economy
+
+After the profile surface is broad enough, `szr` should get more selective about what it keeps. This is where it becomes meaningfully more advanced than a filter library.
+
+### Goals
+
+- Allocate token budget intentionally instead of using static line caps everywhere.
+- Compress repetitive output more aggressively without losing root cause.
+- Adapt to failure shape, verbosity mode, and user intent.
 
 ### Deliverables
 
-- Adaptive output budgets by command type, failure mode, and `--ultra-compact` level.
-- Repetition folding for logs, warnings, and test retries.
-- Path-aware grouping so changes and matches are clustered by file instead of raw line order.
-- Stacktrace folding that preserves root cause, top frames, and unique branches.
-- Semantic diff compaction that keeps churn totals, touched symbols, and file hotspots before raw hunks.
-- Heuristics for "next action" extraction: missing import, failing test name, broken package, bad flag, missing file.
+- Replace static max-line heuristics with adaptive output budgets by command type, failure mode, and `--ultra-compact` level.
+- Add repetition folding for logs, flaky retries, repeated warnings, and repeated compiler notes.
+- Add stacktrace folding that keeps root cause, top frames, branch points, and unique file paths.
+- Add salience ranking so reducers prioritize error-bearing lines, identifiers, and remediation hints above boilerplate.
+- Add low-confidence escape hatches that automatically preserve more output when the reducer cannot confidently identify the actionable core.
 
-### Guardrails
+### Boundary-pushing direction
 
-- Never hide the only failing line.
-- Preserve machine-actionable identifiers: package names, test names, file paths, line numbers, exit codes.
-- Fall back to raw or tee output when confidence is low.
+- Use local command history to suggest tighter or looser budgets for commands that are consistently too noisy or too aggressively compressed.
+- Add entropy-aware compaction so large repeated regions are collapsed faster than unique diagnostic regions.
+- Introduce profile-level budget contracts such as "keep at least one failing test, one stack anchor, and one remediation hint."
+- Add a reasoning-budget mode tuned for agent loops, where stability and token predictability matter more than human readability.
 
-## Phase 5: Project-Aware Compression
+## Phase 5: Project-Aware And Agent-Native szr
 
-The engine should become more useful inside real repositories without becoming magical or opaque.
+The final phase is where `szr` stops being only a CLI wrapper and becomes infrastructure for AI-assisted development.
 
-### Deliverables
+### Goals
 
-- Support project-local rules such as `.szr.json` or `.szr.yaml`.
-- Allow custom profiles to declare matchers, rewrites, and reducers for repo-specific tools.
-- Add include/exclude patterns for directories like `dist`, `node_modules`, generated code, or vendor trees.
-- Let teams define preferred machine-readable flags for internal CLIs.
-- Add rule introspection so `szr explain` shows user-defined rules alongside built-ins.
-
-### Long-term direction
-
-Use local history to recommend custom profiles for commands that repeatedly produce poor savings or excessive fallbacks.
-
-## Phase 6: Agent-Native Workflows
-
-`szr` becomes much more valuable when it is the default execution layer for coding agents.
+- Make `szr` learn the repository it runs in.
+- Make it easy for agents to rely on `szr` by default.
+- Keep the system extensible without turning it into opaque magic.
 
 ### Deliverables
 
-- Installer flows for Codex, Claude Code, Cursor, Gemini CLI, and plain shell aliases.
-- Repo bootstrap that can generate agent instructions describing when to use `szr`, `proxy`, and `explain`.
-- Safer tee artifact naming and lookup so agents can inspect full failure logs only when needed.
-- A compact "reasoning budget" mode that emits short, stable summaries optimized for agent loops.
+- Support project-local rules such as `.szr.json` or `.szr.yaml` for custom matchers, rewrites, reducers, and directory heuristics.
+- Let teams define machine-readable flag preferences for internal CLIs and generated tooling.
+- Add rule introspection so `szr explain` shows built-in and project-local decisions side by side.
+- Add installer flows for Codex, Claude Code, Cursor, Gemini CLI, and plain shell environments.
+- Add repo bootstrap that generates agent instructions describing when to use `szr`, `proxy`, `explain`, and tee artifacts.
+- Add safer tee indexing and retrieval so full logs are easy to inspect only when needed.
+
+### Boundary-pushing direction
+
+- Recommend custom profiles automatically based on command history and poor-savings hotspots.
+- Add repository-specific ignore intelligence for generated files, vendor trees, build output, and known noise sources.
+- Make agent-targeted output modes stable enough that long-running agent loops can depend on them without prompt churn.
+- Position `szr` as a programmable compression layer, not just a command alias.
 
 ## What Not To Do
 
 - Do not add an LLM call into the default filtering path.
-- Do not overfit to synthetic benchmarks while ignoring real developer commands.
-- Do not optimize token savings by dropping identifiers or making failures harder to diagnose.
-- Do not add a giant monolithic router that makes profiles difficult to test or extend.
+- Do not optimize token savings by dropping the identifiers needed to fix the problem.
+- Do not overfit to synthetic fixtures while ignoring real command history.
+- Do not let custom rules become a giant untestable router.
+- Do not chase "advanced" features that add latency without measurable savings or fidelity wins.
 
 ## Suggested Build Order
 
-1. Add benchmark fixtures and richer `gain` analytics.
-2. Add fast-path and streaming engine capabilities.
-3. Ship the next six high-volume profiles.
-4. Add adaptive compaction and repetition folding.
-5. Add project-local rules and agent installers.
+1. Ship Phase 1 instrumentation and `szr bench`.
+2. Upgrade the engine for streaming, budgets, and low-overhead fast paths.
+3. Expand semantic profiles across the highest-noise command families.
+4. Add adaptive budget allocation and stronger repetition folding.
+5. Land project-local rules, agent installers, and repository-aware intelligence.
 
 ## Definition Of Success
 
-`szr` is successful when users stop thinking of it as a novelty wrapper and start treating it as the default way to expose terminal output to an AI system. That requires trust, low latency, and measurable token savings, not just aggressive truncation.
+`szr` succeeds when users and coding agents stop treating terminal output as raw text and start treating `szr` as the trusted, default compression layer between execution and reasoning. It should save tokens aggressively, preserve the next action reliably, and feel fast enough that nobody hesitates to keep it in the loop.

@@ -1,12 +1,8 @@
 package engine
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -42,6 +38,7 @@ func (e *Engine) Execute(ctx context.Context, inv Invocation, passthrough bool) 
 	if len(inv.Command) == 0 {
 		return Result{}, fmt.Errorf("missing command")
 	}
+
 	profile := e.match(inv)
 	command := inv.Command
 	if profile.Prepare != nil {
@@ -108,95 +105,4 @@ func (e *Engine) Execute(ctx context.Context, inv Invocation, passthrough bool) 
 		return result, err
 	}
 	return result, nil
-}
-
-func (e *Engine) match(inv Invocation) Profile {
-	for _, profile := range e.profiles {
-		if profile.Match != nil && profile.Match(inv) {
-			return profile
-		}
-	}
-	return Profile{
-		Name:        "passthrough",
-		Description: "Raw command passthrough with trimming.",
-		Render: func(_ Invocation, exec Execution) string {
-			return combineStreams(exec.Stdout, exec.Stderr)
-		},
-		Explain: []string{
-			"No specialized profile matched.",
-			"Raw stdout and stderr are combined with minimal trimming.",
-		},
-	}
-}
-
-func (e *Engine) writeTee(raw string, command []string) (string, error) {
-	name := fmt.Sprintf("%d_%s.log", time.Now().Unix(), sanitizeFileName(strings.Join(command, "_")))
-	path := filepath.Join(e.paths.TeeDir, name)
-	return path, os.WriteFile(path, []byte(raw), 0o644)
-}
-
-func runCommand(ctx context.Context, args []string, cwd string) (string, string, int, error) {
-	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
-	cmd.Dir = cwd
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	if err == nil {
-		return stdout.String(), stderr.String(), 0, nil
-	}
-
-	exitCode := 1
-	if exitErr, ok := err.(*exec.ExitError); ok {
-		exitCode = exitErr.ExitCode()
-		return stdout.String(), stderr.String(), exitCode, nil
-	}
-	return stdout.String(), stderr.String(), exitCode, err
-}
-
-func combineStreams(stdout, stderr string) string {
-	return CombineStreams(stdout, stderr)
-}
-
-func CombineStreams(stdout, stderr string) string {
-	stdout = strings.TrimSpace(stdout)
-	stderr = strings.TrimSpace(stderr)
-	switch {
-	case stdout == "" && stderr == "":
-		return ""
-	case stdout == "":
-		return stderr
-	case stderr == "":
-		return stdout
-	default:
-		return stdout + "\n" + stderr
-	}
-}
-
-func sanitizeFileName(value string) string {
-	return SanitizeFileName(value)
-}
-
-func SanitizeFileName(value string) string {
-	value = strings.Map(func(r rune) rune {
-		switch {
-		case r >= 'a' && r <= 'z':
-			return r
-		case r >= 'A' && r <= 'Z':
-			return r
-		case r >= '0' && r <= '9':
-			return r
-		default:
-			return '_'
-		}
-	}, value)
-	value = strings.Trim(value, "_")
-	if value == "" {
-		return "output"
-	}
-	if len(value) > 48 {
-		return value[:48]
-	}
-	return value
 }
