@@ -101,7 +101,7 @@ func TestReplayAndCompareCommands(t *testing.T) {
 	}
 
 	binDir := t.TempDir()
-	t.Setenv("PATH", binDir)
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	testutil.WriteExecutable(t, binDir, "git", "#!/bin/sh\nif [ \"$1\" = \"diff\" ]; then\n  echo \"diff --git a/a.go b/a.go\"\n  echo \" a.go | 2 +-\"\n  echo \" 1 file changed, 1 insertion(+), 1 deletion(-)\"\nfi\n")
 	code, stdout, stderr = testutil.RunApp(t, app, "compare", "git", "diff")
 	if code != 0 || stderr != "" {

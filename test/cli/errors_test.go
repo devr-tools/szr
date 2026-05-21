@@ -17,7 +17,7 @@ import (
 func TestErrorsAndSpread(t *testing.T) {
 	app := testutil.NewTestApp(t)
 	binDir := t.TempDir()
-	t.Setenv("PATH", binDir)
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	testutil.WriteExecutable(t, binDir, "rg", "#!/bin/sh\nfor arg in \"$@\"; do\n  if [ \"$arg\" = \"__error__\" ]; then\n    echo \"bad rg\" >&2\n    exit 2\n  fi\n  if [ \"$arg\" = \"nomatch\" ]; then\n    exit 1\n  fi\ndone\necho \"file.go:12:match one\"\n")
 
 	root := t.TempDir()

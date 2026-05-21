@@ -4,6 +4,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -138,7 +139,7 @@ func TestLoadAllErrorsAndHelpers(t *testing.T) {
 	if err := os.WriteFile(protectedPath, []byte("{}\n"), 0o000); err != nil {
 		t.Fatalf("write protected file: %v", err)
 	}
-	if _, err := history.New(protectedPath).LoadAll(); err == nil {
+	if _, err := history.New(protectedPath).LoadAll(); err == nil && runtime.GOOS != "windows" {
 		t.Fatal("expected protected file open error")
 	}
 

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -12,6 +13,8 @@ import (
 )
 
 func TestApplyPlanMergeAndIdempotence(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	testutil.MustWriteFile(t, filepath.Join(root, "AGENTS.md"), "# Existing\n")
 
@@ -49,7 +52,7 @@ func TestApplyPlanMergeAndIdempotence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat hook: %v", err)
 	}
-	if hookInfo.Mode()&0o111 == 0 {
+	if runtime.GOOS != "windows" && hookInfo.Mode()&0o111 == 0 {
 		t.Fatalf("hook not executable: %v", hookInfo.Mode())
 	}
 
@@ -63,6 +66,8 @@ func TestApplyPlanMergeAndIdempotence(t *testing.T) {
 }
 
 func TestApplyWithErrors(t *testing.T) {
+	t.Parallel()
+
 	plan := installers.Plan{
 		Files: []installers.File{{
 			Path:     "/tmp/file.txt",
@@ -115,6 +120,8 @@ func TestApplyWithErrors(t *testing.T) {
 }
 
 func TestApplyEmptyMergePlan(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	plan := installers.Plan{
 		Files: []installers.File{{

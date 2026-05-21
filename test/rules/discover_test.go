@@ -11,6 +11,8 @@ import (
 )
 
 func TestDiscoverWithJSONYAMLAndEmptyTree(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	projectRoot := filepath.Join(root, "repo")
 	child := filepath.Join(projectRoot, "src", "pkg")
@@ -58,6 +60,8 @@ func TestDiscoverWithJSONYAMLAndEmptyTree(t *testing.T) {
 }
 
 func TestDiscoverEdgeCases(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, ".szr.json"), []byte(`{"profiles":[{"name":"ok","match":{"command_prefix":["npm"]}}]}`), 0o644); err != nil {
 		t.Fatalf("write rule file: %v", err)

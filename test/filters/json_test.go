@@ -8,6 +8,8 @@ import (
 )
 
 func TestGoJSONSummary(t *testing.T) {
+	t.Parallel()
+
 	goJSON := filters.SummarizeGoTestJSON(strings.Join([]string{
 		`{"Action":"pass","Package":"pkg/pass"}`,
 		`{"Action":"fail","Package":"pkg/fail"}`,
@@ -41,6 +43,8 @@ func TestGoJSONSummary(t *testing.T) {
 }
 
 func TestJSONStructure(t *testing.T) {
+	t.Parallel()
+
 	if got := filters.RenderJSONStructure([]byte("{bad")); got != "invalid json" {
 		t.Fatalf("unexpected invalid json result: %q", got)
 	}

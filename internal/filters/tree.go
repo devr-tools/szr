@@ -67,7 +67,9 @@ func SplitTreeParts(root, path string, relFn func(string, string) (string, error
 	if err != nil {
 		return nil
 	}
-	return strings.Split(rel, string(filepath.Separator))
+	return strings.FieldsFunc(rel, func(r rune) bool {
+		return r == filepath.Separator || r == '/' || r == '\\'
+	})
 }
 
 func shouldSkipTreePart(part string) bool {

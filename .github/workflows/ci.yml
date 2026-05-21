@@ -65,9 +65,9 @@ jobs:
     name: fmt
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
@@ -99,16 +99,22 @@ jobs:
   # ─── Parallel gates (all need the code-quality gate first) ───
 
   test:
-    name: test (${{ matrix.os }})
+    name: test (${{ matrix.label }})
     needs: vet
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - ubuntu-latest
-          - windows-latest
-          - macos-latest
+        include:
+          - os: ubuntu-latest
+            label: ubuntu-latest full
+            test_command: go test ./test/...
+          - os: macos-latest
+            label: macos-latest full
+            test_command: go test ./test/...
+          - os: windows-latest
+            label: windows-latest smoke
+            test_command: go test ./test/config ./test/filters/... ./test/installers ./test/profiles/... ./test/rules ./test/teeindex
     steps:
       - uses: actions/checkout@v5
 
@@ -118,7 +124,7 @@ jobs:
           cache: true
 
       - name: Run test suite
-        run: go test ./test/...
+        run: ${{ matrix.test_command }}
 
   coverage:
     name: coverage

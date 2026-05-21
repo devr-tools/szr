@@ -19,7 +19,7 @@ func TestResolvePathsWithVariants(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve paths: %v", err)
 	}
-	if paths.ConfigFile != "/cfg/szr/config.json" || paths.HistoryFile != "/cache/szr/history.jsonl" {
+	if paths.ConfigFile != filepath.Join("/cfg", "szr", "config.json") || paths.HistoryFile != filepath.Join("/cache", "szr", "history.jsonl") {
 		t.Fatalf("unexpected paths: %#v", paths)
 	}
 
@@ -31,7 +31,7 @@ func TestResolvePathsWithVariants(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve with fallback: %v", err)
 	}
-	if paths.ConfigDir != "/home/.config/szr" || paths.DataDir != "/home/.local/share/szr" {
+	if paths.ConfigDir != filepath.Join("/home", ".config", "szr") || paths.DataDir != filepath.Join("/home", ".local", "share", "szr") {
 		t.Fatalf("unexpected fallback paths: %#v", paths)
 	}
 

@@ -65,7 +65,7 @@ func sharedInstallDoc(paths Paths, target Target, title, instructionPath string)
 }
 
 func installDocPath(paths Paths, target Target) string {
-	return paths.InstallDir + "/" + string(target) + ".md"
+	return filepath.Join(paths.InstallDir, string(target)+".md")
 }
 
 func renderHookScript(binary string) string {
@@ -147,5 +147,5 @@ func renderInstallDoc(paths Paths, target Target, title, instructionPath string)
 
 func relativePath(root, path string) string {
 	rel, _ := filepath.Rel(root, path)
-	return "./" + strings.TrimPrefix(rel, "./")
+	return "./" + strings.TrimPrefix(filepath.ToSlash(rel), "./")
 }
