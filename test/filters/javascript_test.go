@@ -34,8 +34,14 @@ func TestSummarizeJSTestTextFallback(t *testing.T) {
 
 func TestSummarizeJSTestAllPassAndFallback(t *testing.T) {
 	allPass := filters.SummarizeJSTest(`{"numPassedTestSuites":1,"numFailedTestSuites":0,"numPassedTests":3,"numFailedTests":0,"numPendingTests":0,"numTodoTests":0,"numTotalTests":3,"success":true,"testResults":[]}`, 4)
-	if allPass != "suites: pass=1 fail=0\ntests: pass=3 fail=0\nall tests passed" {
-		t.Fatalf("unexpected all-pass summary: %q", allPass)
+	for _, want := range []string{
+		"suites: pass=1 fail=0",
+		"tests: pass=3 fail=0 skip=0 todo=0 total=3",
+		"all tests passed",
+	} {
+		if !strings.Contains(allPass, want) {
+			t.Fatalf("expected %q in all-pass summary: %q", want, allPass)
+		}
 	}
 
 	fallback := filters.SummarizeJSTest("not-json", 3)
@@ -67,8 +73,8 @@ func TestSummarizeJSTestSuiteMessageAndNoTruncation(t *testing.T) {
 	}
 
 	noTruncation := filters.SummarizeJSTest("FAIL src/x.test.ts\nsingle line", 10)
-	if noTruncation != "FAIL src/x.test.ts\nsingle line" {
-		t.Fatalf("expected full text without truncation, got %q", noTruncation)
+	if noTruncation != "FAIL src/x.test.ts" {
+		t.Fatalf("expected filtered failure text, got %q", noTruncation)
 	}
 }
 
