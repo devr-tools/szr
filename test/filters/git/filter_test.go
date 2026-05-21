@@ -33,11 +33,11 @@ func TestGitSummaries(t *testing.T) {
 		t.Fatalf("unexpected empty git log: %q", got)
 	}
 	log := gitfilter.SummarizeGitLog(strings.Repeat("hash subject\n", 12))
-	if !strings.Contains(log, "hash subject (x12)") {
+	if !strings.Contains(log, "12 commits") || !strings.Contains(log, "hash subject (x12)") {
 		t.Fatalf("unexpected git log summary: %q", log)
 	}
 	log = gitfilter.SummarizeGitLog("a1 save\na2 save\na3 feat\n")
-	if log != "a1 save (x2)\na3 feat" {
+	if log != "3 commits\na1 save (x2)\na3 feat" {
 		t.Fatalf("expected repeated git subjects to fold, got %q", log)
 	}
 
@@ -87,7 +87,7 @@ func TestGitSummaries(t *testing.T) {
 	logReducer := gitfilter.NewGitLogReducer(4, 0)
 	logReducer.ConsumeStdout([]byte("one\n"))
 	logReducer.ConsumeStdout([]byte("two\nthree\nfour\n"))
-	if got := logReducer.Result(); got != "one\ntwo\n... +2 more commits" {
+	if got := logReducer.Result(); got != "4 commits\none\ntwo\n... +2 more commits" {
 		t.Fatalf("unexpected git log stream: %q", got)
 	}
 

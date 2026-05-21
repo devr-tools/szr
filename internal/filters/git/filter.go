@@ -250,7 +250,8 @@ func formatGitLog(entries []gitLogEntry, total int) string {
 	if total == 0 {
 		return "no commits"
 	}
-	out := make([]string, 0, len(entries)+1)
+	out := make([]string, 0, len(entries)+2)
+	out = append(out, fmt.Sprintf("%d commits", total))
 	visible := 0
 	for _, entry := range entries {
 		visible += entry.Count
