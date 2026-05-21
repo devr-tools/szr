@@ -1,4 +1,4 @@
-name: homebrew-validation.yml
+name: homebrew validation
 
 on:
   pull_request:
