@@ -50,7 +50,7 @@ func TestRunRoutes(t *testing.T) {
 		stdin      string
 	}{
 		{"help empty", nil, 0, []string{`szr: "sizer"`}, nil, ""},
-		{"help flag", []string{"--help"}, 0, []string{"Core commands:", "--reasoning-budget <standard|agent>"}, nil, ""},
+		{"help flag", []string{"--help"}, 0, []string{"Core commands:", "self", "--reasoning-budget <standard|agent>"}, nil, ""},
 		{"help ultra", []string{"-u", "help"}, 0, []string{"Core commands:"}, nil, ""},
 		{"help verbose long", []string{"--verbose", "help"}, 0, []string{"Core commands:"}, nil, ""},
 		{"help verbose exact", []string{"-vv", "help"}, 0, []string{"Core commands:"}, nil, ""},
@@ -58,6 +58,7 @@ func TestRunRoutes(t *testing.T) {
 		{"version", []string{"--version"}, 0, []string{"szr test"}, nil, ""},
 		{"profiles", []string{"profiles"}, 0, []string{"git-status", "generic-summary"}, nil, ""},
 		{"doctor", []string{"doctor"}, 0, []string{"version: test", "reasoning budget mode: standard", "go:", "git:", "rg:"}, nil, ""},
+		{"self doctor", []string{"self", "doctor"}, 0, []string{"version: test", "install target:", "config dir:"}, nil, ""},
 		{"doctor missing tool", []string{"doctor"}, 0, []string{"go: missing"}, nil, ""},
 		{"git status", []string{"git", "status"}, 0, []string{"staged=1"}, nil, ""},
 		{"git log", []string{"git", "log"}, 0, []string{"2 commits"}, nil, ""},
@@ -115,5 +116,39 @@ func TestRunRoutes(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestRGExternalMissingShowsInstallHint(t *testing.T) {
+	app := testutil.NewTestApp(t)
+	t.Setenv("PATH", t.TempDir())
+
+	code, stdout, stderr := testutil.RunApp(t, app, "rg", "needle", ".")
+	if code != 1 || stdout != "" {
+		t.Fatalf("unexpected rg missing stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	for _, want := range []string{
+		"szr: `rg` is not installed or not on PATH",
+		"szr: install ripgrep to use `szr rg ...`",
+	} {
+		if !strings.Contains(stderr, want) {
+			t.Fatalf("expected stderr to contain %q, got %q", want, stderr)
+		}
+	}
+}
+
+func TestDoctorMarksRipgrepOptional(t *testing.T) {
+	app := testutil.NewTestApp(t)
+	binDir := t.TempDir()
+	t.Setenv("PATH", binDir)
+	testutil.WriteExecutable(t, binDir, "git", "#!/bin/sh\nexit 0\n")
+	testutil.WriteExecutable(t, binDir, "go", "#!/bin/sh\nexit 0\n")
+
+	code, stdout, stderr := testutil.RunApp(t, app, "self", "doctor")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected self doctor stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	if !strings.Contains(stdout, "rg: missing (optional; only needed for `szr rg`)") {
+		t.Fatalf("expected optional rg status, got %q", stdout)
 	}
 }

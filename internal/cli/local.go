@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -125,6 +126,15 @@ func (a *App) runGrep(cfg config.Config, args []string) int {
 
 	fmt.Println(filters.GroupRipgrep(string(output), adjustCountForReasoningMode(cfg.ReasoningBudgetMode, cfg.MaxMatchGroups)))
 	return 0
+}
+
+func (a *App) runRGExternal(ctx context.Context, flags globalFlags, args []string) int {
+	if _, err := exec.LookPath("rg"); err != nil {
+		fmt.Fprintln(os.Stderr, "szr: `rg` is not installed or not on PATH")
+		fmt.Fprintln(os.Stderr, "szr: install ripgrep to use `szr rg ...`")
+		return 1
+	}
+	return a.runExternal(ctx, flags, "run", append([]string{"rg"}, args...), false)
 }
 
 func adjustCountForReasoningMode(mode string, value int) int {

@@ -55,6 +55,47 @@ The first working scaffold is in place:
 - Good fit for structured parsers and profile registries.
 - Easier to keep the architecture modular as the command surface grows.
 
+## Install
+
+There are now two separate install layers:
+
+- global install: make the `szr` binary available on your shell `PATH`
+- repo bootstrap: teach a specific repo and agent environment to prefer `szr`
+
+### Global install
+
+From a local checkout, install the binary into your Go bin directory:
+
+```bash
+go install ./cmd/szr
+szr self doctor
+```
+
+Or build locally and let `szr` install itself into `~/.local/bin` or `~/bin`:
+
+```bash
+make build
+./bin/szr self install
+./bin/szr self doctor
+```
+
+If your shell does not already include that install directory on `PATH`, `szr self install` prints the exact line to add to `~/.zshrc`, `~/.bashrc`, or the detected shell rc file. To let `szr` append that line for you:
+
+```bash
+./bin/szr self install --update-shell
+```
+
+### Repo bootstrap
+
+Once the binary is globally available, bootstrap repo-local guidance separately:
+
+```bash
+szr install codex
+szr install shell
+```
+
+That keeps global binary installation separate from repo-specific agent/editor wiring.
+
 ## Usage
 
 ```bash
@@ -80,6 +121,8 @@ szr read internal/cli/app.go --level aggressive
 szr spread --history
 szr tee
 szr tee --latest
+szr self install
+szr self doctor
 szr install codex
 szr install shell
 szr bench clean-pass

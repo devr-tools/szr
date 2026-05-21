@@ -8,6 +8,7 @@ func (a *App) printHelp() {
 Usage:
   szr git status
   szr go test ./...
+  szr self install
   szr install codex
   szr bench
   szr grep "pattern" .
@@ -18,7 +19,7 @@ Usage:
 Core commands:
   git, go, run, test, summary, proxy, explain
   ls, read, grep, json, log, tee
-  spread, profiles, doctor, install, bench
+  spread, profiles, doctor, self, install, bench
 
 Global flags:
   -u, --ultra-compact

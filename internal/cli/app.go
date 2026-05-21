@@ -86,6 +86,8 @@ func (a *App) Run(ctx context.Context, args []string) int {
 		return a.runProfiles()
 	case "doctor":
 		return a.runDoctor(a.configForFlags(flags))
+	case "self":
+		return a.runSelf(flags, rest[1:])
 	case "install":
 		return a.runInstall(rest[1:])
 	case "bench":
@@ -108,6 +110,8 @@ func (a *App) Run(ctx context.Context, args []string) int {
 		return a.runRead(a.configForFlags(flags), rest[1:])
 	case "grep":
 		return a.runGrep(a.configForFlags(flags), rest[1:])
+	case "rg":
+		return a.runRGExternal(ctx, flags, rest[1:])
 	case "json":
 		return a.runJSON(rest[1:])
 	case "log":

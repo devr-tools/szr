@@ -4,10 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"time"
 
-	"szr/internal/config"
 	"szr/internal/history"
 )
 
@@ -145,26 +143,6 @@ func (a *App) runProfiles() int {
 		if profile.LatencyBudget > 0 {
 			fmt.Printf("  latency budget: %s\n", profile.LatencyBudget.Round(time.Millisecond))
 		}
-	}
-	return 0
-}
-
-func (a *App) runDoctor(cfg config.Config) int {
-	fmt.Printf("version: %s\n", a.version)
-	fmt.Printf("config: %s\n", a.paths.ConfigFile)
-	fmt.Printf("history: %s\n", a.paths.HistoryFile)
-	fmt.Printf("tee dir: %s\n", a.paths.TeeDir)
-	fmt.Printf("reasoning budget mode: %s\n", cfg.ReasoningBudgetMode)
-	if a.paths.ProjectRuleFile != "" {
-		fmt.Printf("project rules: %s\n", a.paths.ProjectRuleFile)
-	}
-	for _, tool := range []string{"git", "go", "rg"} {
-		path, err := exec.LookPath(tool)
-		if err != nil {
-			fmt.Printf("%s: missing\n", tool)
-			continue
-		}
-		fmt.Printf("%s: %s\n", tool, path)
 	}
 	return 0
 }

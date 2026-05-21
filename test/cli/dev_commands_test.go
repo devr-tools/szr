@@ -158,6 +158,69 @@ func TestInstallCommands(t *testing.T) {
 	}
 }
 
+func TestSelfInstallCommands(t *testing.T) {
+	app := testutil.NewTestApp(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("SHELL", "/bin/zsh")
+	t.Setenv("PATH", "/usr/bin")
+
+	code, stdout, stderr := testutil.RunApp(t, app, "self", "install", "--print")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected self install print stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	for _, want := range []string{
+		"plan: self install",
+		filepath.Join(home, ".local", "bin", "szr"),
+		"path: missing",
+		`export PATH="$HOME/.local/bin:$PATH"`,
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("expected self install print stdout to contain %q, got %q", want, stdout)
+		}
+	}
+
+	code, stdout, stderr = testutil.RunApp(t, app, "self", "install")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected self install stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	target := filepath.Join(home, ".local", "bin", "szr")
+	if _, err := os.Stat(target); err != nil {
+		t.Fatalf("expected installed szr binary at %s: %v", target, err)
+	}
+	for _, want := range []string{
+		"installed: " + target,
+		"path: missing",
+		"shell rc: " + filepath.Join(home, ".zshrc"),
+		`export PATH="$HOME/.local/bin:$PATH"`,
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("expected self install stdout to contain %q, got %q", want, stdout)
+		}
+	}
+}
+
+func TestSelfInstallUpdateShell(t *testing.T) {
+	app := testutil.NewTestApp(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("SHELL", "/bin/bash")
+	t.Setenv("PATH", "/usr/bin")
+
+	code, stdout, stderr := testutil.RunApp(t, app, "self", "install", "--path", filepath.Join(home, "bin"), "--update-shell")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected self install update stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	if !strings.Contains(stdout, "shell rc updated: yes") {
+		t.Fatalf("expected shell rc update in stdout, got %q", stdout)
+	}
+	rcPath := filepath.Join(home, ".bashrc")
+	content := string(testutil.MustReadFile(t, rcPath))
+	if !strings.Contains(content, `export PATH="$HOME/bin:$PATH"`) {
+		t.Fatalf("expected bashrc to contain PATH export, got %q", content)
+	}
+}
+
 func TestInstallGetwdError(t *testing.T) {
 	app := testutil.NewTestApp(t)
 	root := t.TempDir()
