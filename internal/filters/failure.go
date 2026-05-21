@@ -19,10 +19,17 @@ type GenericFailureReducer struct {
 	maxLines     int
 	maxBytes     int
 	head         []string
-	interesting  []string
 	extra        int
 	bytesParsed  int
 	fallbackUsed bool
+	pendingLine  string
+	pendingCount int
+	roots        []string
+	stacks       []string
+	hints        []string
+	warnings     []string
+	seenLines    map[string]struct{}
+	seenStacks   map[string]struct{}
 }
 
 func NewGenericFailureReducer(maxLines, maxBytes int) *GenericFailureReducer {
@@ -30,10 +37,15 @@ func NewGenericFailureReducer(maxLines, maxBytes int) *GenericFailureReducer {
 		maxLines = 12
 	}
 	return &GenericFailureReducer{
-		maxLines:    maxLines,
-		maxBytes:    maxBytes,
-		head:        make([]string, 0, maxLines),
-		interesting: make([]string, 0, maxLines),
+		maxLines:   maxLines,
+		maxBytes:   maxBytes,
+		head:       make([]string, 0, maxLines),
+		roots:      make([]string, 0, maxLines),
+		stacks:     make([]string, 0, maxLines/2),
+		hints:      make([]string, 0, maxLines/2),
+		warnings:   make([]string, 0, maxLines/2),
+		seenLines:  map[string]struct{}{},
+		seenStacks: map[string]struct{}{},
 	}
 }
 
@@ -46,11 +58,12 @@ func (r *GenericFailureReducer) ConsumeStderr(chunk []byte) {
 }
 
 func (r *GenericFailureReducer) Result() string {
-	r.scanner.Finish(r.recordLine)
-	if len(r.head) == 0 && len(r.interesting) == 0 {
+	r.scanner.Finish(r.ingestLine)
+	r.flushPending()
+	if len(r.head) == 0 && !r.hasSignal() {
 		return "ok"
 	}
-	if len(r.interesting) == 0 {
+	if !r.hasSignal() {
 		r.fallbackUsed = true
 		out := append([]string{}, r.head...)
 		if r.extra > 0 {
@@ -58,7 +71,7 @@ func (r *GenericFailureReducer) Result() string {
 		}
 		return strings.Join(out, "\n")
 	}
-	return strings.Join(r.interesting, "\n")
+	return strings.Join(r.compose(), "\n")
 }
 
 func (r *GenericFailureReducer) BytesParsed() int {
@@ -70,12 +83,13 @@ func (r *GenericFailureReducer) FallbackUsed() bool {
 }
 
 func (r *GenericFailureReducer) Done() bool {
-	return len(r.interesting) >= r.maxLines
+	signalCount := len(r.roots) + len(r.stacks) + len(r.hints) + len(r.warnings)
+	return signalCount >= r.maxLines
 }
 
 func (r *GenericFailureReducer) Preview() string {
-	if len(r.interesting) > 0 {
-		return strings.Join(r.interesting, "\n")
+	if r.hasSignal() {
+		return strings.Join(r.compose(), "\n")
 	}
 	if len(r.head) > 0 {
 		return strings.Join(r.head, "\n")
@@ -85,30 +99,186 @@ func (r *GenericFailureReducer) Preview() string {
 
 func (r *GenericFailureReducer) consume(chunk []byte) {
 	r.bytesParsed += len(chunk)
-	r.scanner.Consume(chunk, r.recordLine)
+	r.scanner.Consume(chunk, r.ingestLine)
 }
 
-func (r *GenericFailureReducer) recordLine(line string) {
+func (r *GenericFailureReducer) ingestLine(line string) {
+	if line == r.pendingLine {
+		r.pendingCount++
+		return
+	}
+	r.flushPending()
+	r.pendingLine = line
+	r.pendingCount = 1
+}
+
+func (r *GenericFailureReducer) flushPending() {
+	if r.pendingLine == "" {
+		return
+	}
+	line := r.pendingLine
+	if r.pendingCount > 1 {
+		line = fmt.Sprintf("%s (x%d)", line, r.pendingCount)
+	}
+	r.recordHead(line)
+	r.classifyLine(r.pendingLine, line)
+	r.pendingLine = ""
+	r.pendingCount = 0
+}
+
+func (r *GenericFailureReducer) recordHead(line string) {
 	if len(r.head) < r.maxLines {
 		r.head = append(r.head, line)
 	} else {
 		r.extra++
 	}
+}
 
-	if len(r.interesting) >= r.maxLines {
+func (r *GenericFailureReducer) classifyLine(raw string, display string) {
+	if len(display) > 160 {
+		display = clip(display, 160)
+	}
+	switch classifyFailureLine(raw) {
+	case "root":
+		r.addUnique(&r.roots, display)
+	case "stack":
+		r.addStack(display, raw)
+	case "hint":
+		r.addUnique(&r.hints, display)
+	case "warning":
+		r.addUnique(&r.warnings, display)
+	}
+}
+
+func (r *GenericFailureReducer) addUnique(target *[]string, line string) {
+	if len(*target) >= r.maxLines {
 		return
 	}
-	for _, keyword := range []string{"FAIL", "ERROR", "Error", "error", "panic", "warning", "Warning"} {
-		if strings.Contains(line, keyword) {
-			if r.maxBytes > 0 {
-				line = clip(line, minInt(160, r.maxBytes))
-			} else {
-				line = clip(line, 160)
+	if _, ok := r.seenLines[line]; ok {
+		return
+	}
+	r.seenLines[line] = struct{}{}
+	*target = append(*target, line)
+}
+
+func (r *GenericFailureReducer) addStack(display string, raw string) {
+	if len(r.stacks) >= maxFailureInt(1, r.maxLines/2) {
+		return
+	}
+	key := stackKey(raw)
+	if key == "" {
+		key = display
+	}
+	if _, ok := r.seenStacks[key]; ok {
+		return
+	}
+	r.seenStacks[key] = struct{}{}
+	r.stacks = append(r.stacks, display)
+}
+
+func (r *GenericFailureReducer) hasSignal() bool {
+	return len(r.roots) > 0 || len(r.stacks) > 0 || len(r.hints) > 0 || len(r.warnings) > 0
+}
+
+func (r *GenericFailureReducer) compose() []string {
+	out := []string{}
+	appendLimited := func(lines []string, limit int) {
+		for _, line := range lines {
+			if len(out) >= r.maxLines || limit <= 0 {
+				return
 			}
-			r.interesting = append(r.interesting, line)
-			return
+			out = append(out, line)
+			limit--
 		}
 	}
+
+	rootLimit := minInt(r.maxLines, maxFailureInt(1, r.maxLines/2+1))
+	stackLimit := maxFailureInt(1, r.maxLines/3)
+	hintLimit := maxFailureInt(1, r.maxLines/3)
+
+	appendLimited(r.roots, rootLimit)
+	appendLimited(r.stacks, minInt(stackLimit, r.maxLines-len(out)))
+	appendLimited(r.hints, minInt(hintLimit, r.maxLines-len(out)))
+	appendLimited(r.warnings, r.maxLines-len(out))
+	if r.extra > 0 && len(out) < r.maxLines {
+		out = append(out, fmt.Sprintf("... +%d more lines", r.extra))
+	}
+	return out
+}
+
+func classifyFailureLine(line string) string {
+	lower := strings.ToLower(strings.TrimSpace(line))
+	switch {
+	case strings.HasPrefix(lower, "help:"),
+		strings.HasPrefix(lower, "hint:"),
+		strings.HasPrefix(lower, "note:"),
+		strings.Contains(lower, "did you mean"),
+		strings.Contains(lower, "available fixtures"),
+		strings.Contains(lower, "try using"),
+		strings.Contains(lower, "suggestion"):
+		return "hint"
+	case strings.HasPrefix(line, "at "),
+		strings.HasPrefix(line, "#"),
+		strings.HasPrefix(line, "Traceback"),
+		strings.HasPrefix(line, "File \""),
+		strings.Contains(lower, "stack traceback"):
+		return "stack"
+	case strings.Contains(line, "FAIL"),
+		strings.Contains(line, "FAILED"),
+		strings.Contains(line, "ERROR"),
+		strings.HasPrefix(lower, "error "),
+		strings.Contains(lower, "error:"),
+		strings.Contains(lower, "panic"),
+		strings.Contains(lower, "fatal"),
+		strings.Contains(lower, "assert"),
+		strings.Contains(lower, "exception"),
+		strings.Contains(lower, "caused by"),
+		strings.Contains(lower, "undefined reference"),
+		strings.Contains(lower, "cannot "),
+		strings.Contains(lower, "no such file"),
+		strings.Contains(lower, "does not exist"):
+		return "root"
+	case failureAnchor(line) != "":
+		return "stack"
+	case strings.Contains(lower, "warning"):
+		return "warning"
+	default:
+		return ""
+	}
+}
+
+func stackKey(line string) string {
+	if anchor := failureAnchor(line); anchor != "" {
+		return anchor
+	}
+	return strings.TrimSpace(line)
+}
+
+func failureAnchor(line string) string {
+	lower := strings.ToLower(line)
+	for _, ext := range []string{".go:", ".py:", ".rs:", ".ts:", ".tsx:", ".js:", ".jsx:", ".java:", ".c:", ".cc:", ".cpp:", ".h:", ".hpp:"} {
+		idx := strings.Index(lower, ext)
+		if idx < 0 {
+			continue
+		}
+		start := idx
+		for start > 0 && !strings.ContainsRune(" \t([{\"'", rune(line[start-1])) {
+			start--
+		}
+		end := idx + len(ext)
+		for end < len(line) && !strings.ContainsRune(" \t)]}\"'", rune(line[end])) {
+			end++
+		}
+		return line[start:end]
+	}
+	return ""
+}
+
+func maxFailureInt(left, right int) int {
+	if left > right {
+		return left
+	}
+	return right
 }
 
 func SummarizeGoTestJSON(input string) string {

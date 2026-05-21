@@ -18,7 +18,7 @@ func renderProfile(profile Profile, inv Invocation, exec Execution, fallbackLine
 	}
 
 	if profile.StreamRender != nil {
-		budget := ResolveBudget(profile, fallbackLines)
+		budget := ResolveBudget(profile, inv, fallbackLines)
 		reducer := profile.StreamRender(inv, budget)
 		if reducer != nil {
 			feedReducer(profile.StreamPreference, reducer, exec)

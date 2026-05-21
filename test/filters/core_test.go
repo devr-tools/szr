@@ -26,7 +26,7 @@ func TestFailureHelpers(t *testing.T) {
 		t.Fatalf("unexpected empty generic failure: %q", got)
 	}
 	generic := filters.SummarizeGenericFailure("info\nwarning: x\npanic: y\n", 1)
-	if generic != "warning: x" {
+	if generic != "panic: y" {
 		t.Fatalf("unexpected generic failure summary: %q", generic)
 	}
 	fallback := filters.SummarizeGenericFailure("line1\nline2\nline3\n", 2)
@@ -37,7 +37,7 @@ func TestFailureHelpers(t *testing.T) {
 	reducer := filters.NewGenericFailureReducer(2, 0)
 	reducer.ConsumeStderr([]byte("\x1b[31mwarning"))
 	reducer.ConsumeStdout([]byte(": x\x1b[0m\npanic: y\n"))
-	if got := reducer.Result(); got != "warning: x\npanic: y" {
+	if got := reducer.Result(); got != "panic: y\nwarning: x" {
 		t.Fatalf("unexpected streaming generic failure: %q", got)
 	}
 	if reducer.FallbackUsed() {
@@ -45,6 +45,23 @@ func TestFailureHelpers(t *testing.T) {
 	}
 	if reducer.BytesParsed() != len("\x1b[31mwarning")+len(": x\x1b[0m\npanic: y\n") {
 		t.Fatalf("unexpected bytes parsed: %d", reducer.BytesParsed())
+	}
+
+	stack := filters.SummarizeGenericFailure(strings.Join([]string{
+		"warning: retrying connection",
+		"warning: retrying connection",
+		"panic: nil pointer dereference",
+		"at /tmp/app/main.go:42",
+		"at /tmp/app/main.go:42",
+		"help: rerun with --verbose",
+	}, "\n"), 4)
+	for _, want := range []string{"panic: nil pointer dereference", "/tmp/app/main.go:42", "help: rerun with --verbose"} {
+		if !strings.Contains(stack, want) {
+			t.Fatalf("expected %q in ranked failure output:\n%s", want, stack)
+		}
+	}
+	if !strings.Contains(stack, "warning: retrying connection (x2)") {
+		t.Fatalf("expected repeated warning folding, got %q", stack)
 	}
 }
 

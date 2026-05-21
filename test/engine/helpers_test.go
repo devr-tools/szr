@@ -38,14 +38,29 @@ func TestHelpers(t *testing.T) {
 		t.Fatalf("expected truncated sanitize result, got %d chars", len(got))
 	}
 
-	budget := engine.ResolveBudget(engine.Profile{Budget: engine.OutputBudget{MaxLines: 5}}, 12)
+	budget := engine.ResolveBudget(engine.Profile{Budget: engine.OutputBudget{MaxLines: 5}}, engine.Invocation{}, 12)
 	if budget.MaxLines != 5 || budget.MaxBytes != 800 {
 		t.Fatalf("unexpected resolved budget: %#v", budget)
 	}
 
-	budget = engine.ResolveBudget(engine.Profile{}, 12)
+	budget = engine.ResolveBudget(engine.Profile{}, engine.Invocation{}, 12)
 	if budget.MaxLines != 12 || budget.MaxBytes != 1920 {
 		t.Fatalf("unexpected default budget: %#v", budget)
+	}
+
+	ultraBudget := engine.ResolveBudget(engine.Profile{Budget: engine.OutputBudget{MaxLines: 10}, Confidence: engine.ConfidenceHigh}, engine.Invocation{UltraCompact: true}, 12)
+	if ultraBudget.MaxLines >= 10 {
+		t.Fatalf("expected ultra-compact budget shrink, got %#v", ultraBudget)
+	}
+
+	verboseBudget := engine.ResolveBudget(engine.Profile{Budget: engine.OutputBudget{MaxLines: 10}, Confidence: engine.ConfidenceHigh}, engine.Invocation{Verbose: 2}, 12)
+	if verboseBudget.MaxLines <= 10 {
+		t.Fatalf("expected verbose budget expansion, got %#v", verboseBudget)
+	}
+
+	lowConfidenceBudget := engine.ResolveBudget(engine.Profile{Budget: engine.OutputBudget{MaxLines: 10}, Confidence: engine.ConfidenceLow}, engine.Invocation{}, 12)
+	if lowConfidenceBudget.MaxLines <= 10 {
+		t.Fatalf("expected low-confidence budget expansion, got %#v", lowConfidenceBudget)
 	}
 
 	fast := engine.DecideFastPath(engine.Profile{}, 64, 12, 2*time.Millisecond, 0)

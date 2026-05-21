@@ -84,12 +84,19 @@ func (a *App) runExplain(flags globalFlags, args []string) int {
 	if profile.StreamPreference != "" {
 		fmt.Printf("stream: %s\n", profile.StreamPreference)
 	}
-	if profile.Budget.MaxLines > 0 || profile.Budget.MaxBytes > 0 || profile.Budget.MaxTokens > 0 {
+	resolvedBudget := engine.ResolveBudget(profile, engine.Invocation{
+		Command:      args,
+		Display:      args,
+		Cwd:          cwd,
+		Verbose:      flags.verbose,
+		UltraCompact: flags.ultra,
+	}, a.config.MaxPreviewLines)
+	if resolvedBudget.MaxLines > 0 || resolvedBudget.MaxBytes > 0 || resolvedBudget.MaxTokens > 0 {
 		fmt.Printf(
 			"budget: lines=%d bytes=%d tokens=%d\n",
-			profile.Budget.MaxLines,
-			profile.Budget.MaxBytes,
-			profile.Budget.MaxTokens,
+			resolvedBudget.MaxLines,
+			resolvedBudget.MaxBytes,
+			resolvedBudget.MaxTokens,
 		)
 	}
 	if profile.LatencyBudget > 0 {

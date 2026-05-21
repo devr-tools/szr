@@ -20,41 +20,7 @@ The design bias remains the same: deterministic, parser-first, low-latency compr
 - Optimize for next action, not for pretty summaries.
 - Keep the default path local, deterministic, and cheap.
 
-## Phase 1: Semantic Profiles And Domain Compaction
-
-The largest savings will come from understanding the tools that generate the most waste. `szr` should move from line trimming to domain-aware reduction.
-
-### Goals
-
-- Expand coverage across the noisiest command families.
-- Compress by structure, not by arbitrary line count.
-- Preserve the exact identifiers an agent needs to act.
-
-### Priority profiles
-
-1. `pytest`, `python -m pytest`, and `uv run pytest`
-2. `npm test`, `pnpm test`, `yarn test`, `vitest`, and `jest`
-3. `cargo test`, `cargo build`, and `cargo clippy`
-4. `docker`, `docker compose`, and container logs
-5. `kubectl get`, `kubectl describe`, and `kubectl logs`
-6. `gh pr view`, `gh run view`, and GitHub Actions output
-
-### Deliverables
-
-- Force structured modes where possible and normalize the results into profile-specific reducers.
-- Collapse pass noise to suite, package, and failing-test summaries.
-- Fold duplicate stack frames, repeated warnings, and retried failure bodies.
-- Group matches, diffs, and failures by file, package, service, or container instead of raw line order.
-- Add symbol-aware diff summaries that surface touched files, churn, hotspots, and likely behavioral impact before raw hunks.
-- Add test reducers that preserve failing test names, panic lines, assertion diffs, and the first repair-relevant stack frames.
-
-### Boundary-pushing direction
-
-- Add AST-aware or symbol-aware compaction where the underlying tool can expose enough structure.
-- Extract likely next actions such as missing import, broken package, bad flag, missing file, failing migration, or unhealthy container.
-- Add profile chaining so a command can be rewritten into a machine-readable mode and then passed through multiple reducers.
-
-## Phase 2: Adaptive Token Economy
+## Phase 1: Adaptive Token Economy
 
 After the profile surface is broad enough, `szr` should get more selective about what it keeps. This is where it becomes meaningfully more advanced than a filter library.
 
@@ -79,7 +45,7 @@ After the profile surface is broad enough, `szr` should get more selective about
 - Introduce profile-level budget contracts such as "keep at least one failing test, one stack anchor, and one remediation hint."
 - Add a reasoning-budget mode tuned for agent loops, where stability and token predictability matter more than human readability.
 
-## Phase 3: Project-Aware And Agent-Native szr
+## Phase 2: Project-Aware And Agent-Native szr
 
 The final phase is where `szr` stops being only a CLI wrapper and becomes infrastructure for AI-assisted development.
 
@@ -115,9 +81,8 @@ The final phase is where `szr` stops being only a CLI wrapper and becomes infras
 
 ## Suggested Build Order
 
-1. Expand semantic profiles across the highest-noise command families.
-2. Add adaptive budget allocation and stronger repetition folding.
-3. Land project-local rules, agent installers, and repository-aware intelligence.
+1. Add adaptive budget allocation and stronger repetition folding.
+2. Land project-local rules, agent installers, and repository-aware intelligence.
 
 ## Definition Of Success
 

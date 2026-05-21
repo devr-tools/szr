@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"szr/internal/config"
+	"szr/internal/filters"
 	"szr/internal/history"
 )
 
@@ -54,7 +55,7 @@ func (e *Engine) ExecuteStreaming(
 		command = profile.Prepare(inv)
 	}
 
-	budget := ResolveBudget(profile, e.config.MaxPreviewLines)
+	budget := ResolveBudget(profile, inv, e.config.MaxPreviewLines)
 	var streamReducer StreamReducer
 	if !passthrough && profile.StreamRender != nil {
 		streamReducer = profile.StreamRender(inv, budget)
@@ -119,6 +120,12 @@ func (e *Engine) ExecuteStreaming(
 	}
 	if !passthrough && profile.Name == "passthrough" {
 		fallbackUsed = true
+	}
+	if shouldUseFailureEscape(profile, exitCode, passthrough, fallbackUsed) && rawCombined != "" {
+		escapeBudget := ExpandBudgetForFailureEscape(budget, inv)
+		if escaped := filters.CompactLines(rawCombined, escapeBudget.MaxLines); strings.TrimSpace(escaped) != "" {
+			rendered = escaped
+		}
 	}
 
 	teePath := runResult.teePath
@@ -282,4 +289,14 @@ func bytesForFastPath(profile Profile, result runResult) int {
 	default:
 		return result.stdoutBytes + result.stderrBytes
 	}
+}
+
+func shouldUseFailureEscape(profile Profile, exitCode int, passthrough bool, fallbackUsed bool) bool {
+	if passthrough || exitCode == 0 || !fallbackUsed {
+		return false
+	}
+	if profile.Name == "passthrough" {
+		return false
+	}
+	return profile.Confidence != ConfidenceHigh
 }

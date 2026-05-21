@@ -302,6 +302,44 @@ func TestExecuteStreamingPublishesPartialPreviewBeforeExit(t *testing.T) {
 	}
 }
 
+func TestExecuteUsesFailureEscapeForLowConfidenceFallback(t *testing.T) {
+	binDir := t.TempDir()
+	testutil.WriteExecutable(t, binDir, "lowconf", "#!/bin/sh\nprintf 'line1\\nline2\\nline3\\nline4\\nline5\\nline6\\n' >&2\nexit 9\n")
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	root := t.TempDir()
+	paths := testutil.Paths(root)
+	testutil.EnsurePaths(t, paths)
+
+	cfg := config.Default()
+	e := engine.New(cfg, paths, history.New(paths.HistoryFile), []engine.Profile{{
+		Name:       "low-confidence-fallback",
+		Confidence: engine.ConfidenceLow,
+		Match: func(inv engine.Invocation) bool {
+			return len(inv.Display) > 0 && inv.Display[0] == "lowconf"
+		},
+		Budget: engine.OutputBudget{MaxLines: 2, MaxBytes: 320, MaxTokens: 64},
+		StreamRender: func(engine.Invocation, engine.OutputBudget) engine.StreamReducer {
+			return &fallbackReducer{}
+		},
+	}})
+
+	result, err := e.Execute(context.Background(), engine.Invocation{
+		Command: []string{"lowconf"},
+		Display: []string{"lowconf"},
+		Cwd:     root,
+	}, false)
+	if err != nil {
+		t.Fatalf("execute low-confidence fallback: %v", err)
+	}
+	if !strings.Contains(result.Display, "line1") || !strings.Contains(result.Display, "... +1 more lines") {
+		t.Fatalf("expected compacted failure escape output, got %#v", result)
+	}
+	if strings.Contains(result.Display, "line6") {
+		t.Fatalf("did not expect full raw output after failure escape, got %#v", result)
+	}
+}
+
 type diagnosticReducer struct {
 	stderr strings.Builder
 	parsed int
@@ -408,4 +446,22 @@ func (r *previewReducer) FallbackUsed() bool {
 
 func (r *previewReducer) Preview() string {
 	return r.Result()
+}
+
+type fallbackReducer struct{}
+
+func (r *fallbackReducer) ConsumeStdout([]byte) {}
+
+func (r *fallbackReducer) ConsumeStderr([]byte) {}
+
+func (r *fallbackReducer) Result() string {
+	return ""
+}
+
+func (r *fallbackReducer) BytesParsed() int {
+	return 0
+}
+
+func (r *fallbackReducer) FallbackUsed() bool {
+	return true
 }
