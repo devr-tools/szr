@@ -63,8 +63,12 @@ type Summary struct {
 }
 
 type CommandStat struct {
-	Command string `json:"command"`
-	Count   int    `json:"count"`
+	Command        string  `json:"command"`
+	Count          int     `json:"count"`
+	AveragePct     float64 `json:"average_pct"`
+	SavedTokens    int     `json:"saved_tokens"`
+	RawTokens      int     `json:"raw_tokens"`
+	FilteredTokens int     `json:"filtered_tokens"`
 }
 
 type ProfileStat struct {
@@ -160,12 +164,15 @@ func Summarize(records []Record, limit int) Summary {
 		durations  []int64
 		confidence map[string]int
 	}
+	type commandAccumulator struct {
+		stat CommandStat
+	}
 	type fingerprintAccumulator struct {
 		stat      FingerprintStat
 		durations []int64
 	}
 
-	commands := map[string]int{}
+	commands := map[string]*commandAccumulator{}
 	profileStats := map[string]*profileAccumulator{}
 	fingerprintStats := map[string]*fingerprintAccumulator{}
 	durations := make([]int64, 0, len(records))
@@ -191,7 +198,19 @@ func Summarize(records []Record, limit int) Summary {
 			summary.TeeCount++
 		}
 		summary.Profiles[rec.Profile]++
-		commands[normalizeCommand(rec.Command)]++
+		normalizedCommand := normalizeCommand(rec.Command)
+		command := commands[normalizedCommand]
+		if command == nil {
+			command = &commandAccumulator{
+				stat: CommandStat{Command: normalizedCommand},
+			}
+			commands[normalizedCommand] = command
+		}
+		command.stat.Count++
+		command.stat.AveragePct += rec.SavingsPct
+		command.stat.SavedTokens += rec.SavedTokens
+		command.stat.RawTokens += rec.RawTokens
+		command.stat.FilteredTokens += rec.FilteredTokens
 
 		profile := profileStats[rec.Profile]
 		if profile == nil {
@@ -243,8 +262,9 @@ func Summarize(records []Record, limit int) Summary {
 	summary.DurationP50MS = percentile(durations, 50)
 	summary.DurationP95MS = percentile(durations, 95)
 
-	for cmd, count := range commands {
-		summary.TopCommands = append(summary.TopCommands, CommandStat{Command: cmd, Count: count})
+	for _, command := range commands {
+		command.stat.AveragePct /= float64(command.stat.Count)
+		summary.TopCommands = append(summary.TopCommands, command.stat)
 	}
 	sort.Slice(summary.TopCommands, func(i, j int) bool {
 		if summary.TopCommands[i].Count == summary.TopCommands[j].Count {
