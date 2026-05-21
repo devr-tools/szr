@@ -1,4 +1,4 @@
-package test
+package szrdev_test
 
 import (
 	"context"
@@ -6,13 +6,14 @@ import (
 	"testing"
 
 	"szr/internal/szrdev"
+	"szr/test/testutil"
 )
 
-func TestSZRDevRun(t *testing.T) {
+func TestRun(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 
 	var code int
-	stdout, stderr := captureOutput(t, func() {
+	stdout, stderr := testutil.CaptureOutput(t, func() {
 		code = szrdev.Run(context.Background(), []string{"--version"})
 	})
 	if code != 0 {
@@ -23,12 +24,12 @@ func TestSZRDevRun(t *testing.T) {
 	}
 }
 
-func TestSZRDevAppRun(t *testing.T) {
+func TestNewRun(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 
 	app := szrdev.New()
 	var code int
-	stdout, stderr := captureOutput(t, func() {
+	stdout, stderr := testutil.CaptureOutput(t, func() {
 		code = app.Run(context.Background(), []string{"--version"})
 	})
 	if code != 0 {

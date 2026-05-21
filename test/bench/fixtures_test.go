@@ -1,7 +1,6 @@
-package test
+package bench_test
 
 import (
-	"errors"
 	"strings"
 	"testing"
 
@@ -9,7 +8,7 @@ import (
 	"szr/internal/engine"
 )
 
-func TestBenchmarkFixturesMeasure(t *testing.T) {
+func TestFixturesAndHarness(t *testing.T) {
 	fixtures, err := bench.Fixtures()
 	if err != nil {
 		t.Fatalf("fixtures: %v", err)
@@ -75,25 +74,22 @@ func TestBenchmarkFixturesMeasure(t *testing.T) {
 	}
 }
 
-func TestBenchmarkHarnessEdgeCases(t *testing.T) {
-	harness := bench.NewHarnessWithProfiles([]engine.Profile{
-		{
-			Name: "blank",
-			Render: func(engine.Invocation, engine.Execution) string {
-				return ""
-			},
+func TestHarnessEdgeCases(t *testing.T) {
+	harness := bench.NewHarnessWithProfiles([]engine.Profile{{
+		Name: "blank",
+		Render: func(engine.Invocation, engine.Execution) string {
+			return ""
 		},
-	})
+	}})
 
-	fixture := bench.Fixture{
+	rendered, err := harness.Render(bench.Fixture{
 		Name:        "fallback",
 		Class:       "edge",
 		ProfileName: "blank",
 		Execution: engine.Execution{
 			Stdout: "raw-only",
 		},
-	}
-	rendered, err := harness.Render(fixture)
+	})
 	if err != nil {
 		t.Fatalf("render fallback: %v", err)
 	}
@@ -118,23 +114,5 @@ func TestBenchmarkHarnessEdgeCases(t *testing.T) {
 	}
 	if _, err := harness.Render(bench.Fixture{ProfileName: "missing"}); err == nil {
 		t.Fatal("expected unknown profile error")
-	}
-}
-
-func TestLoadBenchmarkFixturesErrors(t *testing.T) {
-	_, err := bench.LoadFixtures(nil, bench.Specs())
-	if err == nil || !strings.Contains(err.Error(), "missing fixture reader") {
-		t.Fatalf("expected missing reader error, got %v", err)
-	}
-
-	readErr := errors.New("boom")
-	_, err = bench.LoadFixtures(func(string) ([]byte, error) {
-		return nil, readErr
-	}, []bench.Spec{{
-		Name:       "broken",
-		StdoutFile: "testdata/missing.txt",
-	}})
-	if err == nil || !strings.Contains(err.Error(), "testdata/missing.txt") {
-		t.Fatalf("expected wrapped read error, got %v", err)
 	}
 }

@@ -1,19 +1,20 @@
-package test
+package szr_test
 
 import (
 	"context"
 	"strings"
 	"testing"
 
-	szrpkg "szr/pkg/szr"
+	szrapp "szr/pkg/szr"
+	"szr/test/testutil"
 )
 
-func TestSZRRun(t *testing.T) {
+func TestRun(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 
 	var code int
-	stdout, stderr := captureOutput(t, func() {
-		code = szrpkg.Run(context.Background(), "1.2.3", []string{"--version"})
+	stdout, stderr := testutil.CaptureOutput(t, func() {
+		code = szrapp.Run(context.Background(), "1.2.3", []string{"--version"})
 	})
 	if code != 0 {
 		t.Fatalf("unexpected code: %d", code)
@@ -23,10 +24,11 @@ func TestSZRRun(t *testing.T) {
 	}
 }
 
-func TestSZRAppRun(t *testing.T) {
-	app := szrpkg.NewWithCLI(newTestApp(t))
+func TestNewWithCLIRun(t *testing.T) {
+	app := szrapp.NewWithCLI(testutil.NewTestApp(t))
+
 	var code int
-	stdout, stderr := captureOutput(t, func() {
+	stdout, stderr := testutil.CaptureOutput(t, func() {
 		code = app.Run(context.Background(), []string{"--version"})
 	})
 	if code != 0 {

@@ -1,0 +1,66 @@
+package profiles_test
+
+import (
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"szr/internal/engine"
+	"szr/internal/profiles"
+	"szr/test/testutil"
+)
+
+func TestJSProfilesRender(t *testing.T) {
+	list := profiles.Builtins(6)
+	profile := testutil.FindProfile(t, list, "js-package-test")
+
+	report := strings.Join([]string{
+		"> app@test",
+		"> vitest run --reporter=json",
+		`{"numPassedTestSuites":1,"numFailedTestSuites":1,"numPassedTests":2,"numFailedTests":1,"numPendingTests":0,"numTodoTests":0,"numTotalTests":3,"success":false,"testResults":[{"name":"src/math.test.ts","status":"failed","message":"","assertionResults":[{"ancestorTitles":["math"],"fullName":"math subtracts","title":"subtracts","status":"failed","failureMessages":["Error: expect(received).toBe(expected)\nExpected: 2\nReceived: 3\nat src/math.test.ts:12:3"]}]}]}`,
+	}, "\n")
+
+	rendered := profile.Render(engine.Invocation{}, engine.Execution{Stdout: report})
+	for _, want := range []string{"suites: pass=1 fail=1", "src/math.test.ts", "math subtracts", "Expected: 2", "Received: 3"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected %q in rendered output:\n%s", want, rendered)
+		}
+	}
+}
+
+func TestJSProfilesCoverageEdges(t *testing.T) {
+	list := profiles.Builtins(4)
+
+	pm := testutil.FindProfile(t, list, "js-package-test")
+	if pm.Match(engine.Invocation{Display: []string{"npm"}}) {
+		t.Fatal("did not expect short npm args to match")
+	}
+	if !pm.Match(engine.Invocation{Display: []string{"npm", "run", "test"}}) {
+		t.Fatal("expected npm run test to match")
+	}
+	if !pm.Match(engine.Invocation{Display: []string{"yarn", "test"}}) {
+		t.Fatal("expected yarn test to match")
+	}
+	if pm.Match(engine.Invocation{Display: []string{"pnpm", "lint"}}) {
+		t.Fatal("did not expect non-test package manager command to match")
+	}
+	if got := pm.Prepare(engine.Invocation{Command: []string{"bun", "test"}}); strings.Join(got, ",") != "bun,test" {
+		t.Fatalf("expected unknown package manager passthrough, got %#v", got)
+	}
+
+	root := t.TempDir()
+	testutil.MustWriteFile(t, filepath.Join(root, "package.json"), `{"scripts":{"test":"jest"}}`)
+	if got := pm.Prepare(engine.Invocation{Cwd: root}); got != nil {
+		t.Fatalf("expected nil prepare for empty package manager command, got %#v", got)
+	}
+
+	vitest := testutil.FindProfile(t, list, "vitest-json")
+	if rendered := vitest.Render(engine.Invocation{}, engine.Execution{Stdout: "FAIL src/a.test.ts\nExpected: 1"}); !strings.Contains(rendered, "FAIL src/a.test.ts") {
+		t.Fatalf("unexpected vitest render output: %q", rendered)
+	}
+
+	jest := testutil.FindProfile(t, list, "jest-json")
+	if rendered := jest.Render(engine.Invocation{}, engine.Execution{Stdout: "FAIL src/b.test.ts\nExpected: 2"}); !strings.Contains(rendered, "FAIL src/b.test.ts") {
+		t.Fatalf("unexpected jest render output: %q", rendered)
+	}
+}

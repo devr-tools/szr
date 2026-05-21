@@ -1,10 +1,11 @@
-package test
+package profiles_test
 
 import (
 	"testing"
 
 	"szr/internal/engine"
 	"szr/internal/profiles"
+	"szr/test/testutil"
 )
 
 func TestBuiltInProfiles(t *testing.T) {
@@ -13,18 +14,7 @@ func TestBuiltInProfiles(t *testing.T) {
 		t.Fatalf("expected 10 profiles, got %d", len(list))
 	}
 
-	find := func(name string) engine.Profile {
-		t.Helper()
-		for _, profile := range list {
-			if profile.Name == name {
-				return profile
-			}
-		}
-		t.Fatalf("missing profile %s", name)
-		return engine.Profile{}
-	}
-
-	gitStatus := find("git-status")
+	gitStatus := testutil.FindProfile(t, list, "git-status")
 	if !gitStatus.Match(engine.Invocation{Display: []string{"git", "status"}}) {
 		t.Fatal("git-status should match")
 	}
@@ -40,7 +30,7 @@ func TestBuiltInProfiles(t *testing.T) {
 		t.Fatal("expected git-status render output")
 	}
 
-	gitLog := find("git-log")
+	gitLog := testutil.FindProfile(t, list, "git-log")
 	if !gitLog.Match(engine.Invocation{Display: []string{"git", "log"}}) {
 		t.Fatal("git-log should match")
 	}
@@ -54,7 +44,7 @@ func TestBuiltInProfiles(t *testing.T) {
 		t.Fatal("expected git-log render output")
 	}
 
-	gitDiff := find("git-diff")
+	gitDiff := testutil.FindProfile(t, list, "git-diff")
 	if !gitDiff.Match(engine.Invocation{Display: []string{"git", "diff"}}) {
 		t.Fatal("git-diff should match")
 	}
@@ -68,7 +58,7 @@ func TestBuiltInProfiles(t *testing.T) {
 		t.Fatal("expected git-diff render output")
 	}
 
-	goTest := find("go-test-json")
+	goTest := testutil.FindProfile(t, list, "go-test-json")
 	if !goTest.Match(engine.Invocation{Display: []string{"go", "test"}}) {
 		t.Fatal("go-test-json should match")
 	}
@@ -79,7 +69,7 @@ func TestBuiltInProfiles(t *testing.T) {
 		t.Fatal("expected go-test-json to preserve -json")
 	}
 
-	goBuild := find("go-build")
+	goBuild := testutil.FindProfile(t, list, "go-build")
 	if !goBuild.Match(engine.Invocation{Display: []string{"go", "build"}}) || !goBuild.Match(engine.Invocation{Display: []string{"go", "vet"}}) {
 		t.Fatal("go-build should match build and vet")
 	}
@@ -90,7 +80,7 @@ func TestBuiltInProfiles(t *testing.T) {
 		t.Fatal("expected go-build render output")
 	}
 
-	genericTest := find("generic-test")
+	genericTest := testutil.FindProfile(t, list, "generic-test")
 	if !genericTest.Match(engine.Invocation{Display: []string{"test", "pytest"}}) || genericTest.Match(engine.Invocation{Display: nil}) {
 		t.Fatal("unexpected generic-test match behavior")
 	}
@@ -98,7 +88,7 @@ func TestBuiltInProfiles(t *testing.T) {
 		t.Fatal("expected generic-test render output")
 	}
 
-	genericSummary := find("generic-summary")
+	genericSummary := testutil.FindProfile(t, list, "generic-summary")
 	if !genericSummary.Match(engine.Invocation{Display: []string{"summary", "cmd"}}) || genericSummary.Match(engine.Invocation{Display: nil}) {
 		t.Fatal("unexpected generic-summary match behavior")
 	}

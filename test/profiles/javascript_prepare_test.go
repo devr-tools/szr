@@ -1,28 +1,18 @@
-package test
+package profiles_test
 
 import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 
 	"szr/internal/engine"
 	"szr/internal/profiles"
+	"szr/test/testutil"
 )
 
 func TestJSProfilesPrepare(t *testing.T) {
 	list := profiles.Builtins(6)
-	find := func(name string) engine.Profile {
-		t.Helper()
-		for _, profile := range list {
-			if profile.Name == name {
-				return profile
-			}
-		}
-		t.Fatalf("missing profile %s", name)
-		return engine.Profile{}
-	}
 
 	writePackageJSON := func(t *testing.T, script string) string {
 		t.Helper()
@@ -34,7 +24,7 @@ func TestJSProfilesPrepare(t *testing.T) {
 		return root
 	}
 
-	pm := find("js-package-test")
+	pm := testutil.FindProfile(t, list, "js-package-test")
 	if !pm.Match(engine.Invocation{Display: []string{"npm", "test"}}) {
 		t.Fatal("expected npm test to match package profile")
 	}
@@ -123,8 +113,12 @@ func TestJSProfilesPrepare(t *testing.T) {
 	if want := []string{"npm", "test"}; !reflect.DeepEqual(invalidPkg, want) {
 		t.Fatalf("expected invalid package.json passthrough: %#v", invalidPkg)
 	}
+}
 
-	vitest := find("vitest-json")
+func TestStructuredJSProfilesPrepare(t *testing.T) {
+	list := profiles.Builtins(6)
+
+	vitest := testutil.FindProfile(t, list, "vitest-json")
 	if !vitest.Match(engine.Invocation{Display: []string{"vitest"}}) {
 		t.Fatal("expected vitest profile to match")
 	}
@@ -137,8 +131,11 @@ func TestJSProfilesPrepare(t *testing.T) {
 	if got := vitest.Prepare(engine.Invocation{Command: []string{"vitest", "--outputFile=report.json"}}); !reflect.DeepEqual(got, []string{"vitest", "--outputFile=report.json"}) {
 		t.Fatalf("expected explicit vitest output file to be preserved: %#v", got)
 	}
+	if got := vitest.Prepare(engine.Invocation{}); !reflect.DeepEqual(got, []string{"--reporter=json"}) {
+		t.Fatalf("expected structured vitest args for empty command, got %#v", got)
+	}
 
-	jest := find("jest-json")
+	jest := testutil.FindProfile(t, list, "jest-json")
 	if !jest.Match(engine.Invocation{Display: []string{"jest"}}) {
 		t.Fatal("expected jest profile to match")
 	}
@@ -151,31 +148,7 @@ func TestJSProfilesPrepare(t *testing.T) {
 	if got := jest.Prepare(engine.Invocation{Command: []string{"jest", "--reporters=default"}}); !reflect.DeepEqual(got, []string{"jest", "--reporters=default"}) {
 		t.Fatalf("expected explicit jest reporters to be preserved: %#v", got)
 	}
-}
-
-func TestJSProfilesRender(t *testing.T) {
-	list := profiles.Builtins(6)
-	var profile engine.Profile
-	for _, candidate := range list {
-		if candidate.Name == "js-package-test" {
-			profile = candidate
-			break
-		}
-	}
-	if profile.Name == "" {
-		t.Fatal("missing js-package-test profile")
-	}
-
-	report := strings.Join([]string{
-		"> app@test",
-		"> vitest run --reporter=json",
-		`{"numPassedTestSuites":1,"numFailedTestSuites":1,"numPassedTests":2,"numFailedTests":1,"numPendingTests":0,"numTodoTests":0,"numTotalTests":3,"success":false,"testResults":[{"name":"src/math.test.ts","status":"failed","message":"","assertionResults":[{"ancestorTitles":["math"],"fullName":"math subtracts","title":"subtracts","status":"failed","failureMessages":["Error: expect(received).toBe(expected)\nExpected: 2\nReceived: 3\nat src/math.test.ts:12:3"]}]}]}`,
-	}, "\n")
-
-	rendered := profile.Render(engine.Invocation{}, engine.Execution{Stdout: report})
-	for _, want := range []string{"suites: pass=1 fail=1", "src/math.test.ts", "math subtracts", "Expected: 2", "Received: 3"} {
-		if !strings.Contains(rendered, want) {
-			t.Fatalf("expected %q in rendered output:\n%s", want, rendered)
-		}
+	if got := jest.Prepare(engine.Invocation{Command: []string{"jest", "--outputFile=report.json"}}); !reflect.DeepEqual(got, []string{"jest", "--outputFile=report.json"}) {
+		t.Fatalf("expected jest output file to be preserved, got %#v", got)
 	}
 }

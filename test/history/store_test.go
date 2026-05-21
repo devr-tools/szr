@@ -1,4 +1,4 @@
-package test
+package history_test
 
 import (
 	"os"
@@ -8,9 +8,10 @@ import (
 	"time"
 
 	"szr/internal/history"
+	"szr/test/testutil"
 )
 
-func TestHistoryStoreAndSummary(t *testing.T) {
+func TestStoreAndSummary(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "history.jsonl")
 	store := history.New(path)
 	if store == nil {
@@ -29,7 +30,7 @@ func TestHistoryStoreAndSummary(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("append 1: %v", err)
 	}
-	if err := os.WriteFile(path, append(mustReadFile(t, path), []byte("\nnot-json\n")...), 0o644); err != nil {
+	if err := os.WriteFile(path, append(testutil.MustReadFile(t, path), []byte("\nnot-json\n")...), 0o644); err != nil {
 		t.Fatalf("inject bad line: %v", err)
 	}
 	if err := store.Append(history.Record{
@@ -73,7 +74,7 @@ func TestHistoryStoreAndSummary(t *testing.T) {
 	}
 }
 
-func TestHistoryLoadAllErrorsAndHelpers(t *testing.T) {
+func TestLoadAllErrorsAndHelpers(t *testing.T) {
 	store := history.New(filepath.Join(t.TempDir(), "missing.jsonl"))
 	records, err := store.LoadAll()
 	if err != nil || len(records) != 0 {
@@ -127,16 +128,7 @@ func TestHistoryLoadAllErrorsAndHelpers(t *testing.T) {
 	}
 }
 
-func mustReadFile(t *testing.T, path string) []byte {
-	t.Helper()
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read file: %v", err)
-	}
-	return data
-}
-
-func TestHistoryLoadAllScannerError(t *testing.T) {
+func TestLoadAllScannerError(t *testing.T) {
 	longLine := strings.Repeat("x", 70*1024)
 	path := filepath.Join(t.TempDir(), "long.jsonl")
 	if err := os.WriteFile(path, []byte(longLine), 0o644); err != nil {
