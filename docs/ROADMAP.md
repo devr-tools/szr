@@ -20,32 +20,7 @@ The design bias remains the same: deterministic, parser-first, low-latency compr
 - Optimize for next action, not for pretty summaries.
 - Keep the default path local, deterministic, and cheap.
 
-## Phase 1: Ultra-Fast Execution Engine
-
-Once measurement exists, the next constraint is speed. `szr` should feel invisible on small commands and disciplined on large ones.
-
-### Goals
-
-- Remove avoidable buffering.
-- Stop doing work after enough signal has been captured.
-- Make the engine profile-aware without making it complicated.
-
-### Deliverables
-
-- Introduce streaming reducer interfaces alongside the existing buffered render path.
-- Add early-bypass logic for tiny outputs where compaction would cost more than it saves.
-- Add output budgets per profile so reducers can stop once they have captured the actionable core.
-- Add stderr-first and stdout-first profile hints so the engine avoids unnecessary merging work.
-- Keep ANSI stripping, line scanning, and token estimation incremental and cheap.
-
-### Boundary-pushing direction
-
-- Add incremental tee capture so the engine can preserve full failure logs without keeping all raw output in memory.
-- Support fast-path reducers built as state machines instead of generic split-and-trim helpers.
-- Add command-class latency budgets and surface warnings when a profile exceeds them.
-- Explore partial-result streaming so agents can see the compacted summary before the wrapped command has fully flushed.
-
-## Phase 2: Semantic Profiles And Domain Compaction
+## Phase 1: Semantic Profiles And Domain Compaction
 
 The largest savings will come from understanding the tools that generate the most waste. `szr` should move from line trimming to domain-aware reduction.
 
@@ -79,7 +54,7 @@ The largest savings will come from understanding the tools that generate the mos
 - Extract likely next actions such as missing import, broken package, bad flag, missing file, failing migration, or unhealthy container.
 - Add profile chaining so a command can be rewritten into a machine-readable mode and then passed through multiple reducers.
 
-## Phase 3: Adaptive Token Economy
+## Phase 2: Adaptive Token Economy
 
 After the profile surface is broad enough, `szr` should get more selective about what it keeps. This is where it becomes meaningfully more advanced than a filter library.
 
@@ -104,7 +79,7 @@ After the profile surface is broad enough, `szr` should get more selective about
 - Introduce profile-level budget contracts such as "keep at least one failing test, one stack anchor, and one remediation hint."
 - Add a reasoning-budget mode tuned for agent loops, where stability and token predictability matter more than human readability.
 
-## Phase 4: Project-Aware And Agent-Native szr
+## Phase 3: Project-Aware And Agent-Native szr
 
 The final phase is where `szr` stops being only a CLI wrapper and becomes infrastructure for AI-assisted development.
 
@@ -140,10 +115,9 @@ The final phase is where `szr` stops being only a CLI wrapper and becomes infras
 
 ## Suggested Build Order
 
-1. Upgrade the engine for streaming, budgets, and low-overhead fast paths.
-2. Expand semantic profiles across the highest-noise command families.
-3. Add adaptive budget allocation and stronger repetition folding.
-4. Land project-local rules, agent installers, and repository-aware intelligence.
+1. Expand semantic profiles across the highest-noise command families.
+2. Add adaptive budget allocation and stronger repetition folding.
+3. Land project-local rules, agent installers, and repository-aware intelligence.
 
 ## Definition Of Success
 

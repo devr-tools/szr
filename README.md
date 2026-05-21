@@ -11,24 +11,13 @@
 ```mermaid
 flowchart LR
   C["Run: `git diff`"]
+  C --> W["LLM<br/>higher tokens"]
+  C --> Z["szr"]
+  Z --> L["LLM<br/>lower tokens"]
 
-  subgraph W["Without szr"]
-    D[Send command output directly]
-    O1[Raw CLI output]
-    L1["LLM sees full output<br/>Higher token count"]
-    D --> O1 --> L1
-  end
-
-  subgraph S["With szr"]
-    Z[szr runs the command]
-    O2[Raw CLI output]
-    F[Profiles and filters trim noise]
-    L2["LLM sees compact output<br/>Lower token count"]
-    Z --> O2 --> F --> L2
-  end
-
-  C --> D
-  C --> Z
+  classDef blue fill:#31A9F3,stroke:#31A9F3,color:#ffffff;
+  class Z,L blue;
+  linkStyle 1,2 stroke:#31A9F3,stroke-width:2px;
 ```
 
 
