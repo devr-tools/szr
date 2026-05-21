@@ -29,24 +29,3 @@ func fallbackProfile() Profile {
 		},
 	}
 }
-
-func annotateProfilesSource(profiles []Profile, source string) []Profile {
-	annotated := make([]Profile, 0, len(profiles))
-	for _, profile := range profiles {
-		if profile.Source == "" {
-			profile.Source = source
-		}
-		annotated = append(annotated, profile)
-	}
-	return annotated
-}
-
-func explainDecision(profile Profile, selected bool) ExplainDecision {
-	return ExplainDecision{
-		Name:        profile.Name,
-		Description: profile.Description,
-		Source:      profile.Source,
-		Selected:    selected,
-		Explain:     append([]string(nil), profile.Explain...),
-	}
-}

@@ -9,8 +9,9 @@ const (
 )
 
 type File struct {
-	Version  int       `json:"version,omitempty"`
-	Profiles []Profile `json:"profiles"`
+	Version     int          `json:"version,omitempty"`
+	Profiles    []Profile    `json:"profiles,omitempty"`
+	Preferences []Preference `json:"preferences,omitempty"`
 }
 
 type Profile struct {
@@ -20,6 +21,14 @@ type Profile struct {
 	Match       Match    `json:"match"`
 	Rewrite     Rewrite  `json:"rewrite,omitempty"`
 	Render      Render   `json:"render,omitempty"`
+}
+
+type Preference struct {
+	Name        string   `json:"name"`
+	Description string   `json:"description,omitempty"`
+	Explain     []string `json:"explain,omitempty"`
+	Match       Match    `json:"match"`
+	Rewrite     Rewrite  `json:"rewrite"`
 }
 
 type Match struct {
@@ -33,6 +42,7 @@ type Match struct {
 
 type Rewrite struct {
 	Mode         string   `json:"mode,omitempty"`
+	Placement    string   `json:"placement,omitempty"`
 	Args         []string `json:"args,omitempty"`
 	SkipIfHasAny []string `json:"skip_if_has_any,omitempty"`
 }

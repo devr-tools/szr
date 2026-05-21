@@ -81,12 +81,16 @@ func (a *App) runExplain(flags globalFlags, args []string) int {
 		UltraCompact:        flags.ultra,
 		ReasoningBudgetMode: cfg.ReasoningBudgetMode,
 	}
+	effectiveInv, preferences := a.engineForFlags(flags).ExplainPreferences(inv)
 	profile := a.engineForFlags(flags).Explain(inv)
 	decisions := a.engineForFlags(flags).ExplainDecisions(inv)
 	fmt.Printf("profile: %s\n", profile.Name)
 	fmt.Printf("source: %s\n", describeProfileSource(profile.Source, a.paths.ProjectRuleFile))
 	fmt.Printf("about: %s\n", profile.Description)
 	fmt.Printf("reasoning budget mode: %s\n", cfg.ReasoningBudgetMode)
+	if len(preferences) > 0 {
+		fmt.Printf("effective command: %s\n", strings.Join(effectiveInv.Command, " "))
+	}
 	if profile.Confidence != "" {
 		fmt.Printf("confidence: %s\n", profile.Confidence)
 	}
@@ -119,6 +123,16 @@ func (a *App) runExplain(flags globalFlags, args []string) int {
 			suggestion.Confidence,
 			suggestion.Samples,
 		)
+	}
+	if len(preferences) > 0 {
+		fmt.Println("applied preferences:")
+		for _, preference := range preferences {
+			label := "satisfied"
+			if preference.Applied {
+				label = "applied"
+			}
+			fmt.Printf("  %s  %s  %s\n", label, describeProfileSource(preference.Source, a.paths.ProjectRuleFile), preference.Name)
+		}
 	}
 	if len(decisions) > 0 {
 		fmt.Println("matched decisions:")
@@ -156,6 +170,11 @@ func (a *App) findBudgetSuggestion(command []string) *history.BudgetSuggestion {
 func describeProfileSource(source string, projectRuleFile string) string {
 	switch source {
 	case engine.SourceProject:
+		if projectRuleFile != "" {
+			return source + " (" + projectRuleFile + ")"
+		}
+		return source
+	case engine.SourcePreference:
 		if projectRuleFile != "" {
 			return source + " (" + projectRuleFile + ")"
 		}

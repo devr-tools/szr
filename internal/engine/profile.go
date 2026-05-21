@@ -9,9 +9,10 @@ const (
 )
 
 const (
-	SourceBuiltin  = "built-in"
-	SourceProject  = "project-local"
-	SourceFallback = "fallback"
+	SourceBuiltin    = "built-in"
+	SourceProject    = "project-local"
+	SourcePreference = "project-preference"
+	SourceFallback   = "fallback"
 )
 
 const (
@@ -63,6 +64,15 @@ type ExplainDecision struct {
 	Source      string
 	Selected    bool
 	Explain     []string
+}
+
+type PreferenceDecision struct {
+	Name             string
+	Description      string
+	Source           string
+	Applied          bool
+	EffectiveCommand []string
+	Explain          []string
 }
 
 type Profile struct {

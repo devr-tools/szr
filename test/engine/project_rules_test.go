@@ -270,3 +270,69 @@ func TestProjectRuleEdgeCases(t *testing.T) {
 		t.Fatalf("expected compact default render output, got %q", defaultRender.Display)
 	}
 }
+
+func TestProjectRulePreferences(t *testing.T) {
+	binDir := t.TempDir()
+	testutil.WriteExecutable(t, binDir, "argvdump", "#!/bin/sh\nprintf '%s\\n' \"$@\"\n")
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	root := t.TempDir()
+	paths := testutil.Paths(root)
+	testutil.EnsurePaths(t, paths)
+
+	cfg := config.Default()
+	cfg.ProjectRules = rules.File{
+		Preferences: []rules.Preference{
+			{
+				Name:        "internal-cli-json",
+				Description: "Adds machine-readable formatting",
+				Explain:     []string{"Prefers JSON for internal CLI output."},
+				Match: rules.Match{
+					CommandPrefix: []string{"argvdump", "run"},
+				},
+				Rewrite: rules.Rewrite{
+					Placement:    "before-terminator",
+					Args:         []string{"--format", "json"},
+					SkipIfHasAny: []string{"--format"},
+				},
+			},
+		},
+	}
+
+	e := engine.New(cfg, paths, history.New(paths.HistoryFile), nil)
+	effective, decisions := e.ExplainPreferences(engine.Invocation{
+		Command: []string{"argvdump", "run", "--", "target"},
+		Display: []string{"argvdump", "run", "--", "target"},
+		Cwd:     root,
+	})
+	if len(decisions) != 1 || !decisions[0].Applied {
+		t.Fatalf("expected applied preference decision, got %#v", decisions)
+	}
+	if got := strings.Join(effective.Command, " "); got != "argvdump run --format json -- target" {
+		t.Fatalf("unexpected effective command %q", got)
+	}
+
+	result, err := e.Execute(context.Background(), engine.Invocation{
+		Command: []string{"argvdump", "run", "--", "target"},
+		Display: []string{"argvdump", "run", "--", "target"},
+		Cwd:     root,
+	}, false)
+	if err != nil {
+		t.Fatalf("execute with preference: %v", err)
+	}
+	if got := strings.Split(strings.TrimSpace(result.Display), "\n"); len(got) != 5 || got[0] != "run" || got[1] != "--format" || got[2] != "json" || got[3] != "--" || got[4] != "target" {
+		t.Fatalf("unexpected preference-rewritten output: %q", result.Display)
+	}
+
+	satisfiedInv, satisfied := e.ExplainPreferences(engine.Invocation{
+		Command: []string{"argvdump", "run", "--format", "json"},
+		Display: []string{"argvdump", "run", "--format", "json"},
+		Cwd:     root,
+	})
+	if len(satisfied) != 1 || satisfied[0].Applied {
+		t.Fatalf("expected satisfied preference, got %#v", satisfied)
+	}
+	if got := strings.Join(satisfiedInv.Command, " "); got != "argvdump run --format json" {
+		t.Fatalf("unexpected satisfied effective command %q", got)
+	}
+}

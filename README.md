@@ -46,7 +46,7 @@ The first working scaffold is in place:
 - `szr tee` lists indexed failure artifacts so full logs can be retrieved only when needed.
 - `szr install <target>` bootstraps repo-local instructions and hook files for Codex, Claude Code, Cursor, Gemini, and plain shell environments.
 - `szr bench` runs built-in compression fixtures to measure latency and output savings.
-- project-local `.szr.json`, `.szr.yaml`, and `.szr.yml` rules can define custom match, rewrite, render, and cwd-aware behavior.
+- project-local `.szr.json`, `.szr.yaml`, and `.szr.yml` rules can define custom profiles plus machine-readable `preferences` for internal CLIs, generated tooling, and cwd-aware command rewrites.
 
 ## Why build this in Go
 

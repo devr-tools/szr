@@ -46,6 +46,21 @@ func TestLoadWithProjectRules(t *testing.T) {
 	if len(cfg.ProjectRules.Profiles) != 1 || cfg.ProjectRules.Profiles[0].Name != "local-node" {
 		t.Fatalf("unexpected project rules: %#v", cfg.ProjectRules)
 	}
+
+	testutil.MustWriteFile(t, ruleFile, `{"version":1,"preferences":[{"name":"internal-cli-json","match":{"command_prefix":["internal-cli","run"]},"rewrite":{"placement":"before-terminator","args":["--format","json"]}}]}`)
+	cfg, _, err = config.LoadWith(
+		func() (config.Paths, error) { return paths, nil },
+		func(config.Paths) error { return nil },
+		func() (string, error) { return worktree, nil },
+		os.Stat,
+		os.ReadFile,
+	)
+	if err != nil {
+		t.Fatalf("load with project preferences: %v", err)
+	}
+	if len(cfg.ProjectRules.Preferences) != 1 || cfg.ProjectRules.Preferences[0].Name != "internal-cli-json" {
+		t.Fatalf("unexpected project preferences: %#v", cfg.ProjectRules)
+	}
 }
 
 func TestLoadWithProjectRulesWithoutUserConfig(t *testing.T) {

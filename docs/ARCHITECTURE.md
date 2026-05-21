@@ -58,7 +58,7 @@ internal/szrdev
 - The analytics store is deliberately simple JSONL first; it can be swapped for SQLite later without changing the CLI surface.
 - `szr explain` makes the filter decision visible, which is useful when the registry grows.
 - `pkg/szr` keeps the public embedding surface explicit, while `internal/szrdev` contains developer-only launcher wiring.
-- Project-local `.szr.json` and `.szr.yaml` rules compile into the same profile model, so local overrides stay deterministic and inspectable.
+- Project-local `.szr.json` and `.szr.yaml` rules compile into the same profile model, and can also apply deterministic command preferences before profile selection.
 - The benchmark harness lives beside embedded fixtures, which keeps compression measurements reproducible without polluting the core execution path.
 
 ## Next steps
