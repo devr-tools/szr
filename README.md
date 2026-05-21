@@ -96,7 +96,7 @@ brew install --HEAD devr-tools/szr/szr
 szr self doctor
 ```
 
-The first stable formula release is `v0.1.0`. Future tagged releases are documented in [docs/RELEASING.md](/Users/alex/Documents/GitHub/szr/docs/RELEASING.md).
+The first stable formula release is `v0.1.0`. Future tagged releases are documented in [docs/RELEASING.md](/szr/docs/RELEASING.md).
 
 ### Repo bootstrap
 
@@ -149,7 +149,7 @@ make prepush
 
 ## Contributing
 
-Public contributions are welcome. Start with [CONTRIBUTING.md](/Users/alex/Documents/GitHub/szr/CONTRIBUTING.md) for local setup, test expectations, commit hygiene, and PR etiquette.
+Public contributions are welcome. Start with [CONTRIBUTING.md](/szr/CONTRIBUTING.md) for local setup, test expectations, commit hygiene, and PR etiquette.
 
 For most code changes, the minimum bar is:
 
@@ -158,4 +158,6 @@ For most code changes, the minimum bar is:
 - run `make fmt` and `make test`
 - explain the user-facing impact and verification steps in the PR
 
+## Architecture
 
+More detail lives in [docs/ARCHITECTURE.md](/szr/docs/ARCHITECTURE.md).
