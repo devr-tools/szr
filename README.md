@@ -53,6 +53,29 @@ If your shell does not already include that install directory on `PATH`, `szr se
 ./bin/szr self install --update-shell
 ```
 
+Homebrew is also wired up through this repo's tap:
+
+```bash
+# From a local checkout
+brew tap devr-tools/szr "$(pwd)"
+brew install devr-tools/szr/szr
+szr self doctor
+```
+
+```bash
+# From GitHub
+brew install devr-tools/szr/szr
+szr self doctor
+```
+
+```bash
+# Latest main branch instead of the stable tag
+brew install --HEAD devr-tools/szr/szr
+szr self doctor
+```
+
+The first stable formula release is `v0.1.0`. Future tagged releases are documented in [docs/RELEASING.md](/Users/alex/Documents/GitHub/szr/docs/RELEASING.md).
+
 ### Repo bootstrap
 
 Once the binary is globally available, bootstrap repo-local guidance separately:

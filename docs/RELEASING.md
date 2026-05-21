@@ -28,4 +28,8 @@ Use stable semantic versions for stable releases and prerelease suffixes like `-
 
 ## Homebrew follow-up
 
-After a stable release is published, update `Formula/szr.rb` to point at the release source archive and copy the matching `sha256` from the generated `checksums.txt`.
+After a stable release is published, update `Formula/szr.rb` to point at the public release archive or tag archive and copy the matching `sha256`.
+
+For `v0.1.0`, the formula uses the public tag archive:
+
+`https://github.com/devr-tools/szr/archive/refs/tags/v0.1.0.tar.gz`
