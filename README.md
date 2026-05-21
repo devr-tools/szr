@@ -1,3 +1,3 @@
-![szr logo](img/szr-gh.png)
+<img src="img/szr-gh.png" alt="szr logo" width="180" />
 
 # szr
