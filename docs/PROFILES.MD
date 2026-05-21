@@ -2,7 +2,7 @@
 
 This document tracks the builtin profiles currently registered by `internal/profiles.Builtins()`.
 
-Current coverage: `27` builtin profiles across `12` categories.
+Current coverage: `28` builtin profiles across `13` categories.
 
 Anything not listed here does not currently have a dedicated builtin profile in `szr`.
 
@@ -12,6 +12,7 @@ Anything not listed here does not currently have a dedicated builtin profile in 
 | --- | ---: | --- |
 | Go | 2 | `go test`, `go build`, `go vet` |
 | Generic fallback | 2 | wrapped `test` commands, shallow `summary` commands |
+| Search | 1 | `rg` plain-text search |
 | Git | 3 | `git status`, `git log`, `git diff` |
 | GitHub CLI | 3 | `gh pr view`, `gh run view`, GitHub Actions logs |
 | JavaScript | 4 | `npm`, `pnpm`, `yarn`, `turbo`, `nx`, `vite`, `vitest`, `jest` |
@@ -42,6 +43,12 @@ Anything not listed here does not currently have a dedicated builtin profile in 
 - `generic-summary`
   - Matches: commands whose display name starts with `summary`
   - Focus: shallow preview of the first informative lines from long output
+
+### Search
+
+- `ripgrep`
+  - Matches: plain-text `rg` search commands outside JSON, files-only, and count-oriented modes
+  - Focus: groups matches by file with stable filename and line-number output, and falls back to real ripgrep errors when needed
 
 ### Git
 

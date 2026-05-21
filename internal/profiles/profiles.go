@@ -14,6 +14,7 @@ import (
 	patchprofiles "szr/internal/profiles/patch"
 	pythonprofiles "szr/internal/profiles/python"
 	rustprofiles "szr/internal/profiles/rust"
+	searchprofiles "szr/internal/profiles/search"
 )
 
 func Builtins(maxLines int) []engine.Profile {
@@ -28,6 +29,7 @@ func Builtins(maxLines int) []engine.Profile {
 	list = append(list, kubernetesprofiles.Profiles(maxLines)...)
 	list = append(list, githubprofiles.Profiles(maxLines)...)
 	list = append(list, javascriptprofiles.Profiles(maxLines)...)
+	list = append(list, searchprofiles.Profiles(maxLines, 4)...)
 	return list
 }
 

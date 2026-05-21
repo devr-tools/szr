@@ -39,6 +39,7 @@ The first working scaffold is in place:
 - `szr gh pr view`, `szr gh run view`, and `szr gh run view --log` now use GitHub-aware reducers.
 - `szr npm`, `szr pnpm`, `szr yarn`, `szr turbo`, `szr nx`, `szr vite`, `szr vitest`, and `szr jest` now use JS/TS-aware profiles.
 - `szr diff`, `szr patch`, and `szr git apply` now use patch-aware reducers.
+- `szr rg` now uses a ripgrep-aware reducer that groups matches by file.
 - `szr read`, `szr grep`, `szr json`, `szr log`, and `szr ls` are implemented directly in Go.
 - `szr spread` tracks token savings in local JSONL history.
 - `szr explain <cmd...>` shows which profile the engine would use and why.
@@ -72,6 +73,7 @@ szr gh run view 123 --log
 szr npm test
 szr turbo run build
 szr git apply fix.patch
+szr rg TODO internal
 szr grep "TODO" .
 szr read internal/cli/app.go --level aggressive
 szr spread --history

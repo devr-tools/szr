@@ -57,3 +57,21 @@ func TestRipgrepAndTreeHelpers(t *testing.T) {
 		}
 	}
 }
+
+func TestSummarizeRipgrep(t *testing.T) {
+	grouped := filters.SummarizeRipgrep(strings.Join([]string{
+		"one.go:1:first",
+		"one.go:2:second",
+		"two.go:9:two",
+	}, "\n"), 4, 6)
+	for _, want := range []string{"one.go (2 matches)", "two.go (1 matches)"} {
+		if !strings.Contains(grouped, want) {
+			t.Fatalf("expected %q in ripgrep summary:\n%s", want, grouped)
+		}
+	}
+
+	fallback := filters.SummarizeRipgrep("rg: ./vendor: Permission denied (os error 13)\n", 4, 4)
+	if !strings.Contains(fallback, "Permission denied") {
+		t.Fatalf("expected ripgrep error fallback, got %q", fallback)
+	}
+}

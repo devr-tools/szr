@@ -77,6 +77,7 @@ func TestRunRoutes(t *testing.T) {
 		{"read multi aggressive", []string{"read", "-l", "aggressive", "-n", "--max-lines", "1", fileA, fileB}, 0, []string{"== " + fileA + " ==", "== " + fileB + " ==", "func x() { ... }"}, nil, ""},
 		{"grep", []string{"grep", "match", "."}, 0, []string{"file.go (2 matches)"}, nil, ""},
 		{"grep default path", []string{"grep", "match"}, 0, []string{"file.go (2 matches)"}, nil, ""},
+		{"rg external", []string{"rg", "match", "."}, 0, []string{"file.go (2 matches)"}, nil, ""},
 		{"json", []string{"json", jsonFile}, 0, []string{"a: string", "c: number"}, nil, ""},
 		{"log file", []string{"log", logFile}, 0, []string{"same (x2)"}, nil, ""},
 		{"log stdin", []string{"log"}, 0, []string{"same (x2)"}, nil, "same\nsame\n"},

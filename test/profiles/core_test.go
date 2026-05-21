@@ -10,8 +10,8 @@ import (
 
 func TestBuiltInProfiles(t *testing.T) {
 	list := profiles.Builtins(3)
-	if len(list) != 27 {
-		t.Fatalf("expected 27 profiles, got %d", len(list))
+	if len(list) != 28 {
+		t.Fatalf("expected 28 profiles, got %d", len(list))
 	}
 
 	goTest := testutil.FindProfile(t, list, "go-test-json")
@@ -227,6 +227,20 @@ func TestBuiltInProfiles(t *testing.T) {
 	}
 	if got := pythonTooling.Render(engine.Invocation{}, engine.Execution{Stderr: "src/app.py:3: error: Name \"x\" is not defined  [name-defined]\n"}); got == "" {
 		t.Fatal("expected python-tooling render output")
+	}
+
+	ripgrep := testutil.FindProfile(t, list, "ripgrep")
+	if !ripgrep.Match(engine.Invocation{Display: []string{"rg", "needle", "."}}) {
+		t.Fatal("ripgrep should match plain rg commands")
+	}
+	if ripgrep.Match(engine.Invocation{Display: []string{"rg", "--json", "needle"}}) {
+		t.Fatal("ripgrep should not match json rg mode")
+	}
+	if got := ripgrep.Render(engine.Invocation{}, engine.Execution{Stdout: "a.go:1:hit\nb.go:2:hit\n"}); got == "" {
+		t.Fatal("expected ripgrep render output")
+	}
+	if ripgrep.StreamPreference != engine.StreamStdoutFirst || ripgrep.StreamRender == nil {
+		t.Fatalf("unexpected ripgrep stream metadata: %#v", ripgrep)
 	}
 
 	genericTest := testutil.FindProfile(t, list, "generic-test")

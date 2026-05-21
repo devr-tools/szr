@@ -6,6 +6,14 @@ import (
 	"strings"
 )
 
+func SummarizeRipgrep(input string, maxGroups, maxLines int) string {
+	grouped := GroupRipgrep(input, maxGroups)
+	if grouped != "no matches" {
+		return grouped
+	}
+	return SummarizeGenericFailure(input, maxLines)
+}
+
 func GroupRipgrep(input string, maxGroups int) string {
 	type match struct {
 		Line int
