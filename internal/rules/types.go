@@ -28,6 +28,7 @@ type Match struct {
 	AllArgs       []string `json:"all_args,omitempty"`
 	AnyArgs       []string `json:"any_args,omitempty"`
 	ExcludeArgs   []string `json:"exclude_args,omitempty"`
+	CwdContains   []string `json:"cwd_contains,omitempty"`
 }
 
 type Rewrite struct {

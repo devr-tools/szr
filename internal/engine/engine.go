@@ -9,21 +9,28 @@ import (
 	"szr/internal/config"
 	"szr/internal/filters"
 	"szr/internal/history"
+	"szr/internal/teeindex"
 )
 
 type Engine struct {
-	config   config.Config
-	paths    config.Paths
-	history  *history.Store
-	profiles []Profile
+	config          config.Config
+	paths           config.Paths
+	history         *history.Store
+	profiles        []Profile
+	projectProfiles []Profile
+	builtinProfiles []Profile
 }
 
 func New(cfg config.Config, paths config.Paths, store *history.Store, profiles []Profile) *Engine {
+	projectProfiles := compileRuleProfiles(cfg)
+	builtinProfiles := annotateProfilesSource(profiles, SourceBuiltin)
 	return &Engine{
-		config:   cfg,
-		paths:    paths,
-		history:  store,
-		profiles: mergeProfiles(compileRuleProfiles(cfg), profiles),
+		config:          cfg,
+		paths:           paths,
+		history:         store,
+		profiles:        mergeProfiles(projectProfiles, builtinProfiles),
+		projectProfiles: projectProfiles,
+		builtinProfiles: builtinProfiles,
 	}
 }
 
@@ -33,6 +40,26 @@ func (e *Engine) Profiles() []Profile {
 
 func (e *Engine) Explain(inv Invocation) Profile {
 	return e.match(inv)
+}
+
+func (e *Engine) ExplainDecisions(inv Invocation) []ExplainDecision {
+	selected := e.match(inv)
+	decisions := make([]ExplainDecision, 0, len(e.projectProfiles)+len(e.builtinProfiles))
+
+	for _, profile := range e.projectProfiles {
+		if profile.Match != nil && profile.Match(inv) {
+			decisions = append(decisions, explainDecision(profile, profile.Name == selected.Name && profile.Source == selected.Source))
+		}
+	}
+	for _, profile := range e.builtinProfiles {
+		if profile.Match != nil && profile.Match(inv) {
+			decisions = append(decisions, explainDecision(profile, profile.Name == selected.Name && profile.Source == selected.Source))
+		}
+	}
+	if len(decisions) == 0 {
+		return []ExplainDecision{explainDecision(selected, true)}
+	}
+	return decisions
 }
 
 func (e *Engine) Execute(ctx context.Context, inv Invocation, passthrough bool) (Result, error) {
@@ -179,6 +206,21 @@ func (e *Engine) ExecuteStreaming(
 		record.SavingsPct = float64(record.SavedTokens) * 100 / float64(record.RawTokens)
 	}
 	_ = e.history.Append(record)
+	if teePath != "" {
+		_ = teeindex.New(e.paths.TeeDir).Append(teeindex.Entry{
+			Timestamp:          record.Timestamp,
+			Path:               teePath,
+			Command:            record.Command,
+			CommandFingerprint: record.CommandFingerprint,
+			Profile:            record.Profile,
+			ProfileConfidence:  record.ProfileConfidence,
+			Cwd:                record.Cwd,
+			ExitCode:           record.ExitCode,
+			DurationMS:         record.DurationMS,
+			RawBytes:           record.RawBytesRead,
+			RawTokens:          record.RawTokens,
+		})
+	}
 
 	result := Result{
 		ProfileName:       profile.Name,

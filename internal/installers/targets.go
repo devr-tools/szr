@@ -116,3 +116,44 @@ alwaysApply: true
 %s
 `, renderInstructionBody(paths))
 }
+
+func renderShell(paths Paths) Plan {
+	snippetPath := filepath.Join(paths.InstallDir, "shell.sh")
+	return Plan{
+		Target: TargetShell,
+		Title:  "Shell installer",
+		Paths:  paths,
+		Files: []File{
+			sharedHookFile(paths),
+			sharedInstallDoc(paths, TargetShell, "Shell", snippetPath),
+			{
+				Path:        snippetPath,
+				Content:     renderShellSnippet(paths),
+				Mode:        0o644,
+				Strategy:    StrategyWrite,
+				Description: "shell bootstrap snippet",
+			},
+		},
+		ManualSteps: []string{
+			fmt.Sprintf("Source `%s` from your shell rc so `szr` stays the default wrapper in this repo.", relativePath(paths.RepoRoot, snippetPath)),
+			fmt.Sprintf("Optionally run `%s \"$@\"` from your shell preexec hook if your shell supports command reminders.", relativePath(paths.RepoRoot, paths.HookFile)),
+		},
+	}
+}
+
+func renderShellSnippet(paths Paths) string {
+	return fmt.Sprintf(`# szr shell bootstrap
+
+# Load this from your shell rc for repository-local guidance.
+alias szrgit='%s git'
+alias szrgo='%s go'
+
+szr_explain() {
+  %s explain "$@"
+}
+
+szr_proxy() {
+  %s proxy "$@"
+}
+`, paths.Binary, paths.Binary, paths.Binary, paths.Binary)
+}

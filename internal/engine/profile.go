@@ -9,6 +9,12 @@ const (
 )
 
 const (
+	SourceBuiltin  = "built-in"
+	SourceProject  = "project-local"
+	SourceFallback = "fallback"
+)
+
+const (
 	StreamAuto        = "auto"
 	StreamStdoutOnly  = "stdout-only"
 	StreamStderrOnly  = "stderr-only"
@@ -51,9 +57,18 @@ type PartialResult struct {
 	Final             bool
 }
 
+type ExplainDecision struct {
+	Name        string
+	Description string
+	Source      string
+	Selected    bool
+	Explain     []string
+}
+
 type Profile struct {
 	Name             string
 	Description      string
+	Source           string
 	Confidence       string
 	StreamPreference string
 	Budget           OutputBudget

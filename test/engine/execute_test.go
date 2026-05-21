@@ -10,6 +10,7 @@ import (
 	"szr/internal/config"
 	"szr/internal/engine"
 	"szr/internal/history"
+	"szr/internal/teeindex"
 	"szr/test/testutil"
 )
 
@@ -98,6 +99,13 @@ func TestExecuteAndHistory(t *testing.T) {
 	}
 	if _, statErr := os.Stat(failResult.TeePath); statErr != nil {
 		t.Fatalf("expected tee file: %v", statErr)
+	}
+	indexEntries, err := teeindex.New(paths.TeeDir).List(10)
+	if err != nil {
+		t.Fatalf("list tee index: %v", err)
+	}
+	if len(indexEntries) != 1 || indexEntries[0].Path != failResult.TeePath || indexEntries[0].Command != "failcmd "+strings.Repeat("x", 60) {
+		t.Fatalf("unexpected tee index entries: %#v", indexEntries)
 	}
 
 	cfgNoTee := cfg

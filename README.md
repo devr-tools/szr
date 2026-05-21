@@ -43,9 +43,10 @@ The first working scaffold is in place:
 - `szr read`, `szr grep`, `szr json`, `szr log`, and `szr ls` are implemented directly in Go.
 - `szr spread` tracks token savings in local JSONL history.
 - `szr explain <cmd...>` shows which profile the engine would use and why.
-- `szr install <target>` bootstraps repo-local instructions and hook files for Codex, Claude Code, Cursor, and Gemini.
+- `szr tee` lists indexed failure artifacts so full logs can be retrieved only when needed.
+- `szr install <target>` bootstraps repo-local instructions and hook files for Codex, Claude Code, Cursor, Gemini, and plain shell environments.
 - `szr bench` runs built-in compression fixtures to measure latency and output savings.
-- project-local `.szr.json` rules can define custom match, rewrite, and render behavior.
+- project-local `.szr.json`, `.szr.yaml`, and `.szr.yml` rules can define custom match, rewrite, render, and cwd-aware behavior.
 
 ## Why build this in Go
 
@@ -77,7 +78,10 @@ szr rg TODO internal
 szr grep "TODO" .
 szr read internal/cli/app.go --level aggressive
 szr spread --history
+szr tee
+szr tee --latest
 szr install codex
+szr install shell
 szr bench clean-pass
 szr explain go test ./...
 ```

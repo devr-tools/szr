@@ -86,17 +86,28 @@ func TestLoadWithProjectRuleErrors(t *testing.T) {
 
 	paths := testutil.Paths(root)
 	yamlFile := filepath.Join(projectRoot, ".szr.yaml")
-	testutil.MustWriteFile(t, yamlFile, "profiles: []\n")
+	testutil.MustWriteFile(t, yamlFile, `profiles:
+  - name: local-yaml
+    match:
+      command_prefix:
+        - pnpm
+        - test
+      cwd_contains:
+        - repo
+`)
 
-	_, _, err := config.LoadWith(
+	cfg, gotPaths, err := config.LoadWith(
 		func() (config.Paths, error) { return paths, nil },
 		func(config.Paths) error { return nil },
 		func() (string, error) { return projectRoot, nil },
 		os.Stat,
 		os.ReadFile,
 	)
-	if err == nil || !strings.Contains(err.Error(), "yaml project rules are not supported") {
-		t.Fatalf("expected yaml error, got %v", err)
+	if err != nil {
+		t.Fatalf("expected yaml project rules to load, got %v", err)
+	}
+	if gotPaths.ProjectRuleFile != yamlFile || len(cfg.ProjectRules.Profiles) != 1 || cfg.ProjectRules.Profiles[0].Match.CwdContains[0] != "repo" {
+		t.Fatalf("unexpected yaml load result cfg=%#v paths=%#v", cfg, gotPaths)
 	}
 
 	if err := os.Remove(yamlFile); err != nil {

@@ -22,7 +22,7 @@ func TestRenderTargets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("render all: %v", err)
 	}
-	if len(plans) != 4 {
+	if len(plans) != 5 {
 		t.Fatalf("unexpected plan count: %d", len(plans))
 	}
 
@@ -65,6 +65,10 @@ func TestRenderTargets(t *testing.T) {
 				if target == installers.TargetCursor {
 					if file.Strategy != installers.StrategyWrite || !strings.Contains(file.Content, "alwaysApply: true") {
 						t.Fatalf("unexpected cursor file: %#v", file)
+					}
+				} else if target == installers.TargetShell {
+					if file.Strategy != installers.StrategyWrite || !strings.Contains(file.Content, "szr_explain()") || !strings.Contains(file.Content, "szr_proxy()") {
+						t.Fatalf("unexpected shell file: %#v", file)
 					}
 				} else {
 					if file.Strategy != installers.StrategyMerge || file.Marker == "" {

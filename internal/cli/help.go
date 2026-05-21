@@ -17,7 +17,7 @@ Usage:
 
 Core commands:
   git, go, run, test, summary, proxy, explain
-  ls, read, grep, json, log
+  ls, read, grep, json, log, tee
   spread, profiles, doctor, install, bench
 
 Global flags:

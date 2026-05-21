@@ -24,6 +24,8 @@ func Render(target Target, options Options) (Plan, error) {
 		return renderCursor(paths), nil
 	case TargetGemini:
 		return renderGemini(paths), nil
+	case TargetShell:
+		return renderShell(paths), nil
 	default:
 		return Plan{}, fmt.Errorf("unknown target %q", target)
 	}

@@ -9,6 +9,7 @@ const (
 	TargetClaude Target = "claude-code"
 	TargetCursor Target = "cursor"
 	TargetGemini Target = "gemini"
+	TargetShell  Target = "shell"
 )
 
 type Strategy string
@@ -55,5 +56,6 @@ func Targets() []Target {
 		TargetClaude,
 		TargetCursor,
 		TargetGemini,
+		TargetShell,
 	}
 }

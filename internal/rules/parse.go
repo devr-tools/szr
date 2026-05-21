@@ -12,7 +12,7 @@ func ParseFile(path string, data []byte) (File, error) {
 	case ".json":
 		return ParseJSON(data)
 	case ".yaml", ".yml":
-		return File{}, fmt.Errorf("yaml project rules are not supported in this build; use %s", jsonFileName)
+		return ParseYAML(data)
 	default:
 		return File{}, fmt.Errorf("unsupported project rule file format: %s", path)
 	}

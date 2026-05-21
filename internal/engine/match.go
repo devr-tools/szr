@@ -6,9 +6,14 @@ func (e *Engine) match(inv Invocation) Profile {
 			return profile
 		}
 	}
+	return fallbackProfile()
+}
+
+func fallbackProfile() Profile {
 	return Profile{
 		Name:             "passthrough",
 		Description:      "Raw command passthrough with trimming.",
+		Source:           SourceFallback,
 		Confidence:       ConfidenceLow,
 		StreamPreference: StreamStdoutFirst,
 		Budget:           OutputBudget{MaxLines: 12, MaxBytes: 12 * 160, MaxTokens: 12 * 32},
@@ -22,5 +27,26 @@ func (e *Engine) match(inv Invocation) Profile {
 			"No specialized profile matched.",
 			"Raw stdout and stderr are combined with minimal trimming.",
 		},
+	}
+}
+
+func annotateProfilesSource(profiles []Profile, source string) []Profile {
+	annotated := make([]Profile, 0, len(profiles))
+	for _, profile := range profiles {
+		if profile.Source == "" {
+			profile.Source = source
+		}
+		annotated = append(annotated, profile)
+	}
+	return annotated
+}
+
+func explainDecision(profile Profile, selected bool) ExplainDecision {
+	return ExplainDecision{
+		Name:        profile.Name,
+		Description: profile.Description,
+		Source:      profile.Source,
+		Selected:    selected,
+		Explain:     append([]string(nil), profile.Explain...),
 	}
 }

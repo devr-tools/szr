@@ -112,6 +112,8 @@ func (a *App) Run(ctx context.Context, args []string) int {
 		return a.runJSON(rest[1:])
 	case "log":
 		return a.runLog(rest[1:])
+	case "tee":
+		return a.runTee(rest[1:])
 	default:
 		return a.runExternal(ctx, flags, "run", rest, false)
 	}

@@ -45,9 +45,31 @@ func TestParseJSONAndValidate(t *testing.T) {
 }
 
 func TestParseFileAndJSONErrors(t *testing.T) {
-	_, err := rules.ParseFile(".szr.yaml", []byte("profiles: []\n"))
-	if err == nil || !strings.Contains(err.Error(), "yaml project rules are not supported") {
-		t.Fatalf("expected yaml unsupported error, got %v", err)
+	file, err := rules.ParseFile(".szr.yaml", []byte(`version: 1
+profiles:
+  - name: pnpm-test
+    explain:
+      - Uses the repository-local reporter.
+    match:
+      command_prefix:
+        - pnpm
+        - test
+      cwd_contains:
+        - packages/web
+    rewrite:
+      mode: append
+      args:
+        - --reporter
+        - dot
+    render:
+      mode: failure
+      max_lines: 4
+`))
+	if err != nil {
+		t.Fatalf("expected yaml parse success, got %v", err)
+	}
+	if len(file.Profiles) != 1 || file.Profiles[0].Match.CwdContains[0] != "packages/web" || file.Profiles[0].Render.MaxLines != 4 {
+		t.Fatalf("unexpected yaml parse result: %#v", file)
 	}
 
 	_, err = rules.ParseFile(".szr.txt", []byte("{}"))
@@ -101,5 +123,9 @@ func TestValidationErrors(t *testing.T) {
 		},
 	}}}); err == nil || !strings.Contains(err.Error(), "render.max_lines must be >= 0") {
 		t.Fatalf("expected negative max lines error, got %v", err)
+	}
+
+	if _, err := rules.ParseFile(".szr.yaml", []byte("profiles:\n  not-a-list\n")); err == nil || !strings.Contains(err.Error(), "expected profile list item") {
+		t.Fatalf("expected yaml structure error, got %v", err)
 	}
 }

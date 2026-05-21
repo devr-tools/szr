@@ -82,7 +82,9 @@ func (a *App) runExplain(flags globalFlags, args []string) int {
 		ReasoningBudgetMode: cfg.ReasoningBudgetMode,
 	}
 	profile := a.engineForFlags(flags).Explain(inv)
+	decisions := a.engineForFlags(flags).ExplainDecisions(inv)
 	fmt.Printf("profile: %s\n", profile.Name)
+	fmt.Printf("source: %s\n", describeProfileSource(profile.Source, a.paths.ProjectRuleFile))
 	fmt.Printf("about: %s\n", profile.Description)
 	fmt.Printf("reasoning budget mode: %s\n", cfg.ReasoningBudgetMode)
 	if profile.Confidence != "" {
@@ -118,6 +120,16 @@ func (a *App) runExplain(flags globalFlags, args []string) int {
 			suggestion.Samples,
 		)
 	}
+	if len(decisions) > 0 {
+		fmt.Println("matched decisions:")
+		for _, decision := range decisions {
+			label := "also matches"
+			if decision.Selected {
+				label = "selected"
+			}
+			fmt.Printf("  %s  %s  %s\n", label, describeProfileSource(decision.Source, a.paths.ProjectRuleFile), decision.Name)
+		}
+	}
 	for _, line := range profile.Explain {
 		fmt.Printf("- %s\n", line)
 	}
@@ -139,4 +151,18 @@ func (a *App) findBudgetSuggestion(command []string) *history.BudgetSuggestion {
 		}
 	}
 	return nil
+}
+
+func describeProfileSource(source string, projectRuleFile string) string {
+	switch source {
+	case engine.SourceProject:
+		if projectRuleFile != "" {
+			return source + " (" + projectRuleFile + ")"
+		}
+		return source
+	case "":
+		return engine.SourceBuiltin
+	default:
+		return source
+	}
 }

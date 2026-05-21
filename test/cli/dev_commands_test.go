@@ -151,7 +151,7 @@ func TestInstallCommands(t *testing.T) {
 	if code != 0 || stderr != "" {
 		t.Fatalf("unexpected install all stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
-	for _, want := range []string{"plan: codex", "plan: claude-code", "plan: cursor", "plan: gemini"} {
+	for _, want := range []string{"plan: codex", "plan: claude-code", "plan: cursor", "plan: gemini", "plan: shell"} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("expected install all stdout to contain %q, got %q", want, stdout)
 		}

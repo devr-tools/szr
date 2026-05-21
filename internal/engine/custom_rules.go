@@ -19,6 +19,7 @@ func compileRuleProfiles(cfg config.Config) []Profile {
 		compiled = append(compiled, Profile{
 			Name:        rule.Name,
 			Description: rule.Description,
+			Source:      SourceProject,
 			Match: func(inv Invocation) bool {
 				return matchRule(rule.Match, inv)
 			},
@@ -72,6 +73,9 @@ func matchRule(match rules.Match, inv Invocation) bool {
 		return false
 	}
 	if len(match.ExcludeArgs) > 0 && containsAnyValue(args, match.ExcludeArgs) {
+		return false
+	}
+	if len(match.CwdContains) > 0 && !containsAllSubstrings(inv.Cwd, match.CwdContains) {
 		return false
 	}
 	return true
@@ -128,6 +132,9 @@ func explainRule(rule rules.Profile) []string {
 	if len(rule.Match.DisplayPrefix) > 0 {
 		lines = append(lines, "Matches display prefix `"+strings.Join(rule.Match.DisplayPrefix, " ")+"`.")
 	}
+	if len(rule.Match.CwdContains) > 0 {
+		lines = append(lines, "Matches cwd containing `"+strings.Join(rule.Match.CwdContains, "`, `")+"`.")
+	}
 	if len(rule.Explain) > 0 {
 		lines = append(lines, rule.Explain...)
 	}
@@ -171,6 +178,15 @@ func containsValue(values []string, needle string) bool {
 		}
 	}
 	return false
+}
+
+func containsAllSubstrings(value string, needles []string) bool {
+	for _, needle := range needles {
+		if !strings.Contains(value, needle) {
+			return false
+		}
+	}
+	return true
 }
 
 func invocationArgs(inv Invocation) []string {

@@ -3,6 +3,7 @@ package engine_test
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -20,6 +21,10 @@ func TestProjectRules(t *testing.T) {
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	root := t.TempDir()
+	worktree := filepath.Join(root, "nested")
+	if err := os.MkdirAll(worktree, 0o755); err != nil {
+		t.Fatalf("mkdir worktree: %v", err)
+	}
 	paths := testutil.Paths(root)
 	testutil.EnsurePaths(t, paths)
 
@@ -46,6 +51,7 @@ func TestProjectRules(t *testing.T) {
 				Name: "display-wrapper",
 				Match: rules.Match{
 					DisplayPrefix: []string{"summary", "npm", "test"},
+					CwdContains:   []string{"nested"},
 				},
 			},
 			{
@@ -119,9 +125,18 @@ func TestProjectRules(t *testing.T) {
 	explained = e.Explain(engine.Invocation{
 		Command: []string{"npm", "test"},
 		Display: []string{"summary", "npm", "test"},
+		Cwd:     worktree,
 	})
 	if explained.Name != "display-wrapper" {
 		t.Fatalf("expected display-prefix match, got %#v", explained)
+	}
+
+	decisions := e.ExplainDecisions(engine.Invocation{
+		Command: []string{"git", "status"},
+		Display: []string{"git", "status"},
+	})
+	if len(decisions) != 2 || !decisions[0].Selected || decisions[0].Source != engine.SourceProject || decisions[1].Source != engine.SourceBuiltin {
+		t.Fatalf("unexpected explain decisions: %#v", decisions)
 	}
 
 	result, err := e.Execute(context.Background(), engine.Invocation{

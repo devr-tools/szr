@@ -37,7 +37,7 @@ internal/szrdev
 5. The engine optionally rewrites the command for a better machine-readable form.
 6. The command runs and the selected renderer compresses the output.
 7. A local history record is appended for `szr spread`.
-8. On failures, raw output can be tee'd into the local data directory.
+8. On failures, raw output can be tee'd into the local data directory and indexed for later retrieval.
 9. Installer and benchmark commands reuse dedicated internal packages instead of embedding that logic in the core router.
 
 ## Built-in profile strategy
@@ -58,7 +58,7 @@ internal/szrdev
 - The analytics store is deliberately simple JSONL first; it can be swapped for SQLite later without changing the CLI surface.
 - `szr explain` makes the filter decision visible, which is useful when the registry grows.
 - `pkg/szr` keeps the public embedding surface explicit, while `internal/szrdev` contains developer-only launcher wiring.
-- Project-local `.szr.json` rules compile into the same profile model, so local overrides stay deterministic and inspectable.
+- Project-local `.szr.json` and `.szr.yaml` rules compile into the same profile model, so local overrides stay deterministic and inspectable.
 - The benchmark harness lives beside embedded fixtures, which keeps compression measurements reproducible without polluting the core execution path.
 
 ## Next steps
