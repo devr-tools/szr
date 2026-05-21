@@ -111,11 +111,19 @@ func (a *App) runSpread(args []string) int {
 
 func (a *App) runProfiles() int {
 	for _, profile := range a.engine.Profiles() {
-		if profile.Confidence != "" {
-			fmt.Printf("%s\n  %s\n  confidence: %s\n", profile.Name, profile.Description, profile.Confidence)
-			continue
-		}
 		fmt.Printf("%s\n  %s\n", profile.Name, profile.Description)
+		if profile.Confidence != "" {
+			fmt.Printf("  confidence: %s\n", profile.Confidence)
+		}
+		if profile.StreamPreference != "" {
+			fmt.Printf("  stream: %s\n", profile.StreamPreference)
+		}
+		if profile.Budget.MaxLines > 0 || profile.Budget.MaxBytes > 0 || profile.Budget.MaxTokens > 0 {
+			fmt.Printf("  budget: lines=%d bytes=%d tokens=%d\n", profile.Budget.MaxLines, profile.Budget.MaxBytes, profile.Budget.MaxTokens)
+		}
+		if profile.LatencyBudget > 0 {
+			fmt.Printf("  latency budget: %s\n", profile.LatencyBudget.Round(time.Millisecond))
+		}
 	}
 	return 0
 }

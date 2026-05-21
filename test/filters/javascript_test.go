@@ -129,3 +129,20 @@ func TestSummarizeJSTestCoverageEdges(t *testing.T) {
 		t.Fatalf("expected no-data report to fall back to compact output, got %q", noData)
 	}
 }
+
+func TestBufferedTextReducer(t *testing.T) {
+	reducer := filters.NewBufferedTextReducer(true, true, func(input string) string {
+		return filters.SummarizeJSTest(input, 4)
+	})
+	reducer.ConsumeStdout([]byte("\x1b[31mFAIL src/a.test.ts\x1b[0m\n"))
+	reducer.ConsumeStderr([]byte("Error: boom\nTests: 1 failed, 1 total\n"))
+	got := reducer.Result()
+	for _, want := range []string{"FAIL src/a.test.ts", "Error: boom", "Tests: 1 failed, 1 total"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in buffered reducer output:\n%s", want, got)
+		}
+	}
+	if reducer.BytesParsed() != len("\x1b[31mFAIL src/a.test.ts\x1b[0m\n")+len("Error: boom\nTests: 1 failed, 1 total\n") {
+		t.Fatalf("unexpected bytes parsed: %d", reducer.BytesParsed())
+	}
+}

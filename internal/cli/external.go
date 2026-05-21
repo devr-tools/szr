@@ -36,12 +36,14 @@ func (a *App) runExternal(ctx context.Context, flags globalFlags, name string, a
 	if flags.verbose >= 2 {
 		fmt.Fprintf(
 			os.Stderr,
-			"[szr] profile=%s confidence=%s duration=%s exit=%d fallback=%t bytes=%d/%d/%d\n",
+			"[szr] profile=%s confidence=%s duration=%s exit=%d fallback=%t bypass=%q latency_warn=%t bytes=%d/%d/%d\n",
 			result.ProfileName,
 			result.ProfileConfidence,
 			result.Duration.Round(time.Millisecond),
 			result.ExitCode,
 			result.FallbackUsed,
+			result.BypassReason,
+			result.LatencyWarning,
 			result.RawBytesRead,
 			result.BytesParsed,
 			result.BytesEmitted,
@@ -78,6 +80,20 @@ func (a *App) runExplain(flags globalFlags, args []string) int {
 	fmt.Printf("about: %s\n", profile.Description)
 	if profile.Confidence != "" {
 		fmt.Printf("confidence: %s\n", profile.Confidence)
+	}
+	if profile.StreamPreference != "" {
+		fmt.Printf("stream: %s\n", profile.StreamPreference)
+	}
+	if profile.Budget.MaxLines > 0 || profile.Budget.MaxBytes > 0 || profile.Budget.MaxTokens > 0 {
+		fmt.Printf(
+			"budget: lines=%d bytes=%d tokens=%d\n",
+			profile.Budget.MaxLines,
+			profile.Budget.MaxBytes,
+			profile.Budget.MaxTokens,
+		)
+	}
+	if profile.LatencyBudget > 0 {
+		fmt.Printf("latency budget: %s\n", profile.LatencyBudget.Round(time.Millisecond))
 	}
 	for _, line := range profile.Explain {
 		fmt.Printf("- %s\n", line)

@@ -26,6 +26,19 @@ func TestJSProfilesRender(t *testing.T) {
 			t.Fatalf("expected %q in rendered output:\n%s", want, rendered)
 		}
 	}
+	if profile.StreamPreference != engine.StreamStdoutFirst || profile.StreamRender == nil || profile.Budget.MaxLines < 6 {
+		t.Fatalf("unexpected js-package-test stream metadata: %#v", profile)
+	}
+	streamed := profile.StreamRender(engine.Invocation{}, profile.Budget)
+	streamed.ConsumeStdout([]byte("> app@test\n"))
+	streamed.ConsumeStdout([]byte("> vitest run --reporter=json\n"))
+	streamed.ConsumeStdout([]byte(`{"numPassedTestSuites":1,"numFailedTestSuites":1,"numPassedTests":2,"numFailedTests":1,"numPendingTests":0,"numTodoTests":0,"numTotalTests":3,"success":false,"testResults":[{"name":"src/math.test.ts","status":"failed","message":"","assertionResults":[{"ancestorTitles":["math"],"fullName":"math subtracts","title":"subtracts","status":"failed","failureMessages":["Error: expect(received).toBe(expected)\nExpected: 2\nReceived: 3\nat src/math.test.ts:12:3"]}]}]}`))
+	streamRendered := streamed.Result()
+	for _, want := range []string{"suites: pass=1 fail=1", "src/math.test.ts", "Expected: 2"} {
+		if !strings.Contains(streamRendered, want) {
+			t.Fatalf("expected %q in streamed output:\n%s", want, streamRendered)
+		}
+	}
 }
 
 func TestJSProfilesCoverageEdges(t *testing.T) {
@@ -58,9 +71,15 @@ func TestJSProfilesCoverageEdges(t *testing.T) {
 	if rendered := vitest.Render(engine.Invocation{}, engine.Execution{Stdout: "FAIL src/a.test.ts\nExpected: 1"}); !strings.Contains(rendered, "FAIL src/a.test.ts") {
 		t.Fatalf("unexpected vitest render output: %q", rendered)
 	}
+	if vitest.StreamPreference != engine.StreamStdoutFirst || vitest.StreamRender == nil {
+		t.Fatalf("unexpected vitest stream metadata: %#v", vitest)
+	}
 
 	jest := testutil.FindProfile(t, list, "jest-json")
 	if rendered := jest.Render(engine.Invocation{}, engine.Execution{Stdout: "FAIL src/b.test.ts\nExpected: 2"}); !strings.Contains(rendered, "FAIL src/b.test.ts") {
 		t.Fatalf("unexpected jest render output: %q", rendered)
+	}
+	if jest.StreamPreference != engine.StreamStdoutFirst || jest.StreamRender == nil {
+		t.Fatalf("unexpected jest stream metadata: %#v", jest)
 	}
 }

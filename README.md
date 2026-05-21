@@ -6,6 +6,16 @@
 
 `szr` is short for "sizer". It is a Go-native CLI proxy that trims command output before it reaches an LLM, so the model gets the signal without paying for every line of terminal noise.
 
+## How it works
+
+```mermaid
+flowchart LR
+  U[Developer or agent] --> C[Command]
+  C --> S[szr]
+  S -->|runs| T[CLI tool]
+  T -->|raw output| S
+  S -->|profiles + filters trim noise| L[LLM]
+```
 
 
 ## Current status

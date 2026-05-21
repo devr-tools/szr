@@ -1,19 +1,14 @@
 package filters
 
 import (
-	"bytes"
 	"fmt"
 	"strings"
-	"unicode"
 )
 
 func CompactLines(input string, maxLines int) string {
-	lines := nonEmptyLines(input)
-	if len(lines) <= maxLines {
-		return strings.Join(lines, "\n")
-	}
-	head := lines[:maxLines]
-	return strings.Join(head, "\n") + fmt.Sprintf("\n... +%d more lines", len(lines)-maxLines)
+	reducer := NewCompactLineReducer(maxLines, 0)
+	reducer.ConsumeStdout([]byte(input))
+	return reducer.Result()
 }
 
 func DedupeLines(input string, maxLines int) string {
@@ -55,31 +50,23 @@ func ScannerDedupe(data []byte) string {
 }
 
 func StripANSI(input string) string {
-	var out bytes.Buffer
-	inEsc := false
-	for _, r := range input {
-		switch {
-		case r == 0x1b:
-			inEsc = true
-		case inEsc && ((r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z')):
-			inEsc = false
-		case !inEsc:
-			out.WriteRune(r)
-		}
-	}
+	var out strings.Builder
+	var stripper ansiStripper
+	stripper.Consume([]byte(input), func(b byte) {
+		out.WriteByte(b)
+	})
 	return out.String()
 }
 
 func nonEmptyLines(input string) []string {
-	raw := strings.Split(strings.ReplaceAll(input, "\r\n", "\n"), "\n")
-	lines := make([]string, 0, len(raw))
-	for _, line := range raw {
-		trimmed := strings.TrimRightFunc(line, unicode.IsSpace)
-		if trimmed == "" {
-			continue
-		}
-		lines = append(lines, trimmed)
-	}
+	scanner := lineScanner{}
+	lines := []string{}
+	scanner.Consume([]byte(input), func(line string) {
+		lines = append(lines, line)
+	})
+	scanner.Finish(func(line string) {
+		lines = append(lines, line)
+	})
 	return lines
 }
 
@@ -114,4 +101,83 @@ func UniqueStrings(values []string) []string {
 		out = append(out, value)
 	}
 	return out
+}
+
+func minInt(left, right int) int {
+	if left < right {
+		return left
+	}
+	return right
+}
+
+type CompactLineReducer struct {
+	scanner     lineScanner
+	maxLines    int
+	maxBytes    int
+	lines       []string
+	extraLines  int
+	bytesParsed int
+}
+
+func NewCompactLineReducer(maxLines, maxBytes int) *CompactLineReducer {
+	if maxLines <= 0 {
+		maxLines = 12
+	}
+	return &CompactLineReducer{
+		maxLines: maxLines,
+		maxBytes: maxBytes,
+		lines:    make([]string, 0, maxLines),
+	}
+}
+
+func (r *CompactLineReducer) ConsumeStdout(chunk []byte) {
+	r.consume(chunk)
+}
+
+func (r *CompactLineReducer) ConsumeStderr(chunk []byte) {
+	r.consume(chunk)
+}
+
+func (r *CompactLineReducer) Result() string {
+	r.scanner.Finish(r.recordLine)
+	out := append([]string{}, r.lines...)
+	if r.extraLines > 0 {
+		out = append(out, fmt.Sprintf("... +%d more lines", r.extraLines))
+	}
+	return strings.Join(out, "\n")
+}
+
+func (r *CompactLineReducer) BytesParsed() int {
+	return r.bytesParsed
+}
+
+func (r *CompactLineReducer) FallbackUsed() bool {
+	return false
+}
+
+func (r *CompactLineReducer) consume(chunk []byte) {
+	r.bytesParsed += len(chunk)
+	r.scanner.Consume(chunk, r.recordLine)
+}
+
+func (r *CompactLineReducer) recordLine(line string) {
+	if len(r.lines) >= r.maxLines {
+		r.extraLines++
+		return
+	}
+	if r.maxBytes > 0 {
+		used := 0
+		for _, existing := range r.lines {
+			used += len(existing) + 1
+		}
+		remaining := r.maxBytes - used
+		if remaining <= 0 {
+			r.extraLines++
+			return
+		}
+		if len(line) > remaining {
+			line = clip(line, remaining)
+		}
+	}
+	r.lines = append(r.lines, line)
 }

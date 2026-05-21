@@ -7,9 +7,11 @@ func (e *Engine) match(inv Invocation) Profile {
 		}
 	}
 	return Profile{
-		Name:        "passthrough",
-		Description: "Raw command passthrough with trimming.",
-		Confidence:  ConfidenceLow,
+		Name:             "passthrough",
+		Description:      "Raw command passthrough with trimming.",
+		Confidence:       ConfidenceLow,
+		StreamPreference: StreamStdoutFirst,
+		Budget:           OutputBudget{MaxLines: 12, MaxBytes: 12 * 160, MaxTokens: 12 * 32},
 		Render: func(_ Invocation, exec Execution) string {
 			return combineStreams(exec.Stdout, exec.Stderr)
 		},

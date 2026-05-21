@@ -9,28 +9,92 @@ import (
 )
 
 func SummarizeGenericFailure(input string, maxLines int) string {
-	lines := nonEmptyLines(input)
-	if len(lines) == 0 {
+	reducer := NewGenericFailureReducer(maxLines, 0)
+	reducer.ConsumeStdout([]byte(input))
+	return reducer.Result()
+}
+
+type GenericFailureReducer struct {
+	scanner      lineScanner
+	maxLines     int
+	maxBytes     int
+	head         []string
+	interesting  []string
+	extra        int
+	bytesParsed  int
+	fallbackUsed bool
+}
+
+func NewGenericFailureReducer(maxLines, maxBytes int) *GenericFailureReducer {
+	if maxLines <= 0 {
+		maxLines = 12
+	}
+	return &GenericFailureReducer{
+		maxLines:    maxLines,
+		maxBytes:    maxBytes,
+		head:        make([]string, 0, maxLines),
+		interesting: make([]string, 0, maxLines),
+	}
+}
+
+func (r *GenericFailureReducer) ConsumeStdout(chunk []byte) {
+	r.consume(chunk)
+}
+
+func (r *GenericFailureReducer) ConsumeStderr(chunk []byte) {
+	r.consume(chunk)
+}
+
+func (r *GenericFailureReducer) Result() string {
+	r.scanner.Finish(r.recordLine)
+	if len(r.head) == 0 && len(r.interesting) == 0 {
 		return "ok"
 	}
+	if len(r.interesting) == 0 {
+		r.fallbackUsed = true
+		out := append([]string{}, r.head...)
+		if r.extra > 0 {
+			out = append(out, fmt.Sprintf("... +%d more lines", r.extra))
+		}
+		return strings.Join(out, "\n")
+	}
+	return strings.Join(r.interesting, "\n")
+}
 
-	interesting := []string{}
-	keywords := []string{"FAIL", "ERROR", "Error", "error", "panic", "warning", "Warning"}
-	for _, line := range lines {
-		for _, keyword := range keywords {
-			if strings.Contains(line, keyword) {
-				interesting = append(interesting, clip(line, 160))
-				break
+func (r *GenericFailureReducer) BytesParsed() int {
+	return r.bytesParsed
+}
+
+func (r *GenericFailureReducer) FallbackUsed() bool {
+	return r.fallbackUsed
+}
+
+func (r *GenericFailureReducer) consume(chunk []byte) {
+	r.bytesParsed += len(chunk)
+	r.scanner.Consume(chunk, r.recordLine)
+}
+
+func (r *GenericFailureReducer) recordLine(line string) {
+	if len(r.head) < r.maxLines {
+		r.head = append(r.head, line)
+	} else {
+		r.extra++
+	}
+
+	if len(r.interesting) >= r.maxLines {
+		return
+	}
+	for _, keyword := range []string{"FAIL", "ERROR", "Error", "error", "panic", "warning", "Warning"} {
+		if strings.Contains(line, keyword) {
+			if r.maxBytes > 0 {
+				line = clip(line, minInt(160, r.maxBytes))
+			} else {
+				line = clip(line, 160)
 			}
+			r.interesting = append(r.interesting, line)
+			return
 		}
 	}
-	if len(interesting) == 0 {
-		return CompactLines(input, maxLines)
-	}
-	if len(interesting) > maxLines {
-		interesting = interesting[:maxLines]
-	}
-	return strings.Join(interesting, "\n")
 }
 
 func SummarizeGoTestJSON(input string) string {

@@ -29,6 +29,14 @@ func TestBuiltInProfiles(t *testing.T) {
 	if got := gitStatus.Render(engine.Invocation{}, engine.Execution{Stdout: "\x1b[31m## main\x1b[0m\nM  a\n"}); got == "" {
 		t.Fatal("expected git-status render output")
 	}
+	if gitStatus.StreamPreference != engine.StreamStdoutOnly || gitStatus.StreamRender == nil || gitStatus.Budget.MaxLines < 3 {
+		t.Fatalf("unexpected git-status stream metadata: %#v", gitStatus)
+	}
+	gitStatusStream := gitStatus.StreamRender(engine.Invocation{}, gitStatus.Budget)
+	gitStatusStream.ConsumeStdout([]byte("## main\nM  a\n"))
+	if got := gitStatusStream.Result(); got == "" || gitStatusStream.BytesParsed() == 0 {
+		t.Fatalf("expected git-status stream output, got %q", got)
+	}
 
 	gitLog := testutil.FindProfile(t, list, "git-log")
 	if !gitLog.Match(engine.Invocation{Display: []string{"git", "log"}}) {
@@ -42,6 +50,9 @@ func TestBuiltInProfiles(t *testing.T) {
 	}
 	if got := gitLog.Render(engine.Invocation{}, engine.Execution{Stdout: "abc one\ndef two\n"}); got == "" {
 		t.Fatal("expected git-log render output")
+	}
+	if gitLog.StreamPreference != engine.StreamStdoutOnly || gitLog.StreamRender == nil {
+		t.Fatalf("unexpected git-log stream metadata: %#v", gitLog)
 	}
 
 	gitDiff := testutil.FindProfile(t, list, "git-diff")
@@ -57,6 +68,9 @@ func TestBuiltInProfiles(t *testing.T) {
 	if got := gitDiff.Render(engine.Invocation{}, engine.Execution{Stdout: "diff --git a/a b/a\n a | 1 +\n"}); got == "" {
 		t.Fatal("expected git-diff render output")
 	}
+	if gitDiff.StreamPreference != engine.StreamStdoutOnly || gitDiff.StreamRender == nil {
+		t.Fatalf("unexpected git-diff stream metadata: %#v", gitDiff)
+	}
 
 	goTest := testutil.FindProfile(t, list, "go-test-json")
 	if !goTest.Match(engine.Invocation{Display: []string{"go", "test"}}) {
@@ -67,6 +81,9 @@ func TestBuiltInProfiles(t *testing.T) {
 	}
 	if len(goTest.Prepare(engine.Invocation{Command: []string{"go", "test", "-json"}})) != 3 {
 		t.Fatal("expected go-test-json to preserve -json")
+	}
+	if goTest.StreamPreference != engine.StreamStdoutOnly || goTest.StreamRender == nil {
+		t.Fatalf("unexpected go-test-json stream metadata: %#v", goTest)
 	}
 
 	goBuild := testutil.FindProfile(t, list, "go-build")
@@ -79,6 +96,15 @@ func TestBuiltInProfiles(t *testing.T) {
 	if got := goBuild.Render(engine.Invocation{}, engine.Execution{Stdout: "noise", Stderr: "error: bad"}); got == "" {
 		t.Fatal("expected go-build render output")
 	}
+	if goBuild.StreamPreference != engine.StreamStderrFirst || goBuild.StreamRender == nil {
+		t.Fatalf("unexpected go-build stream metadata: %#v", goBuild)
+	}
+	goBuildStream := goBuild.StreamRender(engine.Invocation{}, goBuild.Budget)
+	goBuildStream.ConsumeStderr([]byte("error: bad\n"))
+	goBuildStream.ConsumeStdout([]byte("noise\n"))
+	if got := goBuildStream.Result(); got != "error: bad" {
+		t.Fatalf("unexpected go-build stream output: %q", got)
+	}
 
 	genericTest := testutil.FindProfile(t, list, "generic-test")
 	if !genericTest.Match(engine.Invocation{Display: []string{"test", "pytest"}}) || genericTest.Match(engine.Invocation{Display: nil}) {
@@ -87,6 +113,9 @@ func TestBuiltInProfiles(t *testing.T) {
 	if got := genericTest.Render(engine.Invocation{}, engine.Execution{Stdout: "FAIL one"}); got == "" {
 		t.Fatal("expected generic-test render output")
 	}
+	if genericTest.StreamPreference != engine.StreamStdoutFirst || genericTest.StreamRender == nil {
+		t.Fatalf("unexpected generic-test stream metadata: %#v", genericTest)
+	}
 
 	genericSummary := testutil.FindProfile(t, list, "generic-summary")
 	if !genericSummary.Match(engine.Invocation{Display: []string{"summary", "cmd"}}) || genericSummary.Match(engine.Invocation{Display: nil}) {
@@ -94,5 +123,13 @@ func TestBuiltInProfiles(t *testing.T) {
 	}
 	if got := genericSummary.Render(engine.Invocation{}, engine.Execution{Stdout: "a\nb\nc\nd"}); got == "" {
 		t.Fatal("expected generic-summary render output")
+	}
+	if genericSummary.StreamPreference != engine.StreamStdoutFirst || genericSummary.StreamRender == nil {
+		t.Fatalf("unexpected generic-summary stream metadata: %#v", genericSummary)
+	}
+	genericSummaryStream := genericSummary.StreamRender(engine.Invocation{}, genericSummary.Budget)
+	genericSummaryStream.ConsumeStdout([]byte("a\nb\nc\n"))
+	if got := genericSummaryStream.Result(); got == "" {
+		t.Fatal("expected generic-summary stream output")
 	}
 }

@@ -10,9 +10,12 @@ import (
 func coreProfiles(maxLines int) []engine.Profile {
 	return []engine.Profile{
 		{
-			Name:        "git-status",
-			Description: "Condenses git working tree state into branch and file counts.",
-			Confidence:  engine.ConfidenceHigh,
+			Name:             "git-status",
+			Description:      "Condenses git working tree state into branch and file counts.",
+			Confidence:       engine.ConfidenceHigh,
+			StreamPreference: engine.StreamStdoutOnly,
+			Budget:           outputBudget(atLeast(maxLines, 8)),
+			LatencyBudget:    latencyBudget(15),
 			Match: func(inv engine.Invocation) bool {
 				return hasCommand(inv.Display, "git", "status")
 			},
@@ -25,6 +28,9 @@ func coreProfiles(maxLines int) []engine.Profile {
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return filters.SummarizeGitStatus(filters.StripANSI(exec.Stdout))
 			},
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
+				return filters.NewGitStatusReducer(budget.MaxLines, budget.MaxBytes)
+			},
 			ParseBytes: parseStdout,
 			Explain: []string{
 				"Rewrites `git status` into `git status --short --branch` unless a machine-readable mode was already requested.",
@@ -32,9 +38,12 @@ func coreProfiles(maxLines int) []engine.Profile {
 			},
 		},
 		{
-			Name:        "git-log",
-			Description: "Prefers oneline commit output and trims the history preview.",
-			Confidence:  engine.ConfidenceHigh,
+			Name:             "git-log",
+			Description:      "Prefers oneline commit output and trims the history preview.",
+			Confidence:       engine.ConfidenceHigh,
+			StreamPreference: engine.StreamStdoutOnly,
+			Budget:           outputBudget(atLeast(maxLines, 11)),
+			LatencyBudget:    latencyBudget(15),
 			Match: func(inv engine.Invocation) bool {
 				return hasCommand(inv.Display, "git", "log")
 			},
@@ -47,6 +56,9 @@ func coreProfiles(maxLines int) []engine.Profile {
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return filters.SummarizeGitLog(filters.StripANSI(exec.Stdout))
 			},
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
+				return filters.NewGitLogReducer(budget.MaxLines, budget.MaxBytes)
+			},
 			ParseBytes: parseStdout,
 			Explain: []string{
 				"Injects `--oneline -n 20` for plain `git log` calls.",
@@ -54,9 +66,12 @@ func coreProfiles(maxLines int) []engine.Profile {
 			},
 		},
 		{
-			Name:        "git-diff",
-			Description: "Summarizes file churn and preserves `--stat` style detail.",
-			Confidence:  engine.ConfidenceHigh,
+			Name:             "git-diff",
+			Description:      "Summarizes file churn and preserves `--stat` style detail.",
+			Confidence:       engine.ConfidenceHigh,
+			StreamPreference: engine.StreamStdoutOnly,
+			Budget:           outputBudget(atLeast(maxLines, 9)),
+			LatencyBudget:    latencyBudget(20),
 			Match: func(inv engine.Invocation) bool {
 				return hasCommand(inv.Display, "git", "diff")
 			},
@@ -69,6 +84,9 @@ func coreProfiles(maxLines int) []engine.Profile {
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return filters.SummarizeGitDiff(filters.StripANSI(exec.Stdout))
 			},
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
+				return filters.NewGitDiffReducer(budget.MaxLines, budget.MaxBytes)
+			},
 			ParseBytes: parseStdout,
 			Explain: []string{
 				"Biases `git diff` toward stat output instead of full hunks.",
@@ -76,9 +94,12 @@ func coreProfiles(maxLines int) []engine.Profile {
 			},
 		},
 		{
-			Name:        "go-test-json",
-			Description: "Forces `go test -json` and reports package-level failures only.",
-			Confidence:  engine.ConfidenceHigh,
+			Name:             "go-test-json",
+			Description:      "Forces `go test -json` and reports package-level failures only.",
+			Confidence:       engine.ConfidenceHigh,
+			StreamPreference: engine.StreamStdoutOnly,
+			Budget:           outputBudget(atLeast(maxLines, 12)),
+			LatencyBudget:    latencyBudget(35),
 			Match: func(inv engine.Invocation) bool {
 				return hasCommand(inv.Display, "go", "test")
 			},
@@ -91,6 +112,11 @@ func coreProfiles(maxLines int) []engine.Profile {
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return filters.SummarizeGoTestJSON(exec.Stdout)
 			},
+			StreamRender: func(_ engine.Invocation, _ engine.OutputBudget) engine.StreamReducer {
+				return filters.NewBufferedTextReducer(true, false, func(input string) string {
+					return filters.SummarizeGoTestJSON(input)
+				})
+			},
 			ParseBytes: parseStdout,
 			Explain: []string{
 				"Upgrades `go test` to NDJSON mode.",
@@ -98,14 +124,20 @@ func coreProfiles(maxLines int) []engine.Profile {
 			},
 		},
 		{
-			Name:        "go-build",
-			Description: "Drops download noise and focuses on compiler diagnostics.",
-			Confidence:  engine.ConfidenceHigh,
+			Name:             "go-build",
+			Description:      "Drops download noise and focuses on compiler diagnostics.",
+			Confidence:       engine.ConfidenceHigh,
+			StreamPreference: engine.StreamStderrFirst,
+			Budget:           outputBudget(atLeast(maxLines, 10)),
+			LatencyBudget:    latencyBudget(25),
 			Match: func(inv engine.Invocation) bool {
 				return hasCommand(inv.Display, "go", "build") || hasCommand(inv.Display, "go", "vet")
 			},
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return filters.SummarizeGenericFailure(exec.Stderr+"\n"+exec.Stdout, maxLines)
+			},
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
+				return filters.NewGenericFailureReducer(budget.MaxLines, budget.MaxBytes)
 			},
 			ParseBytes: parseStderrFirst,
 			Explain: []string{
@@ -114,14 +146,20 @@ func coreProfiles(maxLines int) []engine.Profile {
 			},
 		},
 		{
-			Name:        "generic-test",
-			Description: "Generic failure-focused profile for wrapped test commands.",
-			Confidence:  engine.ConfidenceMedium,
+			Name:             "generic-test",
+			Description:      "Generic failure-focused profile for wrapped test commands.",
+			Confidence:       engine.ConfidenceMedium,
+			StreamPreference: engine.StreamStdoutFirst,
+			Budget:           outputBudget(atLeast(maxLines, 8)),
+			LatencyBudget:    latencyBudget(35),
 			Match: func(inv engine.Invocation) bool {
 				return len(inv.Display) > 0 && inv.Display[0] == "test"
 			},
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return filters.SummarizeGenericFailure(exec.Stdout+"\n"+exec.Stderr, maxLines)
+			},
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
+				return filters.NewGenericFailureReducer(budget.MaxLines, budget.MaxBytes)
 			},
 			ParseBytes: parseCombined,
 			Explain: []string{
@@ -130,14 +168,20 @@ func coreProfiles(maxLines int) []engine.Profile {
 			},
 		},
 		{
-			Name:        "generic-summary",
-			Description: "Keeps the first informative lines from long command output.",
-			Confidence:  engine.ConfidenceLow,
+			Name:             "generic-summary",
+			Description:      "Keeps the first informative lines from long command output.",
+			Confidence:       engine.ConfidenceLow,
+			StreamPreference: engine.StreamStdoutFirst,
+			Budget:           outputBudget(atLeast(maxLines, 6)),
+			LatencyBudget:    latencyBudget(20),
 			Match: func(inv engine.Invocation) bool {
 				return len(inv.Display) > 0 && inv.Display[0] == "summary"
 			},
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return filters.CompactLines(exec.Stdout+"\n"+exec.Stderr, maxLines)
+			},
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
+				return filters.NewCompactLineReducer(budget.MaxLines, budget.MaxBytes)
 			},
 			ParseBytes: parseCombined,
 			Explain: []string{
@@ -146,6 +190,13 @@ func coreProfiles(maxLines int) []engine.Profile {
 			},
 		},
 	}
+}
+
+func atLeast(value, floor int) int {
+	if value < floor {
+		return floor
+	}
+	return value
 }
 
 func hasCommand(args []string, head, sub string) bool {

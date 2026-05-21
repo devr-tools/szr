@@ -13,9 +13,12 @@ import (
 func jsProfiles(maxLines int) []engine.Profile {
 	return []engine.Profile{
 		{
-			Name:        "js-package-test",
-			Description: "Detects Jest and Vitest behind package-manager test scripts and forwards structured reporter flags.",
-			Confidence:  engine.ConfidenceMedium,
+			Name:             "js-package-test",
+			Description:      "Detects Jest and Vitest behind package-manager test scripts and forwards structured reporter flags.",
+			Confidence:       engine.ConfidenceMedium,
+			StreamPreference: engine.StreamStdoutFirst,
+			Budget:           outputBudget(atLeast(maxLines, 12)),
+			LatencyBudget:    latencyBudget(35),
 			Match: func(inv engine.Invocation) bool {
 				return isPackageManagerTest(inv.Display)
 			},
@@ -29,6 +32,11 @@ func jsProfiles(maxLines int) []engine.Profile {
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return filters.SummarizeJSTest(exec.Stdout+"\n"+exec.Stderr, maxLines)
 			},
+			StreamRender: func(_ engine.Invocation, _ engine.OutputBudget) engine.StreamReducer {
+				return filters.NewBufferedTextReducer(true, true, func(input string) string {
+					return filters.SummarizeJSTest(input, maxLines)
+				})
+			},
 			ParseBytes: parseCombined,
 			Explain: []string{
 				"Inspects the local `package.json` test script to detect `vitest` or `jest` behind `npm`, `pnpm`, and `yarn` wrappers.",
@@ -36,9 +44,12 @@ func jsProfiles(maxLines int) []engine.Profile {
 			},
 		},
 		{
-			Name:        "vitest-json",
-			Description: "Requests the Vitest JSON reporter and preserves failing suite details.",
-			Confidence:  engine.ConfidenceHigh,
+			Name:             "vitest-json",
+			Description:      "Requests the Vitest JSON reporter and preserves failing suite details.",
+			Confidence:       engine.ConfidenceHigh,
+			StreamPreference: engine.StreamStdoutFirst,
+			Budget:           outputBudget(atLeast(maxLines, 12)),
+			LatencyBudget:    latencyBudget(35),
 			Match: func(inv engine.Invocation) bool {
 				return len(inv.Display) > 0 && inv.Display[0] == "vitest"
 			},
@@ -51,6 +62,11 @@ func jsProfiles(maxLines int) []engine.Profile {
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return filters.SummarizeJSTest(exec.Stdout+"\n"+exec.Stderr, maxLines)
 			},
+			StreamRender: func(_ engine.Invocation, _ engine.OutputBudget) engine.StreamReducer {
+				return filters.NewBufferedTextReducer(true, true, func(input string) string {
+					return filters.SummarizeJSTest(input, maxLines)
+				})
+			},
 			ParseBytes: parseCombined,
 			Explain: []string{
 				"Prefers Vitest's JSON reporter when the command did not already request another structured mode.",
@@ -58,9 +74,12 @@ func jsProfiles(maxLines int) []engine.Profile {
 			},
 		},
 		{
-			Name:        "jest-json",
-			Description: "Requests Jest JSON output and condenses the report into failing suite signal.",
-			Confidence:  engine.ConfidenceHigh,
+			Name:             "jest-json",
+			Description:      "Requests Jest JSON output and condenses the report into failing suite signal.",
+			Confidence:       engine.ConfidenceHigh,
+			StreamPreference: engine.StreamStdoutFirst,
+			Budget:           outputBudget(atLeast(maxLines, 12)),
+			LatencyBudget:    latencyBudget(35),
 			Match: func(inv engine.Invocation) bool {
 				return len(inv.Display) > 0 && inv.Display[0] == "jest"
 			},
@@ -72,6 +91,11 @@ func jsProfiles(maxLines int) []engine.Profile {
 			},
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return filters.SummarizeJSTest(exec.Stdout+"\n"+exec.Stderr, maxLines)
+			},
+			StreamRender: func(_ engine.Invocation, _ engine.OutputBudget) engine.StreamReducer {
+				return filters.NewBufferedTextReducer(true, true, func(input string) string {
+					return filters.SummarizeJSTest(input, maxLines)
+				})
 			},
 			ParseBytes: parseCombined,
 			Explain: []string{

@@ -1,6 +1,10 @@
 package profiles
 
-import "szr/internal/engine"
+import (
+	"time"
+
+	"szr/internal/engine"
+)
 
 func Builtins(maxLines int) []engine.Profile {
 	list := coreProfiles(maxLines)
@@ -21,4 +25,22 @@ func parseStderrFirst(exec engine.Execution) int {
 		return len(exec.Stdout)
 	}
 	return len(exec.Stderr) + len(exec.Stdout)
+}
+
+func outputBudget(lines int) engine.OutputBudget {
+	if lines <= 0 {
+		lines = 12
+	}
+	return engine.OutputBudget{
+		MaxLines:  lines,
+		MaxBytes:  lines * 160,
+		MaxTokens: lines * 32,
+	}
+}
+
+func latencyBudget(ms int) time.Duration {
+	if ms <= 0 {
+		return 0
+	}
+	return time.Duration(ms) * time.Millisecond
 }

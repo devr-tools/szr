@@ -62,4 +62,27 @@ func TestGitSummaries(t *testing.T) {
 	if strings.Count(diffLong, "\n") != 8 {
 		t.Fatalf("expected truncated diff summary, got %q", diffLong)
 	}
+
+	statusReducer := filters.NewGitStatusReducer(8, 0)
+	statusReducer.ConsumeStdout([]byte("\x1b[32m## main\x1b[0m\nM  a\n"))
+	statusReducer.ConsumeStdout([]byte("?? b\n"))
+	statusStream := statusReducer.Result()
+	if !strings.Contains(statusStream, "main") || !strings.Contains(statusStream, "staged=1 unstaged=0 untracked=1") {
+		t.Fatalf("unexpected git status stream: %q", statusStream)
+	}
+
+	logReducer := filters.NewGitLogReducer(4, 0)
+	logReducer.ConsumeStdout([]byte("one\n"))
+	logReducer.ConsumeStdout([]byte("two\nthree\nfour\n"))
+	if got := logReducer.Result(); got != "4 commits\none\ntwo\nthree" {
+		t.Fatalf("unexpected git log stream: %q", got)
+	}
+
+	diffReducer := filters.NewGitDiffReducer(4, 0)
+	diffReducer.ConsumeStdout([]byte("diff --git a/a.go b/a.go\n"))
+	diffReducer.ConsumeStdout([]byte(" a.go | 2 +-\n+foo\n-bar\n"))
+	diffStream := diffReducer.Result()
+	if !strings.Contains(diffStream, "files=1 +1 -1") || !strings.Contains(diffStream, "a.go | 2 +-") {
+		t.Fatalf("unexpected git diff stream: %q", diffStream)
+	}
 }

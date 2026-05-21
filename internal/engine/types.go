@@ -27,6 +27,8 @@ type Result struct {
 	TeePath           string
 	Duration          time.Duration
 	FallbackUsed      bool
+	BypassReason      string
+	LatencyWarning    bool
 	RawBytesRead      int
 	BytesParsed       int
 	BytesEmitted      int
