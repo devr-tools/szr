@@ -20,31 +20,7 @@ The design bias remains the same: deterministic, parser-first, low-latency compr
 - Optimize for next action, not for pretty summaries.
 - Keep the default path local, deterministic, and cheap.
 
-## Phase 1: Instrumentation And Proof
-
-`szr` should measure itself before it tries to become more ambitious. Compression without instrumentation turns into guesswork.
-
-### Goals
-
-- Prove which profiles are actually saving tokens.
-- Measure latency overhead with enough resolution to protect the hot path.
-- Detect regressions in fidelity before expanding the profile surface.
-
-### Deliverables
-
-- Add a benchmark harness for profile latency, output size reduction, and token reduction.
-- Add golden fixtures for representative command classes: clean pass, noisy fail, giant diff, repeated logs, compiler output, and mixed stdout/stderr failures.
-- Extend `szr spread` with per-profile savings, p50/p95 duration, fallback rate, tee rate, and failure rate.
-- Add `szr bench` so profile changes can be compared against stable fixtures.
-- Add a compression quality score that flags suspicious cases such as zero actionable lines, missing failure identifiers, or excessive fallback usage.
-
-### Boundary-pushing direction
-
-- Track command fingerprints so `szr` can learn which commands still have poor savings.
-- Separate `raw bytes read`, `bytes parsed`, and `bytes emitted` to expose expensive reducers.
-- Add profile confidence reporting so future heuristics can fail open instead of hiding signal.
-
-## Phase 2: Ultra-Fast Execution Engine
+## Phase 1: Ultra-Fast Execution Engine
 
 Once measurement exists, the next constraint is speed. `szr` should feel invisible on small commands and disciplined on large ones.
 
@@ -69,7 +45,7 @@ Once measurement exists, the next constraint is speed. `szr` should feel invisib
 - Add command-class latency budgets and surface warnings when a profile exceeds them.
 - Explore partial-result streaming so agents can see the compacted summary before the wrapped command has fully flushed.
 
-## Phase 3: Semantic Profiles And Domain Compaction
+## Phase 2: Semantic Profiles And Domain Compaction
 
 The largest savings will come from understanding the tools that generate the most waste. `szr` should move from line trimming to domain-aware reduction.
 
@@ -103,7 +79,7 @@ The largest savings will come from understanding the tools that generate the mos
 - Extract likely next actions such as missing import, broken package, bad flag, missing file, failing migration, or unhealthy container.
 - Add profile chaining so a command can be rewritten into a machine-readable mode and then passed through multiple reducers.
 
-## Phase 4: Adaptive Token Economy
+## Phase 3: Adaptive Token Economy
 
 After the profile surface is broad enough, `szr` should get more selective about what it keeps. This is where it becomes meaningfully more advanced than a filter library.
 
@@ -128,7 +104,7 @@ After the profile surface is broad enough, `szr` should get more selective about
 - Introduce profile-level budget contracts such as "keep at least one failing test, one stack anchor, and one remediation hint."
 - Add a reasoning-budget mode tuned for agent loops, where stability and token predictability matter more than human readability.
 
-## Phase 5: Project-Aware And Agent-Native szr
+## Phase 4: Project-Aware And Agent-Native szr
 
 The final phase is where `szr` stops being only a CLI wrapper and becomes infrastructure for AI-assisted development.
 
@@ -164,11 +140,10 @@ The final phase is where `szr` stops being only a CLI wrapper and becomes infras
 
 ## Suggested Build Order
 
-1. Ship Phase 1 instrumentation and `szr bench`.
-2. Upgrade the engine for streaming, budgets, and low-overhead fast paths.
-3. Expand semantic profiles across the highest-noise command families.
-4. Add adaptive budget allocation and stronger repetition folding.
-5. Land project-local rules, agent installers, and repository-aware intelligence.
+1. Upgrade the engine for streaming, budgets, and low-overhead fast paths.
+2. Expand semantic profiles across the highest-noise command families.
+3. Add adaptive budget allocation and stronger repetition folding.
+4. Land project-local rules, agent installers, and repository-aware intelligence.
 
 ## Definition Of Success
 
