@@ -20,56 +20,58 @@ The design bias remains the same: deterministic, parser-first, low-latency compr
 - Optimize for next action, not for pretty summaries.
 - Keep the default path local, deterministic, and cheap.
 
-## Phase 1: Adaptive Token Economy
+## Completed Foundations
 
-After the profile surface is broad enough, `szr` should get more selective about what it keeps. This is where it becomes meaningfully more advanced than a filter library.
+The original Phase 1 and Phase 2 work is now baseline, not planned work.
 
-### Goals
+### Landed From The Old Adaptive Token Economy Scope
 
-- Allocate token budget intentionally instead of using static line caps everywhere.
-- Compress repetitive output more aggressively without losing root cause.
-- Adapt to failure shape, verbosity mode, and user intent.
+- Adaptive budgets now vary by profile, confidence, verbosity, `--ultra-compact`, and reasoning-budget mode instead of relying on one static line cap.
+- Repetition folding is built into the shared reducers so repeated warnings, retries, and noisy log regions collapse quickly.
+- Stack and diagnostic anchoring is implemented across the failure reducers so root causes, unique file paths, and salient frames survive compaction.
+- Low-confidence and failure escape paths preserve more output automatically when the reducer cannot confidently isolate the actionable core.
+- Local history already feeds budget suggestions, and agent-oriented reasoning budgets now enforce minimum failure, anchor, and hint contracts.
 
-### Deliverables
+### Landed From The Old Project-Aware And Agent-Native Scope
 
-- Replace static max-line heuristics with adaptive output budgets by command type, failure mode, and `--ultra-compact` level.
-- Add repetition folding for logs, flaky retries, repeated warnings, and repeated compiler notes.
-- Add stacktrace folding that keeps root cause, top frames, branch points, and unique file paths.
-- Add salience ranking so reducers prioritize error-bearing lines, identifiers, and remediation hints above boilerplate.
-- Add low-confidence escape hatches that automatically preserve more output when the reducer cannot confidently identify the actionable core.
+- Project-local `.szr.json`, `.szr.yaml`, and `.szr.yml` rules support custom profiles, rewrites, reducers, and cwd-aware matching.
+- Project-local `preferences` provide machine-readable flag rewrites for internal CLIs and generated tooling.
+- `szr explain` shows project-local and built-in decisions side by side, including applied preference rewrites.
+- `szr install` bootstraps Codex, Claude Code, Cursor, Gemini, and plain shell environments with repo-local instructions and hook files.
+- Tee artifacts are indexed and retrievable so full failure logs stay available without making raw output the default path.
 
-### Boundary-pushing direction
+## Active Roadmap
 
-- Use local command history to suggest tighter or looser budgets for commands that are consistently too noisy or too aggressively compressed.
-- Add entropy-aware compaction so large repeated regions are collapsed faster than unique diagnostic regions.
-- Introduce profile-level budget contracts such as "keep at least one failing test, one stack anchor, and one remediation hint."
-- Add a reasoning-budget mode tuned for agent loops, where stability and token predictability matter more than human readability.
+The next roadmap should focus on what is still not done, not on restating completed foundations.
 
-## Phase 2: Project-Aware And Agent-Native szr
+### Phase 3: Coverage, Calibration, And Stability
 
-The final phase is where `szr` stops being only a CLI wrapper and becomes infrastructure for AI-assisted development.
+#### Goals
 
-### Goals
+- Expand structured coverage where commands still fall back to broad or generic reducers.
+- Turn existing history, bench, and tee data into tighter quality feedback loops.
+- Make agent-facing output modes predictable enough for long-running automated use.
 
-- Make `szr` learn the repository it runs in.
-- Make it easy for agents to rely on `szr` by default.
-- Keep the system extensible without turning it into opaque magic.
-
-### Deliverables
-
-- Support project-local rules such as `.szr.json` or `.szr.yaml` for custom matchers, rewrites, reducers, and directory heuristics.
-- Let teams define machine-readable flag preferences for internal CLIs and generated tooling.
-- Add rule introspection so `szr explain` shows built-in and project-local decisions side by side.
-- Add installer flows for Codex, Claude Code, Cursor, Gemini CLI, and plain shell environments.
-- Add repo bootstrap that generates agent instructions describing when to use `szr`, `proxy`, `explain`, and tee artifacts.
-- Add safer tee indexing and retrieval so full logs are easy to inspect only when needed.
-
-### Boundary-pushing direction
+#### Deliverables
 
 - Recommend custom profiles automatically based on command history and poor-savings hotspots.
 - Add repository-specific ignore intelligence for generated files, vendor trees, build output, and known noise sources.
-- Make agent-targeted output modes stable enough that long-running agent loops can depend on them without prompt churn.
-- Position `szr` as a programmable compression layer, not just a command alias.
+- Tighten stability guarantees for agent-targeted output modes so long-running loops see less prompt churn.
+- Grow bench coverage with more real-world failure fixtures and clearer fidelity regressions for reducers that over-compress.
+- Surface fallback-heavy and low-savings hotspots more explicitly so profile tuning work is easy to prioritize.
+
+### Phase 4: Programmable Compression Layer
+
+#### Goals
+
+- Push `szr` beyond command aliasing into repository infrastructure that teams can tune safely.
+- Keep customizability inspectable, testable, and operationally cheap.
+
+#### Deliverables
+
+- Position `szr` as a programmable compression layer with stronger tooling around profile coverage, overrides, and rule evolution.
+- Improve artifact lifecycle management so tee storage remains searchable, useful, and bounded over time.
+- Keep latency and savings quality gates visible as the profile surface grows.
 
 ## What Not To Do
 
@@ -81,8 +83,8 @@ The final phase is where `szr` stops being only a CLI wrapper and becomes infras
 
 ## Suggested Build Order
 
-1. Add adaptive budget allocation and stronger repetition folding.
-2. Land project-local rules, agent installers, and repository-aware intelligence.
+1. Expand structured reducers and hotspot-driven recommendations.
+2. Harden agent stability, repository intelligence, and artifact operations.
 
 ## Definition Of Success
 
