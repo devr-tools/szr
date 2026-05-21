@@ -2,6 +2,21 @@
   <img src="img/szr-gh.png" alt="szr logo" width="280" />
 </p>
 
+<p align="center">
+  <a href="https://github.com/devr-tools/szr/actions/workflows/release.yml">
+    <img src="https://github.com/devr-tools/szr/actions/workflows/release.yml/badge.svg?branch=main&event=release" alt="release workflow" />
+  </a>
+  <a href="https://github.com/devr-tools/szr/actions/workflows/cd.yml">
+    <img src="https://github.com/devr-tools/szr/actions/workflows/cd.yml/badge.svg?branch=main" alt="cd workflow" />
+  </a>
+  <a href="https://github.com/devr-tools/szr/actions/workflows/ci.yml">
+    <img src="https://github.com/devr-tools/szr/actions/workflows/ci.yml/badge.svg" alt="ci workflow" />
+  </a>
+  <a href="https://github.com/devr-tools/szr/actions/workflows/homebrew.yml">
+    <img src="https://github.com/devr-tools/szr/actions/workflows/homebrew.yml/badge.svg" alt="homebrew workflow" />
+  </a>
+</p>
+
 # szr
 
 `szr` is short for "sizer". It is a Go-native CLI proxy that trims command output before it reaches an LLM, so the model gets the signal without paying for every line of terminal noise.

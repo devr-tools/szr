@@ -1,12 +1,7 @@
-name: homebrew
+name: homebrew validation
 
 on:
   pull_request:
-    branches:
-      - develop
-      - master
-      - main
-  push:
     branches:
       - develop
       - master
@@ -16,7 +11,7 @@ permissions:
   contents: read
 
 jobs:
-  formula:
+  formula-validation:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
