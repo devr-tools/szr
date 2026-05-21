@@ -69,3 +69,56 @@ func TestStoreListLatestFind(t *testing.T) {
 		t.Fatalf("unexpected read data=%q err=%v", string(data), err)
 	}
 }
+
+func TestStoreSearchAndReplace(t *testing.T) {
+	dir := t.TempDir()
+	store := teeindex.New(dir)
+
+	firstPath := filepath.Join(dir, "100_first.log")
+	secondPath := filepath.Join(dir, "200_second.log")
+	if err := os.WriteFile(firstPath, []byte("first\n"), 0o644); err != nil {
+		t.Fatalf("write first tee: %v", err)
+	}
+	if err := os.WriteFile(secondPath, []byte("second\n"), 0o644); err != nil {
+		t.Fatalf("write second tee: %v", err)
+	}
+
+	entries := []teeindex.Entry{
+		{
+			Timestamp: time.Date(2026, 5, 21, 10, 0, 0, 0, time.UTC),
+			Path:      firstPath,
+			Command:   "terraform plan",
+			Profile:   "passthrough",
+			ExitCode:  1,
+		},
+		{
+			Timestamp: time.Date(2026, 5, 21, 11, 0, 0, 0, time.UTC),
+			Path:      secondPath,
+			Command:   "cargo test",
+			Profile:   "cargo-test",
+			ExitCode:  101,
+		},
+	}
+	if err := store.Replace(entries); err != nil {
+		t.Fatalf("replace entries: %v", err)
+	}
+
+	matches, err := store.Search("cargo", 10)
+	if err != nil {
+		t.Fatalf("search entries: %v", err)
+	}
+	if len(matches) != 1 || matches[0].Command != "cargo test" {
+		t.Fatalf("unexpected tee search matches: %#v", matches)
+	}
+
+	if err := store.Replace(entries[:1]); err != nil {
+		t.Fatalf("replace subset: %v", err)
+	}
+	list, err := store.List(10)
+	if err != nil {
+		t.Fatalf("list replaced entries: %v", err)
+	}
+	if len(list) != 1 || list[0].Command != "terraform plan" {
+		t.Fatalf("unexpected replaced tee entries: %#v", list)
+	}
+}

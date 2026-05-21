@@ -6,6 +6,7 @@ import (
 	"os/exec"
 
 	"szr/internal/config"
+	"szr/internal/history"
 	"szr/internal/selfinstall"
 )
 
@@ -19,7 +20,7 @@ func (a *App) runSelf(flags globalFlags, args []string) int {
 	case "install":
 		return a.runSelfInstall(args[1:])
 	case "doctor":
-		return a.runDoctor(a.configForFlags(flags))
+		return a.runDoctor(a.configForFlags(flags), args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "szr: unknown self subcommand %s\n", args[0])
 		return 2
@@ -127,7 +128,18 @@ func printSelfInstallPlan(plan selfinstall.Plan, updateShell bool) {
 	}
 }
 
-func (a *App) runDoctor(cfg config.Config) int {
+func (a *App) runDoctor(cfg config.Config, args []string) int {
+	showHistory := false
+	for _, arg := range args {
+		switch arg {
+		case "--history":
+			showHistory = true
+		default:
+			fmt.Fprintf(os.Stderr, "szr: unknown doctor flag %s\n", arg)
+			return 2
+		}
+	}
+
 	executablePath, execErr := os.Executable()
 	homeDir, homeErr := os.UserHomeDir()
 	var plan selfinstall.Plan
@@ -175,5 +187,39 @@ func (a *App) runDoctor(cfg config.Config) int {
 	} else {
 		fmt.Printf("rg: %s (optional)\n", path)
 	}
+	if showHistory {
+		if err := a.printDoctorHistory(); err != nil {
+			fmt.Fprintf(os.Stderr, "szr: failed to read history: %v\n", err)
+			return 1
+		}
+	}
 	return 0
+}
+
+func (a *App) printDoctorHistory() error {
+	records, err := a.history.LoadAll()
+	if err != nil {
+		return err
+	}
+	summary := history.Summarize(records, 5)
+	fmt.Println("history diagnostics:")
+	fmt.Printf("  commands: %d\n", summary.Commands)
+	fmt.Printf("  fallback rate: %.1f%%\n", summary.FallbackRate)
+	fmt.Printf("  failure rate: %.1f%%\n", summary.FailureRate)
+	fmt.Printf("  tee rate: %.1f%%\n", summary.TeeRate)
+	recommendations := buildRecommendations(records, 3)
+	if len(recommendations) > 0 {
+		fmt.Println("  recommendations:")
+		for _, item := range recommendations {
+			fmt.Printf("    - [%s] %s\n", item.Kind, item.Action)
+		}
+	}
+	hotspots := buildHotspots(records, 3)
+	if len(hotspots) > 0 {
+		fmt.Println("  hotspots:")
+		for _, item := range hotspots {
+			fmt.Printf("    - %s profile=%s avg=%.1f%% fallback=%.1f%% p95=%dms\n", item.Command, item.Profile, item.AveragePct, item.FallbackRate, item.DurationP95MS)
+		}
+	}
+	return nil
 }

@@ -2,7 +2,7 @@
 
 This document tracks the builtin profiles currently registered by `internal/profiles.Builtins()`.
 
-Current coverage: `28` builtin profiles across `13` categories.
+Current coverage: `33` builtin profiles across `13` categories.
 
 Anything not listed here does not currently have a dedicated builtin profile in `szr`.
 
@@ -14,15 +14,15 @@ Anything not listed here does not currently have a dedicated builtin profile in 
 | Generic fallback | 2 | wrapped `test` commands, shallow `summary` commands |
 | Search | 1 | `rg` plain-text search |
 | Git | 3 | `git status`, `git log`, `git diff` |
-| GitHub CLI | 3 | `gh pr view`, `gh run view`, GitHub Actions logs |
-| JavaScript | 4 | `npm`, `pnpm`, `yarn`, `turbo`, `nx`, `vite`, `vitest`, `jest` |
+| GitHub CLI | 5 | `gh pr view`, `gh pr checks`, `gh run list`, `gh run view`, GitHub Actions logs |
+| JavaScript | 5 | `npm`, `pnpm`, `yarn`, `bun`, `turbo`, `nx`, `vite`, `vitest`, `jest`, `eslint`, `tsc` |
 | Python | 2 | `uv`, `poetry`, `pip`, `pytest`, `ruff`, `mypy` |
 | Build systems | 1 | `make`, `just`, `task`, `bazel`, `ninja`, `cmake` |
 | C/C++ tooling | 2 | `ctest`, `clang-tidy`, `clang-format`, `bear` |
 | Patch and diff | 1 | `diff`, `patch`, `git apply` |
 | Rust | 2 | `cargo test`, `cargo build`, `cargo clippy` |
 | Containers | 2 | `docker ps`, `docker logs`, `docker compose ps`, `docker compose logs` |
-| Kubernetes | 3 | `kubectl get`, `kubectl describe`, `kubectl logs` |
+| Kubernetes | 5 | `kubectl get`, `kubectl describe`, `kubectl logs`, `kubectl top`, `kubectl events` |
 
 ## Profile Inventory
 
@@ -67,20 +67,29 @@ Anything not listed here does not currently have a dedicated builtin profile in 
 - `gh-pr-view`
   - Matches: `gh pr view`
   - Focus: pull request metadata, review state, and changed files
+- `gh-pr-checks`
+  - Matches: `gh pr checks`
+  - Focus: failed and pending check rows from raw check output
 - `gh-run-log`
   - Matches: `gh run view --log`, `gh run view --log-failed`
   - Focus: failed GitHub Actions jobs and failing steps from raw logs
+- `gh-run-list`
+  - Matches: `gh run list`
+  - Focus: newest informative workflow rows from run history tables
 - `gh-run-view`
   - Matches: `gh run view`
   - Focus: workflow status, branch or event context, failed jobs, and failed steps
 
 ### JavaScript
 
+- `bun-test`
+  - Matches: `bun test`
+  - Focus: failing suites, assertions, and file-level failure signal
 - `js-package-test`
   - Matches: `npm test`, `pnpm test`, `yarn test`, plus `run test` variants
   - Focus: detects `vitest` or `jest` behind package scripts and forwards structured reporter flags
 - `js-workspace`
-  - Matches: non-test `npm`, `pnpm`, and `yarn` commands plus `turbo`, `nx`, and `vite`
+  - Matches: non-test `npm`, `pnpm`, `yarn`, and `bun` commands plus `turbo`, `nx`, `vite`, `eslint`, and `tsc`
   - Focus: package-manager failures, workspace task failures, and file-anchored Vite or build diagnostics
 - `vitest-json`
   - Matches: direct `vitest` commands
@@ -101,7 +110,7 @@ Anything not listed here does not currently have a dedicated builtin profile in 
 ### Build systems
 
 - `build-system`
-  - Matches: `make`, `just`, `task`, `bazel`, `ninja`, `cmake`
+  - Matches: `make`, `just`, `task`, `bazel`, `ninja`, `cmake`, `terraform`, `tofu`, `helm`, `gradle`, `mvn`, `docker build`
   - Focus: failing targets, orchestration errors, and source-file diagnostics
 
 ### C/C++ tooling
@@ -145,9 +154,15 @@ Anything not listed here does not currently have a dedicated builtin profile in 
 - `kubectl-describe`
   - Matches: `kubectl describe`
   - Focus: object identity plus warning and failure-bearing events
+- `kubectl-events`
+  - Matches: `kubectl events`
+  - Focus: warning-bearing event lines and failure reasons from event streams
 - `kubectl-logs`
   - Matches: `kubectl logs`
   - Focus: bounded log tails with prefixed source identity and grouped repeated errors
+- `kubectl-top`
+  - Matches: `kubectl top`
+  - Focus: compact previews of the newest resource metrics rows
 
 ## Expansion Read
 

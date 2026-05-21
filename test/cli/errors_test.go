@@ -36,7 +36,6 @@ func TestErrorsAndSpread(t *testing.T) {
 		{"proxy missing", []string{"proxy"}, 2, nil, []string{"missing command for proxy"}},
 		{"explain missing", []string{"explain"}, 2, nil, []string{"explain requires a command"}},
 		{"spread bad flag", []string{"spread", "--bad"}, 2, nil, []string{"unknown spread flag"}},
-		{"install missing", []string{"install"}, 2, nil, []string{"install requires a target or --all"}},
 		{"install mixed targets", []string{"install", "--all", "codex"}, 2, nil, []string{"either --all or explicit targets"}},
 		{"install bad flag", []string{"install", "--bad"}, 2, nil, []string{"unknown install flag"}},
 		{"bench bad flag", []string{"bench", "--bad"}, 2, nil, []string{"unknown bench flag"}},

@@ -44,8 +44,10 @@ func isBuildSystemCommand(args []string) bool {
 		return false
 	}
 	switch args[0] {
-	case "make", "just", "task", "bazel", "ninja", "cmake":
+	case "make", "just", "task", "bazel", "ninja", "cmake", "terraform", "tofu", "helm", "gradle", "mvn":
 		return true
+	case "docker":
+		return len(args) >= 2 && (args[1] == "build" || args[1] == "buildx" && len(args) >= 3 && args[2] == "build")
 	default:
 		return false
 	}

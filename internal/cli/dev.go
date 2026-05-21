@@ -38,8 +38,8 @@ func (a *App) runInstall(args []string) int {
 		return 2
 	}
 	if !allTargets && len(targets) == 0 {
-		fmt.Fprintln(os.Stderr, "szr: install requires a target or --all")
-		return 2
+		printInstallTargets()
+		return 0
 	}
 
 	cwd, _ := os.Getwd()
@@ -241,6 +241,21 @@ func printInstalledPlan(plan installers.Plan) {
 	for _, step := range plan.ManualSteps {
 		fmt.Printf("  next: %s\n", step)
 	}
+}
+
+func printInstallTargets() {
+	targets := installers.Targets()
+	names := make([]string, 0, len(targets))
+	for _, target := range targets {
+		names = append(names, string(target))
+	}
+	fmt.Println("available install targets:")
+	for _, name := range names {
+		fmt.Printf("  - %s\n", name)
+	}
+	fmt.Println()
+	fmt.Printf("use: szr install <%s>\n", strings.Join(names, "|"))
+	fmt.Println("or:  szr install --all")
 }
 
 func relativeToRepo(root, path string) string {

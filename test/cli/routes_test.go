@@ -49,12 +49,13 @@ func TestRunRoutes(t *testing.T) {
 		wantStderr []string
 		stdin      string
 	}{
-		{"help empty", nil, 0, []string{`szr: "sizer"`}, nil, ""},
-		{"help flag", []string{"--help"}, 0, []string{"Core commands:", "self", "--reasoning-budget <standard|agent>"}, nil, ""},
-		{"help ultra", []string{"-u", "help"}, 0, []string{"Core commands:"}, nil, ""},
-		{"help verbose long", []string{"--verbose", "help"}, 0, []string{"Core commands:"}, nil, ""},
-		{"help verbose exact", []string{"-vv", "help"}, 0, []string{"Core commands:"}, nil, ""},
-		{"help verbose counted", []string{"-vvvv", "help"}, 0, []string{"Core commands:"}, nil, ""},
+		{"help empty", nil, 0, []string{`szr or "sizer" is a token-aware CLI proxy built in Go`, "Setup:"}, nil, ""},
+		{"help flag", []string{"--help"}, 0, []string{"Setup:", "Insight:", "Discover:", "szr commands", "--reasoning-budget <standard|agent>"}, nil, ""},
+		{"help ultra", []string{"-u", "help"}, 0, []string{"Setup:"}, nil, ""},
+		{"help verbose long", []string{"--verbose", "help"}, 0, []string{"Setup:"}, nil, ""},
+		{"help verbose exact", []string{"-vv", "help"}, 0, []string{"Setup:"}, nil, ""},
+		{"help verbose counted", []string{"-vvvv", "help"}, 0, []string{"Setup:"}, nil, ""},
+		{"commands", []string{"commands"}, 0, []string{"commands", "Execution:", "Local Tools:", "Install:", "szr rg <pattern> [path]"}, nil, ""},
 		{"version", []string{"--version"}, 0, []string{"szr test"}, nil, ""},
 		{"profiles", []string{"profiles"}, 0, []string{"git-status", "generic-summary"}, nil, ""},
 		{"doctor", []string{"doctor"}, 0, []string{"version: test", "reasoning budget mode: standard", "go:", "git:", "rg:"}, nil, ""},

@@ -2,6 +2,7 @@ package github
 
 import (
 	"szr/internal/engine"
+	shared "szr/internal/filters"
 	ghfilter "szr/internal/filters/github"
 	"szr/internal/profilekit"
 )
@@ -39,6 +40,33 @@ func Profiles(maxLines int) []engine.Profile {
 			},
 		},
 		{
+			Name:             "gh-pr-checks",
+			Description:      "Summarizes `gh pr checks` around failed or pending checks without requiring raw table scans.",
+			Confidence:       engine.ConfidenceMedium,
+			StreamPreference: engine.StreamStdoutFirst,
+			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 10)),
+			LatencyBudget:    profilekit.LatencyBudget(30),
+			Match: func(inv engine.Invocation) bool {
+				return isGHCommand(inv.Display, "pr", "checks")
+			},
+			Prepare: func(inv engine.Invocation) []string {
+				return inv.Command
+			},
+			Render: func(_ engine.Invocation, exec engine.Execution) string {
+				return shared.SummarizeGenericFailure(exec.Stdout+"\n"+exec.Stderr, maxLines)
+			},
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
+				return newBufferedCombinedReducer(func(input string) string {
+					return shared.SummarizeGenericFailure(input, budget.MaxLines)
+				})
+			},
+			ParseBytes: profilekit.ParseCombined,
+			Explain: []string{
+				"Matches `gh pr checks` to keep failed and pending checks visible.",
+				"Uses a failure-oriented reducer so long check tables collapse toward the blocking rows.",
+			},
+		},
+		{
 			Name:             "gh-run-log",
 			Description:      "Summarizes GitHub Actions raw logs by failed job and step.",
 			Confidence:       engine.ConfidenceMedium,
@@ -63,6 +91,33 @@ func Profiles(maxLines int) []engine.Profile {
 			Explain: []string{
 				"Activates when `gh run view` is already in raw log mode such as `--log` or `--log-failed`.",
 				"Groups failures by job and step so long GitHub Actions logs collapse into repair-relevant signal.",
+			},
+		},
+		{
+			Name:             "gh-run-list",
+			Description:      "Keeps the most informative `gh run list` rows instead of a long workflow history table.",
+			Confidence:       engine.ConfidenceMedium,
+			StreamPreference: engine.StreamStdoutFirst,
+			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 10)),
+			LatencyBudget:    profilekit.LatencyBudget(30),
+			Match: func(inv engine.Invocation) bool {
+				return isGHCommand(inv.Display, "run", "list")
+			},
+			Prepare: func(inv engine.Invocation) []string {
+				return inv.Command
+			},
+			Render: func(_ engine.Invocation, exec engine.Execution) string {
+				return shared.CompactLines(exec.Stdout+"\n"+exec.Stderr, maxLines)
+			},
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
+				return newBufferedCombinedReducer(func(input string) string {
+					return shared.CompactLines(input, budget.MaxLines)
+				})
+			},
+			ParseBytes: profilekit.ParseCombined,
+			Explain: []string{
+				"Matches `gh run list` so the newest workflow runs stay visible without carrying the full history table.",
+				"Keeps the latest informative lines and lets tee or raw output remain the escape hatch.",
 			},
 		},
 		{

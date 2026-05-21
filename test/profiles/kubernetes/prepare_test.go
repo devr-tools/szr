@@ -39,4 +39,20 @@ func TestKubectlProfilesPrepare(t *testing.T) {
 	if got := kubectlLogs.Prepare(engine.Invocation{Command: []string{"kubectl", "logs", "--tail=50", "api"}}); !reflect.DeepEqual(got, []string{"kubectl", "logs", "--tail=50", "--prefix", "api"}) {
 		t.Fatalf("expected explicit kubectl tail to be preserved: %#v", got)
 	}
+
+	kubectlTop := testutil.FindProfile(t, list, "kubectl-top")
+	if !kubectlTop.Match(engine.Invocation{Display: []string{"kubectl", "top", "pods"}}) {
+		t.Fatal("expected kubectl top to match")
+	}
+	if got := kubectlTop.Prepare(engine.Invocation{Command: []string{"kubectl", "top", "pods"}}); !reflect.DeepEqual(got, []string{"kubectl", "top", "pods"}) {
+		t.Fatalf("expected kubectl top prepare passthrough, got %#v", got)
+	}
+
+	kubectlEvents := testutil.FindProfile(t, list, "kubectl-events")
+	if !kubectlEvents.Match(engine.Invocation{Display: []string{"kubectl", "events", "-n", "prod"}}) {
+		t.Fatal("expected kubectl events to match")
+	}
+	if got := kubectlEvents.Prepare(engine.Invocation{Command: []string{"kubectl", "events", "-n", "prod"}}); !reflect.DeepEqual(got, []string{"kubectl", "events", "-n", "prod"}) {
+		t.Fatalf("expected kubectl events prepare passthrough, got %#v", got)
+	}
 }

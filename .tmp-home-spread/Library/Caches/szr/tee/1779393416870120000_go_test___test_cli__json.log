@@ -1,0 +1,310 @@
+{"Time":"2026-05-21T15:56:57.056837-04:00","Action":"start","Package":"szr/test/cli"}
+{"Time":"2026-05-21T15:56:57.255248-04:00","Action":"run","Package":"szr/test/cli","Test":"TestConstructors"}
+{"Time":"2026-05-21T15:56:57.255313-04:00","Action":"output","Package":"szr/test/cli","Test":"TestConstructors","Output":"=== RUN   TestConstructors\n"}
+{"Time":"2026-05-21T15:56:57.257199-04:00","Action":"output","Package":"szr/test/cli","Test":"TestConstructors","Output":"--- PASS: TestConstructors (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.257208-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestConstructors","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.257224-04:00","Action":"run","Package":"szr/test/cli","Test":"TestBenchCommands"}
+{"Time":"2026-05-21T15:56:57.257236-04:00","Action":"output","Package":"szr/test/cli","Test":"TestBenchCommands","Output":"=== RUN   TestBenchCommands\n"}
+{"Time":"2026-05-21T15:56:57.259036-04:00","Action":"output","Package":"szr/test/cli","Test":"TestBenchCommands","Output":"--- PASS: TestBenchCommands (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.259045-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestBenchCommands","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.259048-04:00","Action":"run","Package":"szr/test/cli","Test":"TestBenchCoverageEdges"}
+{"Time":"2026-05-21T15:56:57.259055-04:00","Action":"output","Package":"szr/test/cli","Test":"TestBenchCoverageEdges","Output":"=== RUN   TestBenchCoverageEdges\n"}
+{"Time":"2026-05-21T15:56:57.263421-04:00","Action":"output","Package":"szr/test/cli","Test":"TestBenchCoverageEdges","Output":"--- PASS: TestBenchCoverageEdges (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.263428-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestBenchCoverageEdges","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.26343-04:00","Action":"run","Package":"szr/test/cli","Test":"TestBenchMismatchOutput"}
+{"Time":"2026-05-21T15:56:57.263432-04:00","Action":"output","Package":"szr/test/cli","Test":"TestBenchMismatchOutput","Output":"=== RUN   TestBenchMismatchOutput\n"}
+{"Time":"2026-05-21T15:56:57.265698-04:00","Action":"output","Package":"szr/test/cli","Test":"TestBenchMismatchOutput","Output":"--- PASS: TestBenchMismatchOutput (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.265701-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestBenchMismatchOutput","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.265703-04:00","Action":"run","Package":"szr/test/cli","Test":"TestInstallCommands"}
+{"Time":"2026-05-21T15:56:57.265709-04:00","Action":"output","Package":"szr/test/cli","Test":"TestInstallCommands","Output":"=== RUN   TestInstallCommands\n"}
+{"Time":"2026-05-21T15:56:57.268552-04:00","Action":"output","Package":"szr/test/cli","Test":"TestInstallCommands","Output":"--- PASS: TestInstallCommands (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.268557-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestInstallCommands","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.268559-04:00","Action":"run","Package":"szr/test/cli","Test":"TestSelfInstallCommands"}
+{"Time":"2026-05-21T15:56:57.268561-04:00","Action":"output","Package":"szr/test/cli","Test":"TestSelfInstallCommands","Output":"=== RUN   TestSelfInstallCommands\n"}
+{"Time":"2026-05-21T15:56:57.271557-04:00","Action":"output","Package":"szr/test/cli","Test":"TestSelfInstallCommands","Output":"--- PASS: TestSelfInstallCommands (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.271563-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestSelfInstallCommands","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.271566-04:00","Action":"run","Package":"szr/test/cli","Test":"TestSelfInstallUpdateShell"}
+{"Time":"2026-05-21T15:56:57.271567-04:00","Action":"output","Package":"szr/test/cli","Test":"TestSelfInstallUpdateShell","Output":"=== RUN   TestSelfInstallUpdateShell\n"}
+{"Time":"2026-05-21T15:56:57.274595-04:00","Action":"output","Package":"szr/test/cli","Test":"TestSelfInstallUpdateShell","Output":"--- PASS: TestSelfInstallUpdateShell (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.274605-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestSelfInstallUpdateShell","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.274608-04:00","Action":"run","Package":"szr/test/cli","Test":"TestInstallGetwdError"}
+{"Time":"2026-05-21T15:56:57.274614-04:00","Action":"output","Package":"szr/test/cli","Test":"TestInstallGetwdError","Output":"=== RUN   TestInstallGetwdError\n"}
+{"Time":"2026-05-21T15:56:57.27582-04:00","Action":"output","Package":"szr/test/cli","Test":"TestInstallGetwdError","Output":"--- PASS: TestInstallGetwdError (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.275823-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestInstallGetwdError","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.275825-04:00","Action":"run","Package":"szr/test/cli","Test":"TestDoctorProjectRules"}
+{"Time":"2026-05-21T15:56:57.275826-04:00","Action":"output","Package":"szr/test/cli","Test":"TestDoctorProjectRules","Output":"=== RUN   TestDoctorProjectRules\n"}
+{"Time":"2026-05-21T15:56:57.276776-04:00","Action":"output","Package":"szr/test/cli","Test":"TestDoctorProjectRules","Output":"--- PASS: TestDoctorProjectRules (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.276779-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestDoctorProjectRules","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.27678-04:00","Action":"run","Package":"szr/test/cli","Test":"TestErrorsAndSpread"}
+{"Time":"2026-05-21T15:56:57.276782-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread","Output":"=== RUN   TestErrorsAndSpread\n"}
+{"Time":"2026-05-21T15:56:57.277308-04:00","Action":"run","Package":"szr/test/cli","Test":"TestErrorsAndSpread/proxy_missing"}
+{"Time":"2026-05-21T15:56:57.27732-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/proxy_missing","Output":"=== RUN   TestErrorsAndSpread/proxy_missing\n"}
+{"Time":"2026-05-21T15:56:57.277341-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/proxy_missing","Output":"--- PASS: TestErrorsAndSpread/proxy_missing (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.277351-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestErrorsAndSpread/proxy_missing","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.277353-04:00","Action":"run","Package":"szr/test/cli","Test":"TestErrorsAndSpread/explain_missing"}
+{"Time":"2026-05-21T15:56:57.277354-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/explain_missing","Output":"=== RUN   TestErrorsAndSpread/explain_missing\n"}
+{"Time":"2026-05-21T15:56:57.277367-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/explain_missing","Output":"--- PASS: TestErrorsAndSpread/explain_missing (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.277371-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestErrorsAndSpread/explain_missing","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.277373-04:00","Action":"run","Package":"szr/test/cli","Test":"TestErrorsAndSpread/spread_bad_flag"}
+{"Time":"2026-05-21T15:56:57.277374-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/spread_bad_flag","Output":"=== RUN   TestErrorsAndSpread/spread_bad_flag\n"}
+{"Time":"2026-05-21T15:56:57.277461-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/spread_bad_flag","Output":"--- PASS: TestErrorsAndSpread/spread_bad_flag (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.277465-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestErrorsAndSpread/spread_bad_flag","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.277473-04:00","Action":"run","Package":"szr/test/cli","Test":"TestErrorsAndSpread/install_missing"}
+{"Time":"2026-05-21T15:56:57.277475-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/install_missing","Output":"=== RUN   TestErrorsAndSpread/install_missing\n"}
+{"Time":"2026-05-21T15:56:57.277477-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/install_missing","Output":"--- PASS: TestErrorsAndSpread/install_missing (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.277479-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestErrorsAndSpread/install_missing","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.27748-04:00","Action":"run","Package":"szr/test/cli","Test":"TestErrorsAndSpread/install_mixed_targets"}
+{"Time":"2026-05-21T15:56:57.277482-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/install_mixed_targets","Output":"=== RUN   TestErrorsAndSpread/install_mixed_targets\n"}
+{"Time":"2026-05-21T15:56:57.277504-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/install_mixed_targets","Output":"--- PASS: TestErrorsAndSpread/install_mixed_targets (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.277507-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestErrorsAndSpread/install_mixed_targets","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.27751-04:00","Action":"run","Package":"szr/test/cli","Test":"TestErrorsAndSpread/install_bad_flag"}
+{"Time":"2026-05-21T15:56:57.277511-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/install_bad_flag","Output":"=== RUN   TestErrorsAndSpread/install_bad_flag\n"}
+{"Time":"2026-05-21T15:56:57.277559-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/install_bad_flag","Output":"--- PASS: TestErrorsAndSpread/install_bad_flag (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.277561-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestErrorsAndSpread/install_bad_flag","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.277563-04:00","Action":"run","Package":"szr/test/cli","Test":"TestErrorsAndSpread/bench_bad_flag"}
+{"Time":"2026-05-21T15:56:57.277564-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/bench_bad_flag","Output":"=== RUN   TestErrorsAndSpread/bench_bad_flag\n"}
+{"Time":"2026-05-21T15:56:57.277572-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/bench_bad_flag","Output":"--- PASS: TestErrorsAndSpread/bench_bad_flag (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.277574-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestErrorsAndSpread/bench_bad_flag","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.277575-04:00","Action":"run","Package":"szr/test/cli","Test":"TestErrorsAndSpread/bench_no_fixtures"}
+{"Time":"2026-05-21T15:56:57.277577-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/bench_no_fixtures","Output":"=== RUN   TestErrorsAndSpread/bench_no_fixtures\n"}
+{"Time":"2026-05-21T15:56:57.277628-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/bench_no_fixtures","Output":"--- PASS: TestErrorsAndSpread/bench_no_fixtures (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.277631-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestErrorsAndSpread/bench_no_fixtures","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.277633-04:00","Action":"run","Package":"szr/test/cli","Test":"TestErrorsAndSpread/read_missing"}
+{"Time":"2026-05-21T15:56:57.277634-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/read_missing","Output":"=== RUN   TestErrorsAndSpread/read_missing\n"}
+{"Time":"2026-05-21T15:56:57.277657-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/read_missing","Output":"--- PASS: TestErrorsAndSpread/read_missing (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.277662-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestErrorsAndSpread/read_missing","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.277665-04:00","Action":"run","Package":"szr/test/cli","Test":"TestErrorsAndSpread/read_missing_level"}
+{"Time":"2026-05-21T15:56:57.277667-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/read_missing_level","Output":"=== RUN   TestErrorsAndSpread/read_missing_level\n"}
+{"Time":"2026-05-21T15:56:57.277685-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/read_missing_level","Output":"--- PASS: TestErrorsAndSpread/read_missing_level (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.277687-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestErrorsAndSpread/read_missing_level","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.277693-04:00","Action":"run","Package":"szr/test/cli","Test":"TestErrorsAndSpread/read_missing_max-lines"}
+{"Time":"2026-05-21T15:56:57.277694-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/read_missing_max-lines","Output":"=== RUN   TestErrorsAndSpread/read_missing_max-lines\n"}
+{"Time":"2026-05-21T15:56:57.277711-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/read_missing_max-lines","Output":"--- PASS: TestErrorsAndSpread/read_missing_max-lines (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.277714-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestErrorsAndSpread/read_missing_max-lines","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.277716-04:00","Action":"run","Package":"szr/test/cli","Test":"TestErrorsAndSpread/read_file_error"}
+{"Time":"2026-05-21T15:56:57.277717-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/read_file_error","Output":"=== RUN   TestErrorsAndSpread/read_file_error\n"}
+{"Time":"2026-05-21T15:56:57.27775-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/read_file_error","Output":"--- PASS: TestErrorsAndSpread/read_file_error (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.277752-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestErrorsAndSpread/read_file_error","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.277754-04:00","Action":"run","Package":"szr/test/cli","Test":"TestErrorsAndSpread/grep_missing"}
+{"Time":"2026-05-21T15:56:57.277755-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/grep_missing","Output":"=== RUN   TestErrorsAndSpread/grep_missing\n"}
+{"Time":"2026-05-21T15:56:57.277775-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/grep_missing","Output":"--- PASS: TestErrorsAndSpread/grep_missing (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.277777-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestErrorsAndSpread/grep_missing","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.277779-04:00","Action":"run","Package":"szr/test/cli","Test":"TestErrorsAndSpread/grep_missing_rg"}
+{"Time":"2026-05-21T15:56:57.27778-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/grep_missing_rg","Output":"=== RUN   TestErrorsAndSpread/grep_missing_rg\n"}
+{"Time":"2026-05-21T15:56:57.278113-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/grep_missing_rg","Output":"--- PASS: TestErrorsAndSpread/grep_missing_rg (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.278115-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestErrorsAndSpread/grep_missing_rg","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.278117-04:00","Action":"run","Package":"szr/test/cli","Test":"TestErrorsAndSpread/grep_error"}
+{"Time":"2026-05-21T15:56:57.278119-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/grep_error","Output":"=== RUN   TestErrorsAndSpread/grep_error\n"}
+{"Time":"2026-05-21T15:56:57.57534-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/grep_error","Output":"--- PASS: TestErrorsAndSpread/grep_error (0.30s)\n"}
+{"Time":"2026-05-21T15:56:57.575363-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestErrorsAndSpread/grep_error","Elapsed":0.3}
+{"Time":"2026-05-21T15:56:57.576179-04:00","Action":"run","Package":"szr/test/cli","Test":"TestErrorsAndSpread/json_missing_args"}
+{"Time":"2026-05-21T15:56:57.576188-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/json_missing_args","Output":"=== RUN   TestErrorsAndSpread/json_missing_args\n"}
+{"Time":"2026-05-21T15:56:57.576195-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/json_missing_args","Output":"--- PASS: TestErrorsAndSpread/json_missing_args (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.576198-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestErrorsAndSpread/json_missing_args","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.576202-04:00","Action":"run","Package":"szr/test/cli","Test":"TestErrorsAndSpread/json_read_error"}
+{"Time":"2026-05-21T15:56:57.576205-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/json_read_error","Output":"=== RUN   TestErrorsAndSpread/json_read_error\n"}
+{"Time":"2026-05-21T15:56:57.576209-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/json_read_error","Output":"--- PASS: TestErrorsAndSpread/json_read_error (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.576212-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestErrorsAndSpread/json_read_error","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.576214-04:00","Action":"run","Package":"szr/test/cli","Test":"TestErrorsAndSpread/log_read_error"}
+{"Time":"2026-05-21T15:56:57.576216-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/log_read_error","Output":"=== RUN   TestErrorsAndSpread/log_read_error\n"}
+{"Time":"2026-05-21T15:56:57.57622-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/log_read_error","Output":"--- PASS: TestErrorsAndSpread/log_read_error (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.576222-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestErrorsAndSpread/log_read_error","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.576225-04:00","Action":"run","Package":"szr/test/cli","Test":"TestErrorsAndSpread/ls_error"}
+{"Time":"2026-05-21T15:56:57.576227-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/ls_error","Output":"=== RUN   TestErrorsAndSpread/ls_error\n"}
+{"Time":"2026-05-21T15:56:57.576251-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/ls_error","Output":"--- PASS: TestErrorsAndSpread/ls_error (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.576254-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestErrorsAndSpread/ls_error","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.576257-04:00","Action":"run","Package":"szr/test/cli","Test":"TestErrorsAndSpread/run_exec_error"}
+{"Time":"2026-05-21T15:56:57.576259-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/run_exec_error","Output":"=== RUN   TestErrorsAndSpread/run_exec_error\n"}
+{"Time":"2026-05-21T15:56:57.577331-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/run_exec_error","Output":"--- PASS: TestErrorsAndSpread/run_exec_error (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.577348-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestErrorsAndSpread/run_exec_error","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.577353-04:00","Action":"run","Package":"szr/test/cli","Test":"TestErrorsAndSpread/grep_no_match"}
+{"Time":"2026-05-21T15:56:57.577357-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/grep_no_match","Output":"=== RUN   TestErrorsAndSpread/grep_no_match\n"}
+{"Time":"2026-05-21T15:56:57.587106-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread/grep_no_match","Output":"--- PASS: TestErrorsAndSpread/grep_no_match (0.01s)\n"}
+{"Time":"2026-05-21T15:56:57.58713-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestErrorsAndSpread/grep_no_match","Elapsed":0.01}
+{"Time":"2026-05-21T15:56:57.591902-04:00","Action":"output","Package":"szr/test/cli","Test":"TestErrorsAndSpread","Output":"--- PASS: TestErrorsAndSpread (0.32s)\n"}
+{"Time":"2026-05-21T15:56:57.591975-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestErrorsAndSpread","Elapsed":0.32}
+{"Time":"2026-05-21T15:56:57.59199-04:00","Action":"run","Package":"szr/test/cli","Test":"TestSpreadReportingOutput"}
+{"Time":"2026-05-21T15:56:57.591994-04:00","Action":"output","Package":"szr/test/cli","Test":"TestSpreadReportingOutput","Output":"=== RUN   TestSpreadReportingOutput\n"}
+{"Time":"2026-05-21T15:56:57.593227-04:00","Action":"output","Package":"szr/test/cli","Test":"TestSpreadReportingOutput","Output":"    errors_test.go:211: expected spread output \"commands: 3\" in \"==================\\n  Spread Summary\\n==================\\ncommands:                3\\navg savings:             48.9%\\ntokens saved:            160\\nduration p50/p95:        30ms / 90ms\\nbytes read/parsed/emitted: 390 / 260 / 120\\nfailure rate:            66.7%\\nfallback rate:           33.3%\\ntee rate:                33.3%\\n\\ntop commands:\\n  - szr custom command (1)\\n  - szr git status (1)\\n  - szr go test (1)\\n\\nprofiles:\\n  - git-status  confidence=high count=1 saved=80 avg=80.0% p50/p95=30/30ms fail=0.0% fallback=0.0% tee=0.0%\\n  - go-test-json  confidence=high count=1 saved=80 avg=66.7% p50/p95=90/90ms fail=100.0% fallback=0.0% tee=100.0%\\n  - passthrough  confidence=low count=1 saved=0 avg=0.0% p50/p95=10/10ms fail=100.0% fallback=100.0% tee=0.0%\\n\\npoor savings fingerprints:\\n  - szr custom command  profile=passthrough count=1 avg=0.0% p50/p95=10/10ms fp=7702efc76ed96fd0\\n  - szr go test ./...  profile=go-test-json count=1 avg=66.7% p50/p"}
+{"Time":"2026-05-21T15:56:57.593255-04:00","Action":"output","Package":"szr/test/cli","Test":"TestSpreadReportingOutput","Output":"95=90/90ms fp=7e359426985dbc9f\\n  - szr git status --short  profile=git-status count=1 avg=80.0% p50/p95=30/30ms fp=1771d262b5e226c8\\n\\nrecent:\\n  - 2026-05-20T12:00:00Z  passthrough  confidence=low  10ms  exit=2  fallback=true  0.0%  szr custom command\\n  - 2026-05-20T11:00:00Z  go-test-json  confidence=high  90ms  exit=1  fallback=false  66.7%  szr go test ./...\\n  - 2026-05-20T10:00:00Z  git-status  confidence=high  30ms  exit=0  fallback=false  80.0%  szr git status --short\\n\"\n"}
+{"Time":"2026-05-21T15:56:57.593697-04:00","Action":"output","Package":"szr/test/cli","Test":"TestSpreadReportingOutput","Output":"--- FAIL: TestSpreadReportingOutput (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.593701-04:00","Action":"fail","Package":"szr/test/cli","Test":"TestSpreadReportingOutput","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.593704-04:00","Action":"run","Package":"szr/test/cli","Test":"TestSpreadBudgetSuggestionsOutput"}
+{"Time":"2026-05-21T15:56:57.593705-04:00","Action":"output","Package":"szr/test/cli","Test":"TestSpreadBudgetSuggestionsOutput","Output":"=== RUN   TestSpreadBudgetSuggestionsOutput\n"}
+{"Time":"2026-05-21T15:56:57.594958-04:00","Action":"output","Package":"szr/test/cli","Test":"TestSpreadBudgetSuggestionsOutput","Output":"--- PASS: TestSpreadBudgetSuggestionsOutput (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.594963-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestSpreadBudgetSuggestionsOutput","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.59497-04:00","Action":"run","Package":"szr/test/cli","Test":"TestExplainShowsAppliedPreferences"}
+{"Time":"2026-05-21T15:56:57.594971-04:00","Action":"output","Package":"szr/test/cli","Test":"TestExplainShowsAppliedPreferences","Output":"=== RUN   TestExplainShowsAppliedPreferences\n"}
+{"Time":"2026-05-21T15:56:57.59598-04:00","Action":"output","Package":"szr/test/cli","Test":"TestExplainShowsAppliedPreferences","Output":"--- PASS: TestExplainShowsAppliedPreferences (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.595984-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestExplainShowsAppliedPreferences","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.595986-04:00","Action":"run","Package":"szr/test/cli","Test":"TestExplainShowsProjectAndBuiltinDecisions"}
+{"Time":"2026-05-21T15:56:57.595987-04:00","Action":"output","Package":"szr/test/cli","Test":"TestExplainShowsProjectAndBuiltinDecisions","Output":"=== RUN   TestExplainShowsProjectAndBuiltinDecisions\n"}
+{"Time":"2026-05-21T15:56:57.596924-04:00","Action":"output","Package":"szr/test/cli","Test":"TestExplainShowsProjectAndBuiltinDecisions","Output":"--- PASS: TestExplainShowsProjectAndBuiltinDecisions (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.596927-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestExplainShowsProjectAndBuiltinDecisions","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.596933-04:00","Action":"run","Package":"szr/test/cli","Test":"TestExplainReasoningBudgetMode"}
+{"Time":"2026-05-21T15:56:57.596934-04:00","Action":"output","Package":"szr/test/cli","Test":"TestExplainReasoningBudgetMode","Output":"=== RUN   TestExplainReasoningBudgetMode\n"}
+{"Time":"2026-05-21T15:56:57.59779-04:00","Action":"output","Package":"szr/test/cli","Test":"TestExplainReasoningBudgetMode","Output":"--- PASS: TestExplainReasoningBudgetMode (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.597792-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestExplainReasoningBudgetMode","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.597794-04:00","Action":"run","Package":"szr/test/cli","Test":"TestReasoningBudgetFlagErrors"}
+{"Time":"2026-05-21T15:56:57.597795-04:00","Action":"output","Package":"szr/test/cli","Test":"TestReasoningBudgetFlagErrors","Output":"=== RUN   TestReasoningBudgetFlagErrors\n"}
+{"Time":"2026-05-21T15:56:57.598616-04:00","Action":"output","Package":"szr/test/cli","Test":"TestReasoningBudgetFlagErrors","Output":"--- PASS: TestReasoningBudgetFlagErrors (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.598619-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestReasoningBudgetFlagErrors","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.59862-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes"}
+{"Time":"2026-05-21T15:56:57.598622-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes","Output":"=== RUN   TestRunRoutes\n"}
+{"Time":"2026-05-21T15:56:57.599938-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/help_empty"}
+{"Time":"2026-05-21T15:56:57.59994-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/help_empty","Output":"=== RUN   TestRunRoutes/help_empty\n"}
+{"Time":"2026-05-21T15:56:57.599965-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/help_empty","Output":"--- PASS: TestRunRoutes/help_empty (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.599968-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/help_empty","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.599971-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/help_flag"}
+{"Time":"2026-05-21T15:56:57.599972-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/help_flag","Output":"=== RUN   TestRunRoutes/help_flag\n"}
+{"Time":"2026-05-21T15:56:57.599995-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/help_flag","Output":"--- PASS: TestRunRoutes/help_flag (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.599997-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/help_flag","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.6-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/help_ultra"}
+{"Time":"2026-05-21T15:56:57.600001-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/help_ultra","Output":"=== RUN   TestRunRoutes/help_ultra\n"}
+{"Time":"2026-05-21T15:56:57.600022-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/help_ultra","Output":"--- PASS: TestRunRoutes/help_ultra (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.600024-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/help_ultra","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.600026-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/help_verbose_long"}
+{"Time":"2026-05-21T15:56:57.600027-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/help_verbose_long","Output":"=== RUN   TestRunRoutes/help_verbose_long\n"}
+{"Time":"2026-05-21T15:56:57.600045-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/help_verbose_long","Output":"--- PASS: TestRunRoutes/help_verbose_long (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.600049-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/help_verbose_long","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.600051-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/help_verbose_exact"}
+{"Time":"2026-05-21T15:56:57.600053-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/help_verbose_exact","Output":"=== RUN   TestRunRoutes/help_verbose_exact\n"}
+{"Time":"2026-05-21T15:56:57.60007-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/help_verbose_exact","Output":"--- PASS: TestRunRoutes/help_verbose_exact (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.600072-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/help_verbose_exact","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.600074-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/help_verbose_counted"}
+{"Time":"2026-05-21T15:56:57.600075-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/help_verbose_counted","Output":"=== RUN   TestRunRoutes/help_verbose_counted\n"}
+{"Time":"2026-05-21T15:56:57.600103-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/help_verbose_counted","Output":"--- PASS: TestRunRoutes/help_verbose_counted (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.600106-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/help_verbose_counted","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.600108-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/version"}
+{"Time":"2026-05-21T15:56:57.600109-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/version","Output":"=== RUN   TestRunRoutes/version\n"}
+{"Time":"2026-05-21T15:56:57.600132-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/version","Output":"--- PASS: TestRunRoutes/version (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.600137-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/version","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.600139-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/profiles"}
+{"Time":"2026-05-21T15:56:57.60014-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/profiles","Output":"=== RUN   TestRunRoutes/profiles\n"}
+{"Time":"2026-05-21T15:56:57.60028-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/profiles","Output":"--- PASS: TestRunRoutes/profiles (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.600282-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/profiles","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.600294-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/doctor"}
+{"Time":"2026-05-21T15:56:57.600296-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/doctor","Output":"=== RUN   TestRunRoutes/doctor\n"}
+{"Time":"2026-05-21T15:56:57.600358-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/doctor","Output":"--- PASS: TestRunRoutes/doctor (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.600361-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/doctor","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.600362-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/self_doctor"}
+{"Time":"2026-05-21T15:56:57.600364-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/self_doctor","Output":"=== RUN   TestRunRoutes/self_doctor\n"}
+{"Time":"2026-05-21T15:56:57.600422-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/self_doctor","Output":"--- PASS: TestRunRoutes/self_doctor (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.600424-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/self_doctor","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.600426-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/doctor_missing_tool"}
+{"Time":"2026-05-21T15:56:57.600427-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/doctor_missing_tool","Output":"=== RUN   TestRunRoutes/doctor_missing_tool\n"}
+{"Time":"2026-05-21T15:56:57.600899-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/doctor_missing_tool","Output":"--- PASS: TestRunRoutes/doctor_missing_tool (0.00s)\n"}
+{"Time":"2026-05-21T15:56:57.600902-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/doctor_missing_tool","Elapsed":0}
+{"Time":"2026-05-21T15:56:57.600905-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/git_status"}
+{"Time":"2026-05-21T15:56:57.60091-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/git_status","Output":"=== RUN   TestRunRoutes/git_status\n"}
+{"Time":"2026-05-21T15:56:57.79157-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/git_status","Output":"--- PASS: TestRunRoutes/git_status (0.19s)\n"}
+{"Time":"2026-05-21T15:56:57.791592-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/git_status","Elapsed":0.19}
+{"Time":"2026-05-21T15:56:57.791599-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/git_log"}
+{"Time":"2026-05-21T15:56:57.791603-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/git_log","Output":"=== RUN   TestRunRoutes/git_log\n"}
+{"Time":"2026-05-21T15:56:57.799032-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/git_log","Output":"--- PASS: TestRunRoutes/git_log (0.01s)\n"}
+{"Time":"2026-05-21T15:56:57.799044-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/git_log","Elapsed":0.01}
+{"Time":"2026-05-21T15:56:57.79905-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/git_diff"}
+{"Time":"2026-05-21T15:56:57.799052-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/git_diff","Output":"=== RUN   TestRunRoutes/git_diff\n"}
+{"Time":"2026-05-21T15:56:57.805299-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/git_diff","Output":"--- PASS: TestRunRoutes/git_diff (0.01s)\n"}
+{"Time":"2026-05-21T15:56:57.805312-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/git_diff","Elapsed":0.01}
+{"Time":"2026-05-21T15:56:57.805317-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/go_test"}
+{"Time":"2026-05-21T15:56:57.80532-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/go_test","Output":"=== RUN   TestRunRoutes/go_test\n"}
+{"Time":"2026-05-21T15:56:58.090373-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/go_test","Output":"--- PASS: TestRunRoutes/go_test (0.28s)\n"}
+{"Time":"2026-05-21T15:56:58.090398-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/go_test","Elapsed":0.28}
+{"Time":"2026-05-21T15:56:58.090409-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/go_build"}
+{"Time":"2026-05-21T15:56:58.090413-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/go_build","Output":"=== RUN   TestRunRoutes/go_build\n"}
+{"Time":"2026-05-21T15:56:58.102282-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/go_build","Output":"--- PASS: TestRunRoutes/go_build (0.01s)\n"}
+{"Time":"2026-05-21T15:56:58.102307-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/go_build","Elapsed":0.01}
+{"Time":"2026-05-21T15:56:58.102314-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/go_vet"}
+{"Time":"2026-05-21T15:56:58.102318-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/go_vet","Output":"=== RUN   TestRunRoutes/go_vet\n"}
+{"Time":"2026-05-21T15:56:58.10866-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/go_vet","Output":"--- PASS: TestRunRoutes/go_vet (0.01s)\n"}
+{"Time":"2026-05-21T15:56:58.108669-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/go_vet","Elapsed":0.01}
+{"Time":"2026-05-21T15:56:58.108674-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/run_default_route"}
+{"Time":"2026-05-21T15:56:58.108676-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/run_default_route","Output":"=== RUN   TestRunRoutes/run_default_route\n"}
+{"Time":"2026-05-21T15:56:58.302542-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/run_default_route","Output":"--- PASS: TestRunRoutes/run_default_route (0.19s)\n"}
+{"Time":"2026-05-21T15:56:58.302562-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/run_default_route","Elapsed":0.19}
+{"Time":"2026-05-21T15:56:58.302571-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/run_explicit"}
+{"Time":"2026-05-21T15:56:58.302574-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/run_explicit","Output":"=== RUN   TestRunRoutes/run_explicit\n"}
+{"Time":"2026-05-21T15:56:58.310306-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/run_explicit","Output":"--- PASS: TestRunRoutes/run_explicit (0.01s)\n"}
+{"Time":"2026-05-21T15:56:58.310316-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/run_explicit","Elapsed":0.01}
+{"Time":"2026-05-21T15:56:58.310325-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/proxy"}
+{"Time":"2026-05-21T15:56:58.310329-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/proxy","Output":"=== RUN   TestRunRoutes/proxy\n"}
+{"Time":"2026-05-21T15:56:58.316219-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/proxy","Output":"--- PASS: TestRunRoutes/proxy (0.01s)\n"}
+{"Time":"2026-05-21T15:56:58.316228-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/proxy","Elapsed":0.01}
+{"Time":"2026-05-21T15:56:58.316234-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/test_wrapper"}
+{"Time":"2026-05-21T15:56:58.316236-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/test_wrapper","Output":"=== RUN   TestRunRoutes/test_wrapper\n"}
+{"Time":"2026-05-21T15:56:58.621572-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/test_wrapper","Output":"--- PASS: TestRunRoutes/test_wrapper (0.31s)\n"}
+{"Time":"2026-05-21T15:56:58.621597-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/test_wrapper","Elapsed":0.31}
+{"Time":"2026-05-21T15:56:58.621608-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/summary_wrapper"}
+{"Time":"2026-05-21T15:56:58.621612-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/summary_wrapper","Output":"=== RUN   TestRunRoutes/summary_wrapper\n"}
+{"Time":"2026-05-21T15:56:58.630973-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/summary_wrapper","Output":"--- PASS: TestRunRoutes/summary_wrapper (0.01s)\n"}
+{"Time":"2026-05-21T15:56:58.630988-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/summary_wrapper","Elapsed":0.01}
+{"Time":"2026-05-21T15:56:58.630996-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/explain"}
+{"Time":"2026-05-21T15:56:58.631008-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/explain","Output":"=== RUN   TestRunRoutes/explain\n"}
+{"Time":"2026-05-21T15:56:58.631454-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/explain","Output":"--- PASS: TestRunRoutes/explain (0.00s)\n"}
+{"Time":"2026-05-21T15:56:58.631468-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/explain","Elapsed":0}
+{"Time":"2026-05-21T15:56:58.631473-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/ls"}
+{"Time":"2026-05-21T15:56:58.631476-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/ls","Output":"=== RUN   TestRunRoutes/ls\n"}
+{"Time":"2026-05-21T15:56:58.632029-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/ls","Output":"--- PASS: TestRunRoutes/ls (0.00s)\n"}
+{"Time":"2026-05-21T15:56:58.632044-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/ls","Elapsed":0}
+{"Time":"2026-05-21T15:56:58.63205-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/ls_default_root"}
+{"Time":"2026-05-21T15:56:58.632053-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/ls_default_root","Output":"=== RUN   TestRunRoutes/ls_default_root\n"}
+{"Time":"2026-05-21T15:56:58.632252-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/ls_default_root","Output":"--- PASS: TestRunRoutes/ls_default_root (0.00s)\n"}
+{"Time":"2026-05-21T15:56:58.632275-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/ls_default_root","Elapsed":0}
+{"Time":"2026-05-21T15:56:58.632281-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/read_single"}
+{"Time":"2026-05-21T15:56:58.632284-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/read_single","Output":"=== RUN   TestRunRoutes/read_single\n"}
+{"Time":"2026-05-21T15:56:58.632405-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/read_single","Output":"--- PASS: TestRunRoutes/read_single (0.00s)\n"}
+{"Time":"2026-05-21T15:56:58.632412-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/read_single","Elapsed":0}
+{"Time":"2026-05-21T15:56:58.632415-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/read_multi_aggressive"}
+{"Time":"2026-05-21T15:56:58.632419-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/read_multi_aggressive","Output":"=== RUN   TestRunRoutes/read_multi_aggressive\n"}
+{"Time":"2026-05-21T15:56:58.632629-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/read_multi_aggressive","Output":"--- PASS: TestRunRoutes/read_multi_aggressive (0.00s)\n"}
+{"Time":"2026-05-21T15:56:58.632635-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/read_multi_aggressive","Elapsed":0}
+{"Time":"2026-05-21T15:56:58.632639-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/grep"}
+{"Time":"2026-05-21T15:56:58.632642-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/grep","Output":"=== RUN   TestRunRoutes/grep\n"}
+{"Time":"2026-05-21T15:56:58.837824-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/grep","Output":"--- PASS: TestRunRoutes/grep (0.21s)\n"}
+{"Time":"2026-05-21T15:56:58.837874-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/grep","Elapsed":0.21}
+{"Time":"2026-05-21T15:56:58.837879-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/grep_default_path"}
+{"Time":"2026-05-21T15:56:58.837881-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/grep_default_path","Output":"=== RUN   TestRunRoutes/grep_default_path\n"}
+{"Time":"2026-05-21T15:56:58.841855-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/grep_default_path","Output":"--- PASS: TestRunRoutes/grep_default_path (0.00s)\n"}
+{"Time":"2026-05-21T15:56:58.841875-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/grep_default_path","Elapsed":0}
+{"Time":"2026-05-21T15:56:58.84189-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/rg_external"}
+{"Time":"2026-05-21T15:56:58.841894-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/rg_external","Output":"=== RUN   TestRunRoutes/rg_external\n"}
+{"Time":"2026-05-21T15:56:58.846004-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/rg_external","Output":"--- PASS: TestRunRoutes/rg_external (0.00s)\n"}
+{"Time":"2026-05-21T15:56:58.846016-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/rg_external","Elapsed":0}
+{"Time":"2026-05-21T15:56:58.846023-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/json"}
+{"Time":"2026-05-21T15:56:58.846031-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/json","Output":"=== RUN   TestRunRoutes/json\n"}
+{"Time":"2026-05-21T15:56:58.846099-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/json","Output":"--- PASS: TestRunRoutes/json (0.00s)\n"}
+{"Time":"2026-05-21T15:56:58.846103-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/json","Elapsed":0}
+{"Time":"2026-05-21T15:56:58.846106-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/log_file"}
+{"Time":"2026-05-21T15:56:58.846107-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/log_file","Output":"=== RUN   TestRunRoutes/log_file\n"}
+{"Time":"2026-05-21T15:56:58.846172-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/log_file","Output":"--- PASS: TestRunRoutes/log_file (0.00s)\n"}
+{"Time":"2026-05-21T15:56:58.846177-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/log_file","Elapsed":0}
+{"Time":"2026-05-21T15:56:58.84618-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/log_stdin"}
+{"Time":"2026-05-21T15:56:58.846182-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/log_stdin","Output":"=== RUN   TestRunRoutes/log_stdin\n"}
+{"Time":"2026-05-21T15:56:58.84622-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/log_stdin","Output":"--- PASS: TestRunRoutes/log_stdin (0.00s)\n"}
+{"Time":"2026-05-21T15:56:58.846223-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/log_stdin","Elapsed":0}
+{"Time":"2026-05-21T15:56:58.846225-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRunRoutes/verbose"}
+{"Time":"2026-05-21T15:56:58.84623-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/verbose","Output":"=== RUN   TestRunRoutes/verbose\n"}
+{"Time":"2026-05-21T15:56:58.849719-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes/verbose","Output":"--- PASS: TestRunRoutes/verbose (0.00s)\n"}
+{"Time":"2026-05-21T15:56:58.849727-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes/verbose","Elapsed":0}
+{"Time":"2026-05-21T15:56:58.851184-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRunRoutes","Output":"--- PASS: TestRunRoutes (1.25s)\n"}
+{"Time":"2026-05-21T15:56:58.851191-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRunRoutes","Elapsed":1.25}
+{"Time":"2026-05-21T15:56:58.851194-04:00","Action":"run","Package":"szr/test/cli","Test":"TestRGExternalMissingShowsInstallHint"}
+{"Time":"2026-05-21T15:56:58.851196-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRGExternalMissingShowsInstallHint","Output":"=== RUN   TestRGExternalMissingShowsInstallHint\n"}
+{"Time":"2026-05-21T15:56:58.852024-04:00","Action":"output","Package":"szr/test/cli","Test":"TestRGExternalMissingShowsInstallHint","Output":"--- PASS: TestRGExternalMissingShowsInstallHint (0.00s)\n"}
+{"Time":"2026-05-21T15:56:58.852028-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestRGExternalMissingShowsInstallHint","Elapsed":0}
+{"Time":"2026-05-21T15:56:58.85203-04:00","Action":"run","Package":"szr/test/cli","Test":"TestDoctorMarksRipgrepOptional"}
+{"Time":"2026-05-21T15:56:58.852032-04:00","Action":"output","Package":"szr/test/cli","Test":"TestDoctorMarksRipgrepOptional","Output":"=== RUN   TestDoctorMarksRipgrepOptional\n"}
+{"Time":"2026-05-21T15:56:58.853047-04:00","Action":"output","Package":"szr/test/cli","Test":"TestDoctorMarksRipgrepOptional","Output":"--- PASS: TestDoctorMarksRipgrepOptional (0.00s)\n"}
+{"Time":"2026-05-21T15:56:58.853051-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestDoctorMarksRipgrepOptional","Elapsed":0}
+{"Time":"2026-05-21T15:56:58.853052-04:00","Action":"run","Package":"szr/test/cli","Test":"TestTeeListAndRead"}
+{"Time":"2026-05-21T15:56:58.853054-04:00","Action":"output","Package":"szr/test/cli","Test":"TestTeeListAndRead","Output":"=== RUN   TestTeeListAndRead\n"}
+{"Time":"2026-05-21T15:56:58.854308-04:00","Action":"output","Package":"szr/test/cli","Test":"TestTeeListAndRead","Output":"--- PASS: TestTeeListAndRead (0.00s)\n"}
+{"Time":"2026-05-21T15:56:58.854312-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestTeeListAndRead","Elapsed":0}
+{"Time":"2026-05-21T15:56:58.854314-04:00","Action":"run","Package":"szr/test/cli","Test":"TestTeeErrors"}
+{"Time":"2026-05-21T15:56:58.854315-04:00","Action":"output","Package":"szr/test/cli","Test":"TestTeeErrors","Output":"=== RUN   TestTeeErrors\n"}
+{"Time":"2026-05-21T15:56:58.855161-04:00","Action":"output","Package":"szr/test/cli","Test":"TestTeeErrors","Output":"--- PASS: TestTeeErrors (0.00s)\n"}
+{"Time":"2026-05-21T15:56:58.855164-04:00","Action":"pass","Package":"szr/test/cli","Test":"TestTeeErrors","Elapsed":0}
+{"Time":"2026-05-21T15:56:58.855166-04:00","Action":"output","Package":"szr/test/cli","Output":"FAIL\n"}
+{"Time":"2026-05-21T15:56:58.855763-04:00","Action":"output","Package":"szr/test/cli","Output":"FAIL\tszr/test/cli\t1.798s\n"}
+{"Time":"2026-05-21T15:56:58.855766-04:00","Action":"fail","Package":"szr/test/cli","Elapsed":1.799}

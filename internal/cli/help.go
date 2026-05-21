@@ -1,30 +1,204 @@
 package cli
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+	"unicode"
+	"unicode/utf8"
+)
+
+var compactBanner = []string{
+	"⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣤⣤⣤⡀⠀⠀⠀⠀⠀",
+	"⠀⠀⠀⠀⠀⠀⢠⣾⣿⣿⣿⣿⣿⣧⡀⠀⠀⠀⠀",
+	"⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⠛⣿⣿⠛⡇⠀⠙⠀",
+	"⠀⠈⠉⠉⠁⠀⣀⣈⢿⣿⣿⣶⣿⣿⡶⠃⣴⣦⠀",
+	"⠀⠀⠀⢀⣴⣶⣿⣿⣮⣝⡻⠿⠿⣛⣁⣠⣽⠟⠀",
+	"⠀⠤⠄⠘⠛⢋⣖⣾⣿⣿⡟⢻⠿⠿⠿⠛⠁⠀⠀",
+	"⠀⠀⠀⠀⣀⡘⢿⣿⣿⣿⣿⣏⠀⠀⠀⠀⠀⠀⠀",
+	"⠀⠀⠀⠸⠿⠿⠷⠋⠙⠛⠻⢿⣷⠟⠀⠀⠀⠀⠀",
+}
+
+type helpSection struct {
+	title string
+	rows  [][]string
+}
 
 func (a *App) printHelp() {
-	fmt.Print(`szr: "sizer" - token-aware CLI proxy rebuilt in Go
+	ui := spreadUI{color: shouldColorizeStdout()}
+	a.printMenuHeader(ui, "", `szr or "sizer" is a token-aware CLI proxy built in Go`)
 
-Usage:
-  szr git status
-  szr go test ./...
-  szr self install
-  szr install codex
-  szr bench
-  szr grep "pattern" .
-  szr read file.go --level aggressive
-  szr spread --history
-  szr proxy <cmd...>
+	a.printHelpSection(ui, helpSection{
+		title: "Setup:",
+		rows: [][]string{
+			{"szr self install", "Install szr globally into ~/.local/bin or ~/bin."},
+			{"szr self doctor", "Check PATH, config, cache, version, and optional tools."},
+			{"szr install", "List available repo bootstrap targets."},
+			{"szr install codex|claude-code|cursor|gemini|shell", "Generate repo-local bootstrap files for a specific target."},
+			{"szr install --all --print", "Preview all installer outputs without writing files."},
+		},
+	})
+	a.printHelpSection(ui, helpSection{
+		title: "Insight:",
+		rows: [][]string{
+			{"szr spread [--history|--json]", "Review savings, usage, hotspots, and fallback behavior."},
+			{"szr recommend [--json]", "Turn command history into concrete tuning next steps."},
+			{"szr hotspots [--json]", "Rank low-savings, fallback-heavy, and slow fingerprints."},
+			{"szr explain <cmd...>", "Show the matched profile, budget, and rewrite decisions."},
+			{"szr tee --latest", "Inspect the latest preserved full failure log."},
+			{"szr profiles", "List builtin reducer profiles."},
+			{"szr doctor [--history]", "Check runtime diagnostics and optional history health."},
+		},
+	})
+	a.printHelpSection(ui, helpSection{
+		title: "Discover:",
+		rows: [][]string{
+			{"szr commands", "Show the full agent and power-user command catalog."},
+		},
+	})
+	a.printHelpSection(ui, helpSection{
+		title: "Global Flags:",
+		rows: [][]string{
+			{"-u, --ultra-compact", "Push harder compression when you want the shortest answer."},
+			{"-v, -vv, -vvv, --verbose", "Show reducer decisions and raw command context."},
+			{"--reasoning-budget <standard|agent>", "Prefer either human readability or stable agent loops."},
+			{"--reasoning-budget-mode <standard|agent>", "Alias for reasoning budget mode selection."},
+		},
+	})
+	a.printHelpSection(ui, helpSection{
+		title: "Examples:",
+		rows: [][]string{
+			{"szr git status", "Summarize repo state with lower token cost."},
+			{"szr go test ./...", "Reduce noisy test output while keeping failures."},
+			{"szr compare go test ./...", "Show raw-vs-reduced output from one execution."},
+			{"szr replay 1779393416870120000_go_test", "Rerender a preserved failure artifact without rerunning it."},
+			{"szr spread --history", "Inspect real savings across recent commands."},
+			{"szr tee --latest", "Open the most recent preserved full log."},
+		},
+	})
+}
 
-Core commands:
-  git, go, run, test, summary, proxy, explain
-  ls, read, grep, json, log, tee
-  spread, profiles, doctor, self, install, bench
+func (a *App) printCommands() {
+	ui := spreadUI{color: shouldColorizeStdout()}
+	a.printMenuHeader(ui, "commands", "full command catalog for agents and power users")
 
-Global flags:
-  -u, --ultra-compact
-  -v, -vv, -vvv, --verbose
-  --reasoning-budget <standard|agent>
-  --reasoning-budget-mode <standard|agent>
-` + "\n")
+	a.printHelpSection(ui, helpSection{
+		title: "Execution:",
+		rows: [][]string{
+			{"szr git <args...>", "Run git through the token-aware wrapper."},
+			{"szr go <args...>", "Run go commands through the token-aware wrapper."},
+			{"szr run <cmd...>", "Run any command through the default reducer path."},
+			{"szr test <cmd...>", "Bias output toward failures and test signal."},
+			{"szr summary <cmd...>", "Force summary-style rendering for generic commands."},
+			{"szr proxy <cmd...>", "Run raw output without reduction."},
+			{"szr compare <cmd...>", "Run once and compare raw vs reduced output."},
+			{"szr replay <tee-id|file>", "Rerender preserved raw output through a selected profile."},
+			{"szr explain <cmd...>", "Show profile, budget, and rewrite selection."},
+		},
+	})
+	a.printHelpSection(ui, helpSection{
+		title: "Local Tools:",
+		rows: [][]string{
+			{"szr ls [path]", "Render a compact directory tree."},
+			{"szr read <file...>", "Read files through the file-aware reducer."},
+			{"szr grep <pattern> [path]", "Search with grouped, stable match summaries."},
+			{"szr rg <pattern> [path]", "Run ripgrep with szr-aware normalization."},
+			{"szr json <file>", "Render JSON structure as readable typed paths."},
+			{"szr log [file]", "Fold repeated log lines from stdin or a file."},
+			{"szr tee [--latest|<id>|--json]", "Inspect preserved full-output artifacts."},
+			{"szr tee find <query>", "Search preserved tee artifacts by id, command, or profile."},
+			{"szr tee prune [flags]", "Remove stale or missing tee artifacts and rewrite the index."},
+		},
+	})
+	a.printHelpSection(ui, helpSection{
+		title: "Insight:",
+		rows: [][]string{
+			{"szr spread [--history|--json]", "Summarize savings, hotspots, and fallback rates."},
+			{"szr gain [--history|--json]", "Alias for spread."},
+			{"szr recommend [--json]", "Emit concrete tuning recommendations from command history."},
+			{"szr hotspots [--json]", "Rank the commands that most need reducer work."},
+			{"szr profiles", "List builtin profiles and contracts."},
+			{"szr doctor [--history]", "Check runtime tools plus optional history diagnostics."},
+			{"szr bench [fixture...]", "Run the built-in benchmark fixtures."},
+		},
+	})
+	a.printHelpSection(ui, helpSection{
+		title: "Rules And Scaffolds:",
+		rows: [][]string{
+			{"szr rules check [path]", "Validate a project rule file and report counts."},
+			{"szr rules test <cmd...>", "Test project rules against a sample command."},
+			{"szr scaffold profile <name>", "Generate a profile stub and fixture skeleton."},
+		},
+	})
+	a.printHelpSection(ui, helpSection{
+		title: "Install:",
+		rows: [][]string{
+			{"szr self install [--update-shell]", "Install szr globally and optionally update shell rc."},
+			{"szr self doctor", "Inspect the global install target and PATH state."},
+			{"szr install codex", "Bootstrap this repo for Codex."},
+			{"szr install shell", "Generate shell integration for this repo."},
+			{"szr install cursor", "Generate repo-local Cursor guidance."},
+			{"szr install claude-code", "Generate repo-local Claude Code guidance."},
+			{"szr install gemini", "Generate repo-local Gemini guidance."},
+			{"szr install --all --print", "Preview all repo bootstrap outputs."},
+		},
+	})
+}
+
+func (a *App) printHelpSection(ui spreadUI, section helpSection) {
+	ui.section(section.title)
+	ui.table(
+		[]string{"command", "what it does"},
+		section.rows,
+		tableSpec{
+			maxWidth: map[int]int{
+				0: 42,
+				1: 72,
+			},
+		},
+	)
+}
+
+func (a *App) printMenuHeader(ui spreadUI, label, subtitle string) {
+	for _, line := range compactBanner {
+		a.printCenteredLine(line, ui.color, true, false)
+	}
+	if label != "" {
+		a.printCenteredLine(label, ui.color, true, false)
+	}
+	if subtitle != "" {
+		a.printCenteredLine(subtitle, ui.color, false, true)
+	}
+	fmt.Println()
+}
+
+func (a *App) printCenteredLine(text string, color, bold, dim bool) {
+	text = strings.TrimRightFunc(text, unicode.IsSpace)
+	padding := 0
+	width := a.menuHeaderWidth()
+	textWidth := utf8.RuneCountInString(text)
+	if textWidth < width {
+		padding = (width - textWidth) / 2
+	}
+	if color {
+		prefix := ""
+		if bold {
+			prefix += ansiBold
+		}
+		if dim {
+			prefix += ansiDim
+		}
+		text = prefix + ansiSkyBlue + text + ansiReset
+	}
+	fmt.Printf("%s%s\n", strings.Repeat(" ", padding), text)
+}
+
+func (a *App) menuHeaderWidth() int {
+	width := utf8.RuneCountInString(`szr or "sizer" is a token-aware CLI proxy built in Go`)
+	for _, line := range compactBanner {
+		line = strings.TrimRightFunc(line, unicode.IsSpace)
+		if lineWidth := utf8.RuneCountInString(line); lineWidth > width {
+			width = lineWidth
+		}
+	}
+	return width
 }

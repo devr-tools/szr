@@ -44,4 +44,20 @@ func TestGHProfilesPrepare(t *testing.T) {
 	if got := ghRunLog.Prepare(engine.Invocation{Command: []string{"gh", "run", "view", "123", "--log"}}); !reflect.DeepEqual(got, []string{"gh", "run", "view", "123", "--log"}) {
 		t.Fatalf("expected gh run log profile to preserve raw log command: %#v", got)
 	}
+
+	ghChecks := testutil.FindProfile(t, list, "gh-pr-checks")
+	if !ghChecks.Match(engine.Invocation{Display: []string{"gh", "pr", "checks", "42"}}) {
+		t.Fatal("expected gh pr checks to match")
+	}
+	if got := ghChecks.Prepare(engine.Invocation{Command: []string{"gh", "pr", "checks", "42"}}); !reflect.DeepEqual(got, []string{"gh", "pr", "checks", "42"}) {
+		t.Fatalf("expected gh pr checks prepare passthrough: %#v", got)
+	}
+
+	ghRunList := testutil.FindProfile(t, list, "gh-run-list")
+	if !ghRunList.Match(engine.Invocation{Display: []string{"gh", "run", "list"}}) {
+		t.Fatal("expected gh run list to match")
+	}
+	if got := ghRunList.Prepare(engine.Invocation{Command: []string{"gh", "run", "list", "--limit", "5"}}); !reflect.DeepEqual(got, []string{"gh", "run", "list", "--limit", "5"}) {
+		t.Fatalf("expected gh run list prepare passthrough: %#v", got)
+	}
 }

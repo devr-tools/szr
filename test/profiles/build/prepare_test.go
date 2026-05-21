@@ -20,6 +20,13 @@ func TestBuildSystemProfilePrepare(t *testing.T) {
 		{"bazel", "test", "//..."},
 		{"ninja"},
 		{"cmake", "--build", "build"},
+		{"terraform", "plan"},
+		{"tofu", "apply"},
+		{"helm", "upgrade", "app"},
+		{"gradle", "test"},
+		{"mvn", "test"},
+		{"docker", "build", "."},
+		{"docker", "buildx", "build", "."},
 	} {
 		if !profile.Match(engine.Invocation{Display: display}) {
 			t.Fatalf("expected %#v to match build-system", display)

@@ -10,8 +10,8 @@ import (
 
 func TestBuiltInProfiles(t *testing.T) {
 	list := profiles.Builtins(3)
-	if len(list) != 28 {
-		t.Fatalf("expected 28 profiles, got %d", len(list))
+	if len(list) != 33 {
+		t.Fatalf("expected 33 profiles, got %d", len(list))
 	}
 
 	goTest := testutil.FindProfile(t, list, "go-test-json")

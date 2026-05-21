@@ -1,11 +1,26 @@
 package engine
 
-import "strings"
+import (
+	"strings"
+
+	"szr/internal/filters"
+	"szr/internal/history"
+)
 
 type renderResult struct {
 	text         string
 	bytesParsed  int
 	fallbackUsed bool
+}
+
+type RenderedExecution struct {
+	Text           string
+	RawCombined    string
+	BytesParsed    int
+	BytesEmitted   int
+	RawTokens      int
+	FilteredTokens int
+	FallbackUsed   bool
 }
 
 func renderProfile(profile Profile, inv Invocation, exec Execution, fallbackLines int, passthrough bool) renderResult {
@@ -54,6 +69,28 @@ func renderProfile(profile Profile, inv Invocation, exec Execution, fallbackLine
 		text:         rendered,
 		bytesParsed:  bytesParsed,
 		fallbackUsed: fallbackUsed,
+	}
+}
+
+func RenderExecution(profile Profile, inv Invocation, exec Execution, fallbackLines int, passthrough bool) RenderedExecution {
+	rawCombined := combineStreams(exec.Stdout, exec.Stderr)
+	rendered := renderProfile(profile, inv, exec, fallbackLines, passthrough)
+	text := rendered.text
+	if shouldUseFailureEscape(profile, exec.ExitCode, passthrough, rendered.fallbackUsed) && rawCombined != "" {
+		budget := ResolveBudget(profile, inv, fallbackLines)
+		escapeBudget := ExpandBudgetForFailureEscape(budget, inv)
+		if escaped := filters.CompactLines(rawCombined, escapeBudget.MaxLines); strings.TrimSpace(escaped) != "" {
+			text = escaped
+		}
+	}
+	return RenderedExecution{
+		Text:           text,
+		RawCombined:    rawCombined,
+		BytesParsed:    rendered.bytesParsed,
+		BytesEmitted:   len(text),
+		RawTokens:      history.EstimateTokens(rawCombined),
+		FilteredTokens: history.EstimateTokens(text),
+		FallbackUsed:   rendered.fallbackUsed,
 	}
 }
 

@@ -77,21 +77,36 @@ func (a *App) Run(ctx context.Context, args []string) int {
 	case "--help", "-h", "help":
 		a.printHelp()
 		return 0
+	case "commands":
+		a.printCommands()
+		return 0
 	case "--version", "version":
 		fmt.Println("szr", a.version)
 		return 0
 	case "spread", "gain":
 		return a.runSpread(rest[1:])
+	case "recommend":
+		return a.runRecommend(rest[1:])
+	case "hotspots":
+		return a.runHotspots(rest[1:])
 	case "profiles":
 		return a.runProfiles()
 	case "doctor":
-		return a.runDoctor(a.configForFlags(flags))
+		return a.runDoctor(a.configForFlags(flags), rest[1:])
 	case "self":
 		return a.runSelf(flags, rest[1:])
 	case "install":
 		return a.runInstall(rest[1:])
 	case "bench":
 		return a.runBench(rest[1:])
+	case "replay":
+		return a.runReplay(flags, rest[1:])
+	case "compare":
+		return a.runCompare(ctx, flags, rest[1:])
+	case "rules":
+		return a.runRules(flags, rest[1:])
+	case "scaffold":
+		return a.runScaffold(rest[1:])
 	case "proxy":
 		return a.runExternal(ctx, flags, "proxy", rest[1:], true)
 	case "run":

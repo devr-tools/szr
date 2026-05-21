@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -121,5 +122,66 @@ func TestTeeErrors(t *testing.T) {
 	code, stdout, stderr = testutil.RunApp(t, app, "tee", "300_missing")
 	if code != 1 || stdout != "" || !strings.Contains(stderr, "tee artifact unavailable") {
 		t.Fatalf("unexpected missing artifact stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+}
+
+func TestTeeFindAndPrune(t *testing.T) {
+	root := t.TempDir()
+	paths := testutil.Paths(root)
+	testutil.EnsurePaths(t, paths)
+
+	store := teeindex.New(paths.TeeDir)
+	firstPath := filepath.Join(paths.TeeDir, "100_first.log")
+	secondPath := filepath.Join(paths.TeeDir, "200_second.log")
+	testutil.MustWriteFile(t, firstPath, "first artifact\n")
+	testutil.MustWriteFile(t, secondPath, "second artifact\n")
+
+	for _, entry := range []teeindex.Entry{
+		{
+			Timestamp: time.Now().Add(-48 * time.Hour),
+			Path:      firstPath,
+			Command:   "terraform plan",
+			Profile:   "passthrough",
+			ExitCode:  1,
+		},
+		{
+			Timestamp: time.Now(),
+			Path:      secondPath,
+			Command:   "cargo test",
+			Profile:   "cargo-test",
+			ExitCode:  101,
+		},
+	} {
+		if err := store.Append(entry); err != nil {
+			t.Fatalf("append tee entry: %v", err)
+		}
+	}
+
+	app := cli.NewWithDependencies("test", config.Default(), paths, history.New(paths.HistoryFile), testutil.AppEngine(t, paths))
+	code, stdout, stderr := testutil.RunApp(t, app, "tee", "find", "cargo")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected tee find stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	if !strings.Contains(stdout, "cargo test") {
+		t.Fatalf("expected tee find output to include cargo artifact, got %q", stdout)
+	}
+
+	code, stdout, stderr = testutil.RunApp(t, app, "tee", "prune", "--keep", "1")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected tee prune stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	if !strings.Contains(stdout, "removed=1 kept=1") {
+		t.Fatalf("expected tee prune summary, got %q", stdout)
+	}
+	if _, err := os.Stat(firstPath); !os.IsNotExist(err) {
+		t.Fatalf("expected first artifact to be pruned, got err=%v", err)
+	}
+
+	entries, err := store.List(10)
+	if err != nil {
+		t.Fatalf("list tee entries: %v", err)
+	}
+	if len(entries) != 1 || entries[0].Command != "cargo test" {
+		t.Fatalf("unexpected surviving tee entries: %#v", entries)
 	}
 }

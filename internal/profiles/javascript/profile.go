@@ -15,6 +15,33 @@ import (
 func Profiles(maxLines int) []engine.Profile {
 	return []engine.Profile{
 		{
+			Name:             "bun-test",
+			Description:      "Summarizes `bun test` output around failed suites and assertions.",
+			Confidence:       engine.ConfidenceMedium,
+			StreamPreference: engine.StreamStdoutFirst,
+			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 12)),
+			LatencyBudget:    profilekit.LatencyBudget(35),
+			Match: func(inv engine.Invocation) bool {
+				return len(inv.Display) >= 2 && inv.Display[0] == "bun" && inv.Display[1] == "test"
+			},
+			Prepare: func(inv engine.Invocation) []string {
+				return inv.Command
+			},
+			Render: func(_ engine.Invocation, exec engine.Execution) string {
+				return jsfilter.SummarizeJSTest(exec.Stdout+"\n"+exec.Stderr, maxLines)
+			},
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
+				return shared.NewBufferedTextReducer(true, true, func(input string) string {
+					return jsfilter.SummarizeJSTest(input, budget.MaxLines)
+				})
+			},
+			ParseBytes: profilekit.ParseCombined,
+			Explain: []string{
+				"Matches direct `bun test` runs and reuses the JS test reducer family.",
+				"Keeps failing suites, assertions, and file anchors while collapsing pass noise.",
+			},
+		},
+		{
 			Name:             "js-package-test",
 			Description:      "Detects Jest and Vitest behind package-manager test scripts and forwards structured reporter flags.",
 			Confidence:       engine.ConfidenceMedium,
@@ -148,7 +175,7 @@ func isJSWorkspaceCommand(args []string) bool {
 	switch args[0] {
 	case "npm", "pnpm", "yarn":
 		return !isPackageManagerTest(args)
-	case "turbo", "nx", "vite":
+	case "turbo", "nx", "vite", "eslint", "tsc", "bun":
 		return true
 	default:
 		return false

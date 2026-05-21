@@ -103,6 +103,25 @@ func (s *Store) List(limit int) ([]Entry, error) {
 	return entries, nil
 }
 
+func (s *Store) Replace(entries []Entry) error {
+	if s == nil || s.path == "" {
+		return fmt.Errorf("tee index store is not configured")
+	}
+	file, err := os.Create(s.path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	enc := json.NewEncoder(file)
+	for _, entry := range entries {
+		if err := enc.Encode(hydrateEntry(entry)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *Store) Latest() (Entry, bool, error) {
 	entries, err := s.List(1)
 	if err != nil {
@@ -142,6 +161,39 @@ func (s *Store) Find(id string) (Entry, bool, error) {
 
 func (s *Store) Read(entry Entry) ([]byte, error) {
 	return os.ReadFile(entry.Path)
+}
+
+func (s *Store) Search(query string, limit int) ([]Entry, error) {
+	entries, err := s.LoadAll()
+	if err != nil {
+		return nil, err
+	}
+	query = strings.ToLower(strings.TrimSpace(query))
+	if query == "" {
+		return s.List(limit)
+	}
+
+	matches := make([]Entry, 0, len(entries))
+	for _, entry := range entries {
+		hydrated := hydrateEntry(entry)
+		haystack := strings.ToLower(strings.Join([]string{
+			hydrated.ID,
+			hydrated.Path,
+			hydrated.Command,
+			hydrated.Profile,
+			hydrated.CommandFingerprint,
+		}, "\n"))
+		if strings.Contains(haystack, query) {
+			matches = append(matches, hydrated)
+		}
+	}
+	sort.Slice(matches, func(i, j int) bool {
+		return matches[i].Timestamp.After(matches[j].Timestamp)
+	})
+	if limit > 0 && len(matches) > limit {
+		matches = matches[:limit]
+	}
+	return matches, nil
 }
 
 func hydrateEntry(entry Entry) Entry {

@@ -115,7 +115,25 @@ func TestInstallCommands(t *testing.T) {
 	restore := testutil.Chdir(t, repo)
 	defer restore()
 
-	code, stdout, stderr := testutil.RunApp(t, app, "install", "--print", "cursor")
+	code, stdout, stderr := testutil.RunApp(t, app, "install")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected install list stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	for _, want := range []string{
+		"available install targets:",
+		"codex",
+		"claude-code",
+		"cursor",
+		"gemini",
+		"shell",
+		"szr install --all",
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("expected install list stdout to contain %q, got %q", want, stdout)
+		}
+	}
+
+	code, stdout, stderr = testutil.RunApp(t, app, "install", "--print", "cursor")
 	if code != 0 || stderr != "" {
 		t.Fatalf("unexpected install print stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}

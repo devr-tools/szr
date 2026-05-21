@@ -97,5 +97,59 @@ func Profiles(maxLines int) []engine.Profile {
 				"Collapses repeated failures by pod or container while leaving error-bearing lines visible.",
 			},
 		},
+		{
+			Name:             "kubectl-top",
+			Description:      "Keeps the highest-signal `kubectl top` rows visible without a full metrics table.",
+			Confidence:       engine.ConfidenceMedium,
+			StreamPreference: engine.StreamStdoutOnly,
+			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 8)),
+			LatencyBudget:    profilekit.LatencyBudget(25),
+			Match: func(inv engine.Invocation) bool {
+				return isKubectlCommand(inv.Display, "top")
+			},
+			Prepare: func(inv engine.Invocation) []string {
+				return inv.Command
+			},
+			Render: func(_ engine.Invocation, exec engine.Execution) string {
+				return shared.CompactLines(exec.Stdout, maxLines)
+			},
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
+				return shared.NewBufferedTextReducer(true, false, func(input string) string {
+					return shared.CompactLines(input, budget.MaxLines)
+				})
+			},
+			ParseBytes: profilekit.ParseStdout,
+			Explain: []string{
+				"Matches `kubectl top` to keep the newest metric rows visible without preserving the whole table.",
+				"Uses a compact preview reducer because `kubectl top` is already terse but often wider than needed.",
+			},
+		},
+		{
+			Name:             "kubectl-events",
+			Description:      "Surfaces warning-bearing `kubectl events` lines ahead of long event streams.",
+			Confidence:       engine.ConfidenceMedium,
+			StreamPreference: engine.StreamStdoutOnly,
+			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 10)),
+			LatencyBudget:    profilekit.LatencyBudget(25),
+			Match: func(inv engine.Invocation) bool {
+				return isKubectlCommand(inv.Display, "events")
+			},
+			Prepare: func(inv engine.Invocation) []string {
+				return inv.Command
+			},
+			Render: func(_ engine.Invocation, exec engine.Execution) string {
+				return kubefilter.SummarizeDescribe(exec.Stdout, maxLines)
+			},
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
+				return shared.NewBufferedTextReducer(true, false, func(input string) string {
+					return kubefilter.SummarizeDescribe(input, budget.MaxLines)
+				})
+			},
+			ParseBytes: profilekit.ParseStdout,
+			Explain: []string{
+				"Matches `kubectl events` so warning-bearing event lines are easy to spot.",
+				"Reuses the describe/event summarizer to keep failure reasons and backoff-style events near the top.",
+			},
+		},
 	}
 }

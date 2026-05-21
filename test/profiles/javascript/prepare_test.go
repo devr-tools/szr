@@ -118,6 +118,14 @@ func TestJSProfilesPrepare(t *testing.T) {
 func TestStructuredJSProfilesPrepare(t *testing.T) {
 	list := profiles.Builtins(6)
 
+	bunTest := testutil.FindProfile(t, list, "bun-test")
+	if !bunTest.Match(engine.Invocation{Display: []string{"bun", "test"}}) {
+		t.Fatal("expected bun test profile to match")
+	}
+	if got := bunTest.Prepare(engine.Invocation{Command: []string{"bun", "test"}}); !reflect.DeepEqual(got, []string{"bun", "test"}) {
+		t.Fatalf("expected bun test prepare passthrough, got %#v", got)
+	}
+
 	vitest := testutil.FindProfile(t, list, "vitest-json")
 	if !vitest.Match(engine.Invocation{Display: []string{"vitest"}}) {
 		t.Fatal("expected vitest profile to match")
@@ -164,6 +172,9 @@ func TestJSWorkspaceProfilePrepare(t *testing.T) {
 		{"turbo", "run", "build"},
 		{"nx", "test", "web"},
 		{"vite", "build"},
+		{"eslint", "."},
+		{"tsc", "--noEmit"},
+		{"bun", "run", "build"},
 	} {
 		if !workspace.Match(engine.Invocation{Display: display}) {
 			t.Fatalf("expected %#v to match js-workspace", display)

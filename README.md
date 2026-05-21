@@ -35,16 +35,19 @@ The first working scaffold is in place:
 - `szr make`, `szr just`, `szr task`, `szr bazel`, `szr ninja`, and `szr cmake` now use build-system reducers.
 - `szr ctest`, `szr clang-tidy`, `szr clang-format`, and `szr bear` now use C/C++ tooling reducers.
 - `szr docker ps`, `szr docker compose ps`, `szr docker logs`, and `szr docker compose logs` now use container-aware reducers.
-- `szr kubectl get`, `szr kubectl describe`, and `szr kubectl logs` now use Kubernetes-aware reducers.
-- `szr gh pr view`, `szr gh run view`, and `szr gh run view --log` now use GitHub-aware reducers.
-- `szr npm`, `szr pnpm`, `szr yarn`, `szr turbo`, `szr nx`, `szr vite`, `szr vitest`, and `szr jest` now use JS/TS-aware profiles.
+- `szr kubectl get`, `szr kubectl describe`, `szr kubectl logs`, `szr kubectl top`, and `szr kubectl events` now use Kubernetes-aware reducers.
+- `szr gh pr view`, `szr gh pr checks`, `szr gh run list`, `szr gh run view`, and `szr gh run view --log` now use GitHub-aware reducers.
+- `szr npm`, `szr pnpm`, `szr yarn`, `szr bun`, `szr turbo`, `szr nx`, `szr vite`, `szr vitest`, `szr jest`, `szr eslint`, and `szr tsc` now use JS/TS-aware profiles.
+- `szr terraform`, `szr tofu`, `szr helm`, `szr gradle`, `szr mvn`, and `szr docker build` now route through build-style reducers.
 - `szr diff`, `szr patch`, and `szr git apply` now use patch-aware reducers.
 - `szr rg` now uses a ripgrep-aware reducer that groups matches by file.
 - `szr read`, `szr grep`, `szr json`, `szr log`, and `szr ls` are implemented directly in Go.
 - `szr spread` tracks token savings in local JSONL history.
+- `szr recommend`, `szr hotspots`, `szr compare`, and `szr replay` now turn history and preserved artifacts into tuning workflows.
 - `szr explain <cmd...>` shows which profile the engine would use and why.
-- `szr tee` lists indexed failure artifacts so full logs can be retrieved only when needed.
+- `szr tee`, `szr tee find`, and `szr tee prune` manage indexed failure artifacts so full logs can be retrieved only when needed.
 - `szr install <target>` bootstraps repo-local instructions and hook files for Codex, Claude Code, Cursor, Gemini, and plain shell environments.
+- `szr rules check`, `szr rules test`, and `szr scaffold profile` make project-local rules safer to iterate on.
 - `szr bench` runs built-in compression fixtures to measure latency and output savings.
 - project-local `.szr.json`, `.szr.yaml`, and `.szr.yml` rules can define custom profiles plus machine-readable `preferences` for internal CLIs, generated tooling, and cwd-aware command rewrites.
 
