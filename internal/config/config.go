@@ -32,18 +32,34 @@ func Default() Config {
 }
 
 func ResolvePaths() (Paths, error) {
-	configRoot, err := os.UserConfigDir()
+	return ResolvePathsWith(os.UserConfigDir, os.UserCacheDir, os.UserHomeDir)
+}
+
+func EnsurePaths(paths Paths) error {
+	return EnsurePathsWith(paths, os.MkdirAll)
+}
+
+func Load() (Config, Paths, error) {
+	return LoadWith(ResolvePaths, EnsurePaths, os.ReadFile)
+}
+
+func ResolvePathsWith(
+	userConfigDir func() (string, error),
+	userCacheDir func() (string, error),
+	userHomeDir func() (string, error),
+) (Paths, error) {
+	configRoot, err := userConfigDir()
 	if err != nil {
-		home, homeErr := os.UserHomeDir()
+		home, homeErr := userHomeDir()
 		if homeErr != nil {
 			return Paths{}, errors.New("failed to resolve user config directory")
 		}
 		configRoot = filepath.Join(home, ".config")
 	}
 
-	dataRoot, err := os.UserCacheDir()
+	dataRoot, err := userCacheDir()
 	if err != nil {
-		home, homeErr := os.UserHomeDir()
+		home, homeErr := userHomeDir()
 		if homeErr != nil {
 			return Paths{}, errors.New("failed to resolve user cache directory")
 		}
@@ -62,26 +78,30 @@ func ResolvePaths() (Paths, error) {
 	}, nil
 }
 
-func EnsurePaths(paths Paths) error {
+func EnsurePathsWith(paths Paths, mkdirAll func(string, os.FileMode) error) error {
 	for _, dir := range []string{paths.ConfigDir, paths.DataDir, paths.TeeDir} {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := mkdirAll(dir, 0o755); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func Load() (Config, Paths, error) {
-	paths, err := ResolvePaths()
+func LoadWith(
+	resolve func() (Paths, error),
+	ensure func(Paths) error,
+	readFile func(string) ([]byte, error),
+) (Config, Paths, error) {
+	paths, err := resolve()
 	if err != nil {
 		return Config{}, Paths{}, err
 	}
-	if err := EnsurePaths(paths); err != nil {
+	if err := ensure(paths); err != nil {
 		return Config{}, Paths{}, err
 	}
 
 	cfg := Default()
-	data, err := os.ReadFile(paths.ConfigFile)
+	data, err := readFile(paths.ConfigFile)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return cfg, paths, nil

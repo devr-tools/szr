@@ -6,7 +6,7 @@
 
 `szr` is short for "sizer". It is a Go-native CLI proxy that trims command output before it reaches an LLM, so the model gets the signal without paying for every line of terminal noise.
 
-This repo is not a line-by-line port of `rtk-ai/rtk`. The goal is to build a cleaner Go architecture with a stronger extension surface, better introspection, and a bias toward structured output whenever the wrapped tool can provide it.
+
 
 ## Current status
 

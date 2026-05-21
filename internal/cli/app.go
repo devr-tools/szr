@@ -33,27 +33,48 @@ type globalFlags struct {
 }
 
 func New(version string) *App {
-	cfg, paths, err := config.Load()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "szr: failed to load config: %v\n", err)
-		os.Exit(1)
-	}
-	store := history.New(paths.HistoryFile)
+	return NewWithLoader(version, config.Load, os.Exit)
+}
+
+func NewWithDependencies(
+	version string,
+	cfg config.Config,
+	paths config.Paths,
+	store *history.Store,
+	eng *engine.Engine,
+) *App {
 	return &App{
 		version: version,
 		config:  cfg,
 		paths:   paths,
 		history: store,
-		engine:  engine.New(cfg, paths, store, profiles.Builtins(cfg.MaxPreviewLines)),
+		engine:  eng,
 	}
 }
 
-func (a *App) Run(ctx context.Context, args []string) int {
-	flags, rest, err := parseGlobalFlags(args)
+func NewWithLoader(
+	version string,
+	load func() (config.Config, config.Paths, error),
+	exit func(int),
+) *App {
+	cfg, paths, err := load()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 2
+		fmt.Fprintf(os.Stderr, "szr: failed to load config: %v\n", err)
+		exit(1)
+		return nil
 	}
+	store := history.New(paths.HistoryFile)
+	return NewWithDependencies(
+		version,
+		cfg,
+		paths,
+		store,
+		engine.New(cfg, paths, store, profiles.Builtins(cfg.MaxPreviewLines)),
+	)
+}
+
+func (a *App) Run(ctx context.Context, args []string) int {
+	flags, rest := parseGlobalFlags(args)
 	if len(rest) == 0 {
 		a.printHelp()
 		return 0
@@ -99,7 +120,7 @@ func (a *App) Run(ctx context.Context, args []string) int {
 	}
 }
 
-func parseGlobalFlags(args []string) (globalFlags, []string, error) {
+func parseGlobalFlags(args []string) (globalFlags, []string) {
 	var flags globalFlags
 	for len(args) > 0 {
 		switch args[0] {
@@ -121,10 +142,10 @@ func parseGlobalFlags(args []string) (globalFlags, []string, error) {
 				args = args[1:]
 				continue
 			}
-			return flags, args, nil
+			return flags, args
 		}
 	}
-	return flags, args, nil
+	return flags, args
 }
 
 func (a *App) runExternal(ctx context.Context, flags globalFlags, name string, args []string, passthrough bool) int {
@@ -174,11 +195,6 @@ func (a *App) runExplain(flags globalFlags, args []string) int {
 	}
 	display := args
 	command := args
-	if args[0] == "git" || args[0] == "go" {
-		command = args
-	} else {
-		command = args
-	}
 	cwd, _ := os.Getwd()
 	profile := a.engine.Explain(engine.Invocation{
 		Command:      command,

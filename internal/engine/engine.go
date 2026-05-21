@@ -156,6 +156,10 @@ func runCommand(ctx context.Context, args []string, cwd string) (string, string,
 }
 
 func combineStreams(stdout, stderr string) string {
+	return CombineStreams(stdout, stderr)
+}
+
+func CombineStreams(stdout, stderr string) string {
 	stdout = strings.TrimSpace(stdout)
 	stderr = strings.TrimSpace(stderr)
 	switch {
@@ -171,6 +175,10 @@ func combineStreams(stdout, stderr string) string {
 }
 
 func sanitizeFileName(value string) string {
+	return SanitizeFileName(value)
+}
+
+func SanitizeFileName(value string) string {
 	value = strings.Map(func(r rune) rune {
 		switch {
 		case r >= 'a' && r <= 'z':
