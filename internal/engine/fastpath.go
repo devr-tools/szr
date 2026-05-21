@@ -32,6 +32,7 @@ func ResolveBudget(profile Profile, inv Invocation, fallbackLines int) OutputBud
 	}
 
 	budget = tuneBudgetByProfile(profile, budget)
+	budget = tuneBudgetByReasoningMode(inv.ReasoningBudgetMode, budget)
 	if inv.UltraCompact {
 		budget = scaleBudget(budget, 3, 5)
 	}
@@ -97,6 +98,23 @@ func tuneBudgetByProfile(profile Profile, budget OutputBudget) OutputBudget {
 	case strings.Contains(name, "test"), strings.Contains(name, "build"), name == "pytest", name == "ctest":
 		if budget.MaxLines < 10 {
 			budget.MaxLines = 10
+		}
+	}
+	return budget
+}
+
+func tuneBudgetByReasoningMode(mode string, budget OutputBudget) OutputBudget {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "agent":
+		budget = scaleBudget(budget, 3, 4)
+		if budget.MinFailures < 1 {
+			budget.MinFailures = 1
+		}
+		if budget.MinAnchors < 1 {
+			budget.MinAnchors = 1
+		}
+		if budget.MinHints < 1 {
+			budget.MinHints = 1
 		}
 	}
 	return budget

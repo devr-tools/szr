@@ -3,11 +3,12 @@ package engine
 import "time"
 
 type Invocation struct {
-	Command      []string
-	Display      []string
-	Cwd          string
-	Verbose      int
-	UltraCompact bool
+	Command             []string
+	Display             []string
+	Cwd                 string
+	Verbose             int
+	UltraCompact        bool
+	ReasoningBudgetMode string
 }
 
 type Execution struct {

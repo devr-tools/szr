@@ -38,27 +38,28 @@ type Store struct {
 }
 
 type Summary struct {
-	Commands            int               `json:"commands"`
-	AveragePct          float64           `json:"average_pct"`
-	SavedTokens         int               `json:"saved_tokens"`
-	RawTokens           int               `json:"raw_tokens"`
-	FilteredTokens      int               `json:"filtered_tokens"`
-	Failures            int               `json:"failures"`
-	FailureRate         float64           `json:"failure_rate"`
-	Fallbacks           int               `json:"fallbacks"`
-	FallbackRate        float64           `json:"fallback_rate"`
-	TeeCount            int               `json:"tee_count"`
-	TeeRate             float64           `json:"tee_rate"`
-	DurationP50MS       int64             `json:"duration_p50_ms"`
-	DurationP95MS       int64             `json:"duration_p95_ms"`
-	RawBytesRead        int               `json:"raw_bytes_read"`
-	BytesParsed         int               `json:"bytes_parsed"`
-	BytesEmitted        int               `json:"bytes_emitted"`
-	TopCommands         []CommandStat     `json:"top_commands"`
-	Recent              []Record          `json:"recent"`
-	Profiles            map[string]int    `json:"profiles"`
-	ProfileStats        []ProfileStat     `json:"profile_stats"`
-	FingerprintHotspots []FingerprintStat `json:"fingerprint_hotspots"`
+	Commands            int                `json:"commands"`
+	AveragePct          float64            `json:"average_pct"`
+	SavedTokens         int                `json:"saved_tokens"`
+	RawTokens           int                `json:"raw_tokens"`
+	FilteredTokens      int                `json:"filtered_tokens"`
+	Failures            int                `json:"failures"`
+	FailureRate         float64            `json:"failure_rate"`
+	Fallbacks           int                `json:"fallbacks"`
+	FallbackRate        float64            `json:"fallback_rate"`
+	TeeCount            int                `json:"tee_count"`
+	TeeRate             float64            `json:"tee_rate"`
+	DurationP50MS       int64              `json:"duration_p50_ms"`
+	DurationP95MS       int64              `json:"duration_p95_ms"`
+	RawBytesRead        int                `json:"raw_bytes_read"`
+	BytesParsed         int                `json:"bytes_parsed"`
+	BytesEmitted        int                `json:"bytes_emitted"`
+	TopCommands         []CommandStat      `json:"top_commands"`
+	Recent              []Record           `json:"recent"`
+	Profiles            map[string]int     `json:"profiles"`
+	ProfileStats        []ProfileStat      `json:"profile_stats"`
+	FingerprintHotspots []FingerprintStat  `json:"fingerprint_hotspots"`
+	BudgetSuggestions   []BudgetSuggestion `json:"budget_suggestions"`
 }
 
 type CommandStat struct {
@@ -136,6 +137,14 @@ func (s *Store) LoadAll() ([]Record, error) {
 		return nil, err
 	}
 	return records, nil
+}
+
+func (s *Store) SuggestBudgets(opts BudgetSuggestionOptions) ([]BudgetSuggestion, error) {
+	records, err := s.LoadAll()
+	if err != nil {
+		return nil, err
+	}
+	return SuggestBudgets(records, opts), nil
 }
 
 func Summarize(records []Record, limit int) Summary {
@@ -294,6 +303,7 @@ func Summarize(records []Record, limit int) Summary {
 	if len(summary.FingerprintHotspots) > limit {
 		summary.FingerprintHotspots = summary.FingerprintHotspots[:limit]
 	}
+	summary.BudgetSuggestions = SuggestBudgets(records, BudgetSuggestionOptions{Limit: limit})
 
 	return summary
 }

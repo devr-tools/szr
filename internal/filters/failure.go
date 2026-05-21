@@ -18,6 +18,9 @@ type GenericFailureReducer struct {
 	scanner      lineScanner
 	maxLines     int
 	maxBytes     int
+	minFailures  int
+	minAnchors   int
+	minHints     int
 	head         []string
 	extra        int
 	bytesParsed  int
@@ -33,19 +36,26 @@ type GenericFailureReducer struct {
 }
 
 func NewGenericFailureReducer(maxLines, maxBytes int) *GenericFailureReducer {
+	return NewGenericFailureReducerWithContract(maxLines, maxBytes, 0, 0, 0)
+}
+
+func NewGenericFailureReducerWithContract(maxLines, maxBytes, minFailures, minAnchors, minHints int) *GenericFailureReducer {
 	if maxLines <= 0 {
 		maxLines = 12
 	}
 	return &GenericFailureReducer{
-		maxLines:   maxLines,
-		maxBytes:   maxBytes,
-		head:       make([]string, 0, maxLines),
-		roots:      make([]string, 0, maxLines),
-		stacks:     make([]string, 0, maxLines/2),
-		hints:      make([]string, 0, maxLines/2),
-		warnings:   make([]string, 0, maxLines/2),
-		seenLines:  map[string]struct{}{},
-		seenStacks: map[string]struct{}{},
+		maxLines:    maxLines,
+		maxBytes:    maxBytes,
+		minFailures: minFailures,
+		minAnchors:  minAnchors,
+		minHints:    minHints,
+		head:        make([]string, 0, maxLines),
+		roots:       make([]string, 0, maxLines),
+		stacks:      make([]string, 0, maxLines/2),
+		hints:       make([]string, 0, maxLines/2),
+		warnings:    make([]string, 0, maxLines/2),
+		seenLines:   map[string]struct{}{},
+		seenStacks:  map[string]struct{}{},
 	}
 }
 
@@ -192,9 +202,9 @@ func (r *GenericFailureReducer) compose() []string {
 		}
 	}
 
-	rootLimit := minInt(r.maxLines, maxFailureInt(1, r.maxLines/2+1))
-	stackLimit := maxFailureInt(1, r.maxLines/3)
-	hintLimit := maxFailureInt(1, r.maxLines/3)
+	rootLimit := minInt(r.maxLines, maxFailureInt(maxFailureInt(1, r.maxLines/2+1), r.minFailures))
+	stackLimit := maxFailureInt(maxFailureInt(1, r.maxLines/3), r.minAnchors)
+	hintLimit := maxFailureInt(maxFailureInt(1, r.maxLines/3), r.minHints)
 
 	appendLimited(r.roots, rootLimit)
 	appendLimited(r.stacks, minInt(stackLimit, r.maxLines-len(out)))

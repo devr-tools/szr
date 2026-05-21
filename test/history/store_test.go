@@ -180,6 +180,54 @@ func TestLoadAllScannerError(t *testing.T) {
 	}
 }
 
+func TestBudgetSuggestions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.jsonl")
+	store := history.New(path)
+	for i := 0; i < 4; i++ {
+		if err := store.Append(history.Record{
+			Timestamp:          time.Date(2026, 5, 20, 10+i, 0, 0, 0, time.UTC),
+			Command:            "szr go build ./...",
+			CommandFingerprint: history.Fingerprint("szr go build ./..."),
+			Profile:            "go-build",
+			ProfileConfidence:  "medium",
+			DurationMS:         40,
+			ExitCode:           1,
+			RawTokens:          200,
+			FilteredTokens:     12,
+			SavedTokens:        188,
+			SavingsPct:         94,
+			BytesEmitted:       48,
+			FallbackUsed:       i < 3,
+		}); err != nil {
+			t.Fatalf("append %d: %v", i, err)
+		}
+	}
+
+	suggestions, err := store.SuggestBudgets(history.BudgetSuggestionOptions{Limit: 4})
+	if err != nil {
+		t.Fatalf("suggest budgets: %v", err)
+	}
+	if len(suggestions) != 1 {
+		t.Fatalf("expected 1 suggestion, got %#v", suggestions)
+	}
+	suggestion := suggestions[0]
+	if suggestion.Direction != history.BudgetSuggestionLoosen || suggestion.Reason != history.BudgetSuggestionFallbackHeavy {
+		t.Fatalf("unexpected suggestion: %#v", suggestion)
+	}
+	if suggestion.Suggested.MaxLines <= 0 || suggestion.Samples != 4 || suggestion.Profile != "go-build" {
+		t.Fatalf("unexpected suggestion payload: %#v", suggestion)
+	}
+
+	records, err := store.LoadAll()
+	if err != nil {
+		t.Fatalf("load all for summary: %v", err)
+	}
+	summary := history.Summarize(records, 8)
+	if len(summary.BudgetSuggestions) != 1 || summary.BudgetSuggestions[0].Fingerprint != suggestion.Fingerprint {
+		t.Fatalf("unexpected summary suggestions: %#v", summary.BudgetSuggestions)
+	}
+}
+
 func closeEnough(got, want, tolerance float64) bool {
 	return math.Abs(got-want) <= tolerance
 }

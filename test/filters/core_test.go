@@ -106,4 +106,16 @@ func TestUtilityHelpers(t *testing.T) {
 	if got := compact.Result(); got != "a\nb2\n... +1 more lines" {
 		t.Fatalf("unexpected streaming compact lines: %q", got)
 	}
+
+	entropyCompact := filters.NewCompactLineReducer(2, 0)
+	entropyCompact.ConsumeStdout([]byte("repeat\nrepeat\nrepeat\nunique\n"))
+	if got := entropyCompact.Result(); got != "repeat (x3)\nunique" {
+		t.Fatalf("unexpected entropy-aware compact lines: %q", got)
+	}
+
+	contracted := filters.NewGenericFailureReducerWithContract(3, 0, 1, 1, 1)
+	contracted.ConsumeStdout([]byte("panic: boom\nsrc/app.go:12:3\nhelp: rerun with -v\n"))
+	if got := contracted.Result(); !strings.Contains(got, "panic: boom") || !strings.Contains(got, "src/app.go:12:3") || !strings.Contains(got, "help: rerun with -v") {
+		t.Fatalf("expected contract-preserved failure parts, got %q", got)
+	}
 }

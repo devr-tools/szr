@@ -227,3 +227,44 @@ func TestSpreadReportingOutput(t *testing.T) {
 		t.Fatalf("unexpected json profile stats: %#v", payload.ProfileStats)
 	}
 }
+
+func TestSpreadBudgetSuggestionsOutput(t *testing.T) {
+	paths := testutil.Paths(t.TempDir())
+	testutil.EnsurePaths(t, paths)
+	store := history.New(paths.HistoryFile)
+	for i := 0; i < 4; i++ {
+		if err := store.Append(history.Record{
+			Timestamp:          time.Date(2026, 5, 20, 10+i, 0, 0, 0, time.UTC),
+			Command:            "szr go build ./...",
+			CommandFingerprint: history.Fingerprint("szr go build ./..."),
+			Profile:            "go-build",
+			ProfileConfidence:  "medium",
+			DurationMS:         40,
+			ExitCode:           1,
+			RawBytesRead:       240,
+			BytesParsed:        160,
+			BytesEmitted:       48,
+			RawTokens:          200,
+			FilteredTokens:     12,
+			SavedTokens:        188,
+			SavingsPct:         94,
+			FallbackUsed:       i < 3,
+		}); err != nil {
+			t.Fatalf("append history record: %v", err)
+		}
+	}
+
+	app := cli.NewWithDependencies("test", config.Default(), paths, store, testutil.AppEngine(t, paths))
+	code, stdout, stderr := testutil.RunApp(t, app, "spread")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected spread output stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	for _, want := range []string{
+		"budget suggestions:",
+		"szr go build ./...  profile=go-build samples=4 loosen/fallback_heavy",
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("expected spread budget suggestion %q in %q", want, stdout)
+		}
+	}
+}

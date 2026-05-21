@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"szr/internal/config"
 	"szr/internal/filters"
 )
 
@@ -41,7 +42,7 @@ func (a *App) runLS(args []string) int {
 	return 0
 }
 
-func (a *App) runRead(args []string) int {
+func (a *App) runRead(cfg config.Config, args []string) int {
 	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, "szr: read requires a file")
 		return 2
@@ -49,7 +50,7 @@ func (a *App) runRead(args []string) int {
 
 	level := "none"
 	lineNumbers := false
-	maxLines := a.config.MaxPreviewLines
+	maxLines := adjustCountForReasoningMode(cfg.ReasoningBudgetMode, cfg.MaxPreviewLines)
 	files := []string{}
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
@@ -91,7 +92,7 @@ func (a *App) runRead(args []string) int {
 	return 0
 }
 
-func (a *App) runGrep(args []string) int {
+func (a *App) runGrep(cfg config.Config, args []string) int {
 	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, "szr: grep requires a pattern")
 		return 2
@@ -122,8 +123,24 @@ func (a *App) runGrep(args []string) int {
 		}
 	}
 
-	fmt.Println(filters.GroupRipgrep(string(output), a.config.MaxMatchGroups))
+	fmt.Println(filters.GroupRipgrep(string(output), adjustCountForReasoningMode(cfg.ReasoningBudgetMode, cfg.MaxMatchGroups)))
 	return 0
+}
+
+func adjustCountForReasoningMode(mode string, value int) int {
+	if value <= 0 {
+		return value
+	}
+	switch mode {
+	case config.ReasoningBudgetAgent:
+		scaled := (value*3 + 3) / 4
+		if scaled < 4 {
+			return 4
+		}
+		return scaled
+	default:
+		return value
+	}
 }
 
 func (a *App) runJSON(args []string) int {

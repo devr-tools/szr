@@ -35,10 +35,10 @@ func TestLoadVariants(t *testing.T) {
 		func() (string, error) { return root, nil },
 		func(string) (os.FileInfo, error) { return nil, os.ErrNotExist },
 		func(string) ([]byte, error) {
-			return []byte(`{"tee_on_failure":false,"max_preview_lines":7,"max_match_groups":4}`), nil
+			return []byte(`{"tee_on_failure":false,"max_preview_lines":7,"max_match_groups":4,"reasoning_budget":"agent"}`), nil
 		},
 	)
-	if err != nil || cfg.TeeOnFailure || cfg.MaxPreviewLines != 7 || cfg.MaxMatchGroups != 4 {
+	if err != nil || cfg.TeeOnFailure || cfg.MaxPreviewLines != 7 || cfg.MaxMatchGroups != 4 || cfg.ReasoningBudgetMode != config.ReasoningBudgetAgent {
 		t.Fatalf("unexpected loaded config: %#v err=%v", cfg, err)
 	}
 
@@ -84,6 +84,19 @@ func TestLoadVariants(t *testing.T) {
 	)
 	if err == nil {
 		t.Fatal("expected json error")
+	}
+
+	_, _, err = config.LoadWith(
+		func() (config.Paths, error) { return paths, nil },
+		func(config.Paths) error { return nil },
+		func() (string, error) { return root, nil },
+		func(string) (os.FileInfo, error) { return nil, os.ErrNotExist },
+		func(string) ([]byte, error) {
+			return []byte(`{"reasoning_budget":"agent","reasoning_budget_mode":"standard"}`), nil
+		},
+	)
+	if err == nil || !strings.Contains(err.Error(), "reasoning_budget and reasoning_budget_mode disagree") {
+		t.Fatalf("expected reasoning budget conflict error, got %v", err)
 	}
 }
 

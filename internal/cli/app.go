@@ -30,6 +30,7 @@ func NewWithDependencies(
 	store *history.Store,
 	eng *engine.Engine,
 ) *App {
+	cfg.ReasoningBudgetMode = config.ResolveReasoningBudgetMode(cfg.ReasoningBudgetMode)
 	return &App{
 		version: version,
 		config:  cfg,
@@ -62,7 +63,11 @@ func NewWithLoader(
 }
 
 func (a *App) Run(ctx context.Context, args []string) int {
-	flags, rest := parseGlobalFlags(args)
+	flags, rest, err := parseGlobalFlags(args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "szr: %v\n", err)
+		return 2
+	}
 	if len(rest) == 0 {
 		a.printHelp()
 		return 0
@@ -80,7 +85,7 @@ func (a *App) Run(ctx context.Context, args []string) int {
 	case "profiles":
 		return a.runProfiles()
 	case "doctor":
-		return a.runDoctor()
+		return a.runDoctor(a.configForFlags(flags))
 	case "install":
 		return a.runInstall(rest[1:])
 	case "bench":
@@ -100,9 +105,9 @@ func (a *App) Run(ctx context.Context, args []string) int {
 	case "ls":
 		return a.runLS(rest[1:])
 	case "read":
-		return a.runRead(rest[1:])
+		return a.runRead(a.configForFlags(flags), rest[1:])
 	case "grep":
-		return a.runGrep(rest[1:])
+		return a.runGrep(a.configForFlags(flags), rest[1:])
 	case "json":
 		return a.runJSON(rest[1:])
 	case "log":
@@ -110,4 +115,21 @@ func (a *App) Run(ctx context.Context, args []string) int {
 	default:
 		return a.runExternal(ctx, flags, "run", rest, false)
 	}
+}
+
+func (a *App) configForFlags(flags globalFlags) config.Config {
+	cfg := a.config
+	if flags.reasoningBudgetSet {
+		cfg.ReasoningBudgetMode = flags.reasoningBudget
+	}
+	cfg.ReasoningBudgetMode = config.ResolveReasoningBudgetMode(cfg.ReasoningBudgetMode)
+	return cfg
+}
+
+func (a *App) engineForFlags(flags globalFlags) *engine.Engine {
+	if !flags.reasoningBudgetSet {
+		return a.engine
+	}
+	cfg := a.configForFlags(flags)
+	return engine.New(cfg, a.paths, a.history, profiles.Builtins(cfg.MaxPreviewLines))
 }

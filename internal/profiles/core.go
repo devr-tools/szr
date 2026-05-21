@@ -43,7 +43,7 @@ func coreProfiles(maxLines int) []engine.Profile {
 			Description:      "Drops download noise and focuses on compiler diagnostics.",
 			Confidence:       engine.ConfidenceHigh,
 			StreamPreference: engine.StreamStderrFirst,
-			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 10)),
+			Budget:           engine.OutputBudget{MaxLines: profilekit.AtLeast(maxLines, 10), MaxBytes: profilekit.AtLeast(maxLines, 10) * 160, MaxTokens: profilekit.AtLeast(maxLines, 10) * 32, MinFailures: 1, MinAnchors: 1, MinHints: 1},
 			LatencyBudget:    profilekit.LatencyBudget(25),
 			Match: func(inv engine.Invocation) bool {
 				return profilekit.HasCommand(inv.Display, "go", "build") || profilekit.HasCommand(inv.Display, "go", "vet")
@@ -52,7 +52,7 @@ func coreProfiles(maxLines int) []engine.Profile {
 				return filters.SummarizeGenericFailure(exec.Stderr+"\n"+exec.Stdout, maxLines)
 			},
 			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return filters.NewGenericFailureReducer(budget.MaxLines, budget.MaxBytes)
+				return filters.NewGenericFailureReducerWithContract(budget.MaxLines, budget.MaxBytes, budget.MinFailures, budget.MinAnchors, budget.MinHints)
 			},
 			ParseBytes: profilekit.ParseStderrFirst,
 			Explain: []string{
@@ -65,7 +65,7 @@ func coreProfiles(maxLines int) []engine.Profile {
 			Description:      "Generic failure-focused profile for wrapped test commands.",
 			Confidence:       engine.ConfidenceMedium,
 			StreamPreference: engine.StreamStdoutFirst,
-			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 8)),
+			Budget:           engine.OutputBudget{MaxLines: profilekit.AtLeast(maxLines, 8), MaxBytes: profilekit.AtLeast(maxLines, 8) * 160, MaxTokens: profilekit.AtLeast(maxLines, 8) * 32, MinFailures: 1, MinAnchors: 1, MinHints: 1},
 			LatencyBudget:    profilekit.LatencyBudget(35),
 			Match: func(inv engine.Invocation) bool {
 				return len(inv.Display) > 0 && inv.Display[0] == "test"
@@ -74,7 +74,7 @@ func coreProfiles(maxLines int) []engine.Profile {
 				return filters.SummarizeGenericFailure(exec.Stdout+"\n"+exec.Stderr, maxLines)
 			},
 			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return filters.NewGenericFailureReducer(budget.MaxLines, budget.MaxBytes)
+				return filters.NewGenericFailureReducerWithContract(budget.MaxLines, budget.MaxBytes, budget.MinFailures, budget.MinAnchors, budget.MinHints)
 			},
 			ParseBytes: profilekit.ParseCombined,
 			Explain: []string{

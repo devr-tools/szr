@@ -213,12 +213,14 @@ func DiagnosticAnchor(line string) string {
 }
 
 type CompactLineReducer struct {
-	scanner     lineScanner
-	maxLines    int
-	maxBytes    int
-	lines       []string
-	extraLines  int
-	bytesParsed int
+	scanner      lineScanner
+	maxLines     int
+	maxBytes     int
+	lines        []string
+	extraLines   int
+	bytesParsed  int
+	pendingLine  string
+	pendingCount int
 }
 
 func NewCompactLineReducer(maxLines, maxBytes int) *CompactLineReducer {
@@ -241,7 +243,8 @@ func (r *CompactLineReducer) ConsumeStderr(chunk []byte) {
 }
 
 func (r *CompactLineReducer) Result() string {
-	r.scanner.Finish(r.recordLine)
+	r.scanner.Finish(r.ingestLine)
+	r.flushPending()
 	out := append([]string{}, r.lines...)
 	if r.extraLines > 0 {
 		out = append(out, fmt.Sprintf("... +%d more lines", r.extraLines))
@@ -259,6 +262,13 @@ func (r *CompactLineReducer) FallbackUsed() bool {
 
 func (r *CompactLineReducer) Preview() string {
 	out := append([]string{}, r.lines...)
+	if r.pendingLine != "" && len(out) < r.maxLines {
+		line := r.pendingLine
+		if r.pendingCount > 1 {
+			line = fmt.Sprintf("%s (x%d)", line, r.pendingCount)
+		}
+		out = append(out, line)
+	}
 	if r.extraLines > 0 {
 		out = append(out, "... +more lines")
 	}
@@ -267,7 +277,30 @@ func (r *CompactLineReducer) Preview() string {
 
 func (r *CompactLineReducer) consume(chunk []byte) {
 	r.bytesParsed += len(chunk)
-	r.scanner.Consume(chunk, r.recordLine)
+	r.scanner.Consume(chunk, r.ingestLine)
+}
+
+func (r *CompactLineReducer) ingestLine(line string) {
+	if line == r.pendingLine {
+		r.pendingCount++
+		return
+	}
+	r.flushPending()
+	r.pendingLine = line
+	r.pendingCount = 1
+}
+
+func (r *CompactLineReducer) flushPending() {
+	if r.pendingLine == "" {
+		return
+	}
+	line := r.pendingLine
+	if r.pendingCount > 1 {
+		line = fmt.Sprintf("%s (x%d)", line, r.pendingCount)
+	}
+	r.recordLine(line)
+	r.pendingLine = ""
+	r.pendingCount = 0
 }
 
 func (r *CompactLineReducer) recordLine(line string) {

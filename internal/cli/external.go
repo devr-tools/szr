@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"szr/internal/engine"
+	"szr/internal/history"
 )
 
 func (a *App) runExternal(ctx context.Context, flags globalFlags, name string, args []string, passthrough bool) int {
@@ -26,13 +28,14 @@ func (a *App) runExternal(ctx context.Context, flags globalFlags, name string, a
 
 	cwd, _ := os.Getwd()
 	inv := engine.Invocation{
-		Command:      command,
-		Display:      display,
-		Cwd:          cwd,
-		Verbose:      flags.verbose,
-		UltraCompact: flags.ultra,
+		Command:             command,
+		Display:             display,
+		Cwd:                 cwd,
+		Verbose:             flags.verbose,
+		UltraCompact:        flags.ultra,
+		ReasoningBudgetMode: a.configForFlags(flags).ReasoningBudgetMode,
 	}
-	result, err := a.engine.Execute(ctx, inv, passthrough)
+	result, err := a.engineForFlags(flags).Execute(ctx, inv, passthrough)
 	if flags.verbose >= 2 {
 		fmt.Fprintf(
 			os.Stderr,
@@ -68,29 +71,27 @@ func (a *App) runExplain(flags globalFlags, args []string) int {
 		return 2
 	}
 
+	cfg := a.configForFlags(flags)
 	cwd, _ := os.Getwd()
-	profile := a.engine.Explain(engine.Invocation{
-		Command:      args,
-		Display:      args,
-		Cwd:          cwd,
-		Verbose:      flags.verbose,
-		UltraCompact: flags.ultra,
-	})
+	inv := engine.Invocation{
+		Command:             args,
+		Display:             args,
+		Cwd:                 cwd,
+		Verbose:             flags.verbose,
+		UltraCompact:        flags.ultra,
+		ReasoningBudgetMode: cfg.ReasoningBudgetMode,
+	}
+	profile := a.engineForFlags(flags).Explain(inv)
 	fmt.Printf("profile: %s\n", profile.Name)
 	fmt.Printf("about: %s\n", profile.Description)
+	fmt.Printf("reasoning budget mode: %s\n", cfg.ReasoningBudgetMode)
 	if profile.Confidence != "" {
 		fmt.Printf("confidence: %s\n", profile.Confidence)
 	}
 	if profile.StreamPreference != "" {
 		fmt.Printf("stream: %s\n", profile.StreamPreference)
 	}
-	resolvedBudget := engine.ResolveBudget(profile, engine.Invocation{
-		Command:      args,
-		Display:      args,
-		Cwd:          cwd,
-		Verbose:      flags.verbose,
-		UltraCompact: flags.ultra,
-	}, a.config.MaxPreviewLines)
+	resolvedBudget := engine.ResolveBudget(profile, inv, cfg.MaxPreviewLines)
 	if resolvedBudget.MaxLines > 0 || resolvedBudget.MaxBytes > 0 || resolvedBudget.MaxTokens > 0 {
 		fmt.Printf(
 			"budget: lines=%d bytes=%d tokens=%d\n",
@@ -99,11 +100,43 @@ func (a *App) runExplain(flags globalFlags, args []string) int {
 			resolvedBudget.MaxTokens,
 		)
 	}
+	if resolvedBudget.MinFailures > 0 || resolvedBudget.MinAnchors > 0 || resolvedBudget.MinHints > 0 {
+		fmt.Printf("contract: failures=%d anchors=%d hints=%d\n", resolvedBudget.MinFailures, resolvedBudget.MinAnchors, resolvedBudget.MinHints)
+	}
 	if profile.LatencyBudget > 0 {
 		fmt.Printf("latency budget: %s\n", profile.LatencyBudget.Round(time.Millisecond))
+	}
+	if suggestion := a.findBudgetSuggestion(args); suggestion != nil {
+		fmt.Printf(
+			"history suggestion: %s %s lines=%d bytes=%d tokens=%d confidence=%s samples=%d\n",
+			suggestion.Direction,
+			suggestion.Reason,
+			suggestion.Suggested.MaxLines,
+			suggestion.Suggested.MaxBytes,
+			suggestion.Suggested.MaxTokens,
+			suggestion.Confidence,
+			suggestion.Samples,
+		)
 	}
 	for _, line := range profile.Explain {
 		fmt.Printf("- %s\n", line)
 	}
 	return 0
+}
+
+func (a *App) findBudgetSuggestion(command []string) *history.BudgetSuggestion {
+	if a.history == nil {
+		return nil
+	}
+	suggestions, err := a.history.SuggestBudgets(history.BudgetSuggestionOptions{Limit: 16})
+	if err != nil {
+		return nil
+	}
+	fingerprint := history.Fingerprint(strings.Join(command, " "))
+	for i := range suggestions {
+		if suggestions[i].Fingerprint == fingerprint {
+			return &suggestions[i]
+		}
+	}
+	return nil
 }

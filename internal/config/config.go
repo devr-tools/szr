@@ -12,10 +12,11 @@ import (
 const appName = "szr"
 
 type Config struct {
-	TeeOnFailure    bool       `json:"tee_on_failure"`
-	MaxPreviewLines int        `json:"max_preview_lines"`
-	MaxMatchGroups  int        `json:"max_match_groups"`
-	ProjectRules    rules.File `json:"-"`
+	TeeOnFailure        bool       `json:"tee_on_failure"`
+	MaxPreviewLines     int        `json:"max_preview_lines"`
+	MaxMatchGroups      int        `json:"max_match_groups"`
+	ReasoningBudgetMode string     `json:"reasoning_budget_mode"`
+	ProjectRules        rules.File `json:"-"`
 }
 
 type Paths struct {
@@ -30,9 +31,10 @@ type Paths struct {
 
 func Default() Config {
 	return Config{
-		TeeOnFailure:    true,
-		MaxPreviewLines: 12,
-		MaxMatchGroups:  8,
+		TeeOnFailure:        true,
+		MaxPreviewLines:     12,
+		MaxMatchGroups:      8,
+		ReasoningBudgetMode: ReasoningBudgetStandard,
 	}
 }
 
@@ -113,7 +115,26 @@ func LoadWith(
 		if !errors.Is(err, os.ErrNotExist) {
 			return Config{}, Paths{}, err
 		}
-	} else if err := json.Unmarshal(data, &cfg); err != nil {
+	} else {
+		if err := json.Unmarshal(data, &cfg); err != nil {
+			return Config{}, Paths{}, err
+		}
+		var aliases struct {
+			ReasoningBudget     string `json:"reasoning_budget"`
+			ReasoningBudgetMode string `json:"reasoning_budget_mode"`
+		}
+		if err := json.Unmarshal(data, &aliases); err != nil {
+			return Config{}, Paths{}, err
+		}
+		if aliases.ReasoningBudget != "" && aliases.ReasoningBudgetMode != "" && aliases.ReasoningBudget != aliases.ReasoningBudgetMode {
+			return Config{}, Paths{}, errors.New("config reasoning_budget and reasoning_budget_mode disagree")
+		}
+		if aliases.ReasoningBudget != "" {
+			cfg.ReasoningBudgetMode = aliases.ReasoningBudget
+		}
+	}
+	cfg, err = Normalize(cfg)
+	if err != nil {
 		return Config{}, Paths{}, err
 	}
 

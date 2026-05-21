@@ -63,6 +63,20 @@ func TestHelpers(t *testing.T) {
 		t.Fatalf("expected low-confidence budget expansion, got %#v", lowConfidenceBudget)
 	}
 
+	standardMediumBudget := engine.ResolveBudget(
+		engine.Profile{Budget: engine.OutputBudget{MaxLines: 12}, Confidence: engine.ConfidenceMedium},
+		engine.Invocation{},
+		12,
+	)
+	agentBudget := engine.ResolveBudget(
+		engine.Profile{Budget: engine.OutputBudget{MaxLines: 12}, Confidence: engine.ConfidenceMedium},
+		engine.Invocation{ReasoningBudgetMode: "agent"},
+		12,
+	)
+	if agentBudget.MaxLines >= standardMediumBudget.MaxLines || agentBudget.MinFailures != 1 || agentBudget.MinAnchors != 1 || agentBudget.MinHints != 1 {
+		t.Fatalf("expected reasoning-budget agent mode to tighten and add contracts, got %#v", agentBudget)
+	}
+
 	fast := engine.DecideFastPath(engine.Profile{}, 64, 12, 2*time.Millisecond, 0)
 	if !fast.BypassCompression || fast.Reason == "" {
 		t.Fatalf("expected tiny output fast path, got %#v", fast)

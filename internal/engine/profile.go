@@ -17,9 +17,12 @@ const (
 )
 
 type OutputBudget struct {
-	MaxLines  int
-	MaxBytes  int
-	MaxTokens int
+	MaxLines    int
+	MaxBytes    int
+	MaxTokens   int
+	MinFailures int
+	MinAnchors  int
+	MinHints    int
 }
 
 type StreamReducer interface {

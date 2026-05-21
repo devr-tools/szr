@@ -50,14 +50,14 @@ func TestRunRoutes(t *testing.T) {
 		stdin      string
 	}{
 		{"help empty", nil, 0, []string{`szr: "sizer"`}, nil, ""},
-		{"help flag", []string{"--help"}, 0, []string{"Core commands:"}, nil, ""},
+		{"help flag", []string{"--help"}, 0, []string{"Core commands:", "--reasoning-budget <standard|agent>"}, nil, ""},
 		{"help ultra", []string{"-u", "help"}, 0, []string{"Core commands:"}, nil, ""},
 		{"help verbose long", []string{"--verbose", "help"}, 0, []string{"Core commands:"}, nil, ""},
 		{"help verbose exact", []string{"-vv", "help"}, 0, []string{"Core commands:"}, nil, ""},
 		{"help verbose counted", []string{"-vvvv", "help"}, 0, []string{"Core commands:"}, nil, ""},
 		{"version", []string{"--version"}, 0, []string{"szr test"}, nil, ""},
 		{"profiles", []string{"profiles"}, 0, []string{"git-status", "generic-summary"}, nil, ""},
-		{"doctor", []string{"doctor"}, 0, []string{"version: test", "go:", "git:", "rg:"}, nil, ""},
+		{"doctor", []string{"doctor"}, 0, []string{"version: test", "reasoning budget mode: standard", "go:", "git:", "rg:"}, nil, ""},
 		{"doctor missing tool", []string{"doctor"}, 0, []string{"go: missing"}, nil, ""},
 		{"git status", []string{"git", "status"}, 0, []string{"staged=1"}, nil, ""},
 		{"git log", []string{"git", "log"}, 0, []string{"2 commits"}, nil, ""},

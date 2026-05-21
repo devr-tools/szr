@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"time"
 
+	"szr/internal/config"
 	"szr/internal/history"
 )
 
@@ -90,6 +91,23 @@ func (a *App) runSpread(args []string) int {
 			)
 		}
 	}
+	if len(summary.BudgetSuggestions) > 0 {
+		fmt.Println("budget suggestions:")
+		for _, suggestion := range summary.BudgetSuggestions {
+			fmt.Printf(
+				"  %s  profile=%s samples=%d %s/%s target=%d lines %d bytes %d tokens confidence=%s\n",
+				suggestion.Command,
+				suggestion.Profile,
+				suggestion.Samples,
+				suggestion.Direction,
+				suggestion.Reason,
+				suggestion.Suggested.MaxLines,
+				suggestion.Suggested.MaxBytes,
+				suggestion.Suggested.MaxTokens,
+				suggestion.Confidence,
+			)
+		}
+	}
 	if showHistory {
 		fmt.Println("recent:")
 		for _, rec := range summary.Recent {
@@ -121,6 +139,9 @@ func (a *App) runProfiles() int {
 		if profile.Budget.MaxLines > 0 || profile.Budget.MaxBytes > 0 || profile.Budget.MaxTokens > 0 {
 			fmt.Printf("  budget: lines=%d bytes=%d tokens=%d\n", profile.Budget.MaxLines, profile.Budget.MaxBytes, profile.Budget.MaxTokens)
 		}
+		if profile.Budget.MinFailures > 0 || profile.Budget.MinAnchors > 0 || profile.Budget.MinHints > 0 {
+			fmt.Printf("  contract: failures=%d anchors=%d hints=%d\n", profile.Budget.MinFailures, profile.Budget.MinAnchors, profile.Budget.MinHints)
+		}
 		if profile.LatencyBudget > 0 {
 			fmt.Printf("  latency budget: %s\n", profile.LatencyBudget.Round(time.Millisecond))
 		}
@@ -128,11 +149,12 @@ func (a *App) runProfiles() int {
 	return 0
 }
 
-func (a *App) runDoctor() int {
+func (a *App) runDoctor(cfg config.Config) int {
 	fmt.Printf("version: %s\n", a.version)
 	fmt.Printf("config: %s\n", a.paths.ConfigFile)
 	fmt.Printf("history: %s\n", a.paths.HistoryFile)
 	fmt.Printf("tee dir: %s\n", a.paths.TeeDir)
+	fmt.Printf("reasoning budget mode: %s\n", cfg.ReasoningBudgetMode)
 	if a.paths.ProjectRuleFile != "" {
 		fmt.Printf("project rules: %s\n", a.paths.ProjectRuleFile)
 	}

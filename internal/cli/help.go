@@ -19,5 +19,11 @@ Core commands:
   git, go, run, test, summary, proxy, explain
   ls, read, grep, json, log
   spread, profiles, doctor, install, bench
+
+Global flags:
+  -u, --ultra-compact
+  -v, -vv, -vvv, --verbose
+  --reasoning-budget <standard|agent>
+  --reasoning-budget-mode <standard|agent>
 ` + "\n")
 }
