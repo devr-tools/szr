@@ -8,6 +8,9 @@ import (
 
 func Builtins(maxLines int) []engine.Profile {
 	list := coreProfiles(maxLines)
+	list = append(list, rustProfiles(maxLines)...)
+	list = append(list, pythonProfiles(maxLines)...)
+	list = append(list, containerProfiles(maxLines)...)
 	list = append(list, jsProfiles(maxLines)...)
 	return list
 }

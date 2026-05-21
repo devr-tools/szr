@@ -30,6 +30,9 @@ The first working scaffold is in place:
 
 - `szr git status`, `szr git log`, and `szr git diff` use dedicated profiles.
 - `szr go test` forces `-json` and summarizes package-level failures.
+- `szr cargo test`, `szr cargo build`, and `szr cargo clippy` now use Rust-aware reducers.
+- `szr pytest`, `szr python -m pytest`, and `szr uv run pytest` now use a pytest-aware reducer.
+- `szr docker ps`, `szr docker compose ps`, `szr docker logs`, and `szr docker compose logs` now use container-aware reducers.
 - `szr npm test`, `szr pnpm test`, `szr yarn test`, `szr vitest`, and `szr jest` now use JS/TS-aware profiles.
 - `szr read`, `szr grep`, `szr json`, `szr log`, and `szr ls` are implemented directly in Go.
 - `szr spread` tracks token savings in local JSONL history.
@@ -51,6 +54,9 @@ The first working scaffold is in place:
 szr git status
 szr git diff
 szr go test ./...
+szr cargo test
+szr pytest -k failing_case
+szr docker logs api
 szr npm test
 szr grep "TODO" .
 szr read internal/cli/app.go --level aggressive
@@ -97,7 +103,7 @@ More detail lives in [docs/ARCHITECTURE.md](/Users/alex/Documents/GitHub/szr/doc
 The current roadmap is organized around three goals:
 
 - lower wrapper latency so `szr` stays on the hot path
-- expand parser-first coverage beyond the current Go, Git, and JS/TS command families
+- expand parser-first coverage beyond the current Go, Git, Rust, Python, JS/TS, and container command families
 - improve compression quality without hiding actionable failure lines, and extend the bench harness as profiles grow
 
 The detailed plan lives in [docs/ROADMAP.md](/Users/alex/Documents/GitHub/szr/docs/ROADMAP.md).

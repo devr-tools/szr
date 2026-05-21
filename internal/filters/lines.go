@@ -110,6 +110,18 @@ func minInt(left, right int) int {
 	return right
 }
 
+func joinLimitedLines(lines []string, maxLines int) string {
+	if len(lines) == 0 {
+		return "ok"
+	}
+	if len(lines) <= maxLines {
+		return strings.Join(lines, "\n")
+	}
+	selected := append([]string{}, lines[:maxLines]...)
+	selected = append(selected, fmt.Sprintf("... +%d more lines", len(lines)-maxLines))
+	return strings.Join(selected, "\n")
+}
+
 type CompactLineReducer struct {
 	scanner     lineScanner
 	maxLines    int

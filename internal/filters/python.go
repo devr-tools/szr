@@ -1,9 +1,6 @@
 package filters
 
-import (
-	"fmt"
-	"strings"
-)
+import "strings"
 
 func SummarizePytest(input string, maxLines int) string {
 	if maxLines <= 0 {
@@ -61,6 +58,13 @@ func collectPytestShortFailures(lines []string) []string {
 		trimmed := strings.TrimSpace(line)
 		normalized := normalizePytestSummaryLine(trimmed)
 
+		if strings.HasPrefix(normalized, "FAILED ") || strings.HasPrefix(normalized, "ERROR ") {
+			out = append(out, normalized)
+			if !inSummary {
+				continue
+			}
+		}
+
 		if strings.EqualFold(normalized, "short test summary info") {
 			inSummary = true
 			continue
@@ -69,10 +73,6 @@ func collectPytestShortFailures(lines []string) []string {
 			continue
 		}
 		if isDividerLine(trimmed) {
-			continue
-		}
-		if strings.HasPrefix(normalized, "FAILED ") || strings.HasPrefix(normalized, "ERROR ") {
-			out = append(out, normalized)
 			continue
 		}
 		if len(out) > 0 {
@@ -143,6 +143,7 @@ func isInterestingPytestDetail(line string) bool {
 		strings.HasPrefix(line, "E       "),
 		strings.HasPrefix(line, "assert "),
 		strings.HasPrefix(line, ">") && strings.Contains(line, "assert"),
+		strings.HasPrefix(line, ">") && strings.Contains(line, "available fixtures:"),
 		strings.HasPrefix(line, "available fixtures:"):
 		return true
 	case strings.Contains(line, ".py:"),
@@ -170,16 +171,4 @@ func normalizePytestDetail(line string) string {
 	default:
 		return line
 	}
-}
-
-func joinLimitedLines(lines []string, maxLines int) string {
-	if len(lines) == 0 {
-		return "ok"
-	}
-	if len(lines) <= maxLines {
-		return strings.Join(lines, "\n")
-	}
-	selected := append([]string{}, lines[:maxLines]...)
-	selected = append(selected, fmt.Sprintf("... +%d more lines", len(lines)-maxLines))
-	return strings.Join(selected, "\n")
 }

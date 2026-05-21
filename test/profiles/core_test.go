@@ -10,8 +10,8 @@ import (
 
 func TestBuiltInProfiles(t *testing.T) {
 	list := profiles.Builtins(3)
-	if len(list) != 10 {
-		t.Fatalf("expected 10 profiles, got %d", len(list))
+	if len(list) != 15 {
+		t.Fatalf("expected 15 profiles, got %d", len(list))
 	}
 
 	gitStatus := testutil.FindProfile(t, list, "git-status")
@@ -104,6 +104,67 @@ func TestBuiltInProfiles(t *testing.T) {
 	goBuildStream.ConsumeStdout([]byte("noise\n"))
 	if got := goBuildStream.Result(); got != "error: bad" {
 		t.Fatalf("unexpected go-build stream output: %q", got)
+	}
+
+	pytest := testutil.FindProfile(t, list, "pytest")
+	if !pytest.Match(engine.Invocation{Display: []string{"pytest"}}) || !pytest.Match(engine.Invocation{Display: []string{"uv", "run", "pytest"}}) {
+		t.Fatal("pytest profile should match direct and uv-wrapped invocations")
+	}
+	if pytest.Match(engine.Invocation{Display: []string{"python", "-m", "unittest"}}) {
+		t.Fatal("pytest profile should not match unittest")
+	}
+	if got := pytest.Render(engine.Invocation{}, engine.Execution{Stdout: "collected 1 item\n\n============================== 1 passed in 0.03s ==============================\n"}); got == "" {
+		t.Fatal("expected pytest render output")
+	}
+	if pytest.StreamPreference != engine.StreamStdoutFirst || pytest.StreamRender == nil {
+		t.Fatalf("unexpected pytest stream metadata: %#v", pytest)
+	}
+
+	cargoTest := testutil.FindProfile(t, list, "cargo-test")
+	if !cargoTest.Match(engine.Invocation{Display: []string{"cargo", "test"}}) {
+		t.Fatal("cargo-test should match cargo test")
+	}
+	if cargoTest.Match(engine.Invocation{Display: []string{"cargo", "build"}}) {
+		t.Fatal("cargo-test should not match cargo build")
+	}
+	if got := cargoTest.Render(engine.Invocation{}, engine.Execution{Stdout: "running 1 test\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out\n"}); got == "" {
+		t.Fatal("expected cargo-test render output")
+	}
+	if cargoTest.StreamPreference != engine.StreamStdoutFirst || cargoTest.StreamRender == nil {
+		t.Fatalf("unexpected cargo-test stream metadata: %#v", cargoTest)
+	}
+
+	cargoBuild := testutil.FindProfile(t, list, "cargo-build")
+	if !cargoBuild.Match(engine.Invocation{Display: []string{"cargo", "build"}}) || !cargoBuild.Match(engine.Invocation{Display: []string{"cargo", "clippy"}}) {
+		t.Fatal("cargo-build should match cargo build and clippy")
+	}
+	if got := cargoBuild.Render(engine.Invocation{}, engine.Execution{Stderr: "error[E0432]: unresolved import `x`\n--> src/lib.rs:1:1\n"}); got == "" {
+		t.Fatal("expected cargo-build render output")
+	}
+	if cargoBuild.StreamPreference != engine.StreamStderrFirst || cargoBuild.StreamRender == nil {
+		t.Fatalf("unexpected cargo-build stream metadata: %#v", cargoBuild)
+	}
+
+	dockerPS := testutil.FindProfile(t, list, "docker-ps")
+	if !dockerPS.Match(engine.Invocation{Display: []string{"docker", "ps"}}) || !dockerPS.Match(engine.Invocation{Display: []string{"docker", "compose", "ps"}}) {
+		t.Fatal("docker-ps should match docker ps and docker compose ps")
+	}
+	if got := dockerPS.Render(engine.Invocation{}, engine.Execution{Stdout: "api\tUp 2m\tapp\n"}); got == "" {
+		t.Fatal("expected docker-ps render output")
+	}
+	if dockerPS.StreamPreference != engine.StreamStdoutOnly || dockerPS.StreamRender == nil {
+		t.Fatalf("unexpected docker-ps stream metadata: %#v", dockerPS)
+	}
+
+	dockerLogs := testutil.FindProfile(t, list, "docker-logs")
+	if !dockerLogs.Match(engine.Invocation{Display: []string{"docker", "logs", "api"}}) || !dockerLogs.Match(engine.Invocation{Display: []string{"docker", "compose", "logs", "api"}}) {
+		t.Fatal("docker-logs should match docker logs and docker compose logs")
+	}
+	if got := dockerLogs.Render(engine.Invocation{}, engine.Execution{Stdout: "api | ERROR failed\n"}); got == "" {
+		t.Fatal("expected docker-logs render output")
+	}
+	if dockerLogs.StreamPreference != engine.StreamStdoutFirst || dockerLogs.StreamRender == nil {
+		t.Fatalf("unexpected docker-logs stream metadata: %#v", dockerLogs)
 	}
 
 	genericTest := testutil.FindProfile(t, list, "generic-test")
