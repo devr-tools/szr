@@ -8,7 +8,7 @@ The design bias remains the same: deterministic, parser-first, low-latency compr
 
 - Keep wrapper overhead under `10ms` p50 and `35ms` p95 for common commands.
 - Reach `60%+` token savings across mixed usage and `80%+` on noisy workloads like tests, logs, and diffs.
-- Push specialized-profile coverage above `75%` of commands seen in `szr gain`.
+- Push specialized-profile coverage above `75%` of commands seen in `szr spread`.
 - Keep low-confidence fallbacks rare enough that `proxy` and tee files are exception paths, not routine escapes.
 - Make every compression decision inspectable so users and agents can trust what was dropped.
 
@@ -34,7 +34,7 @@ The design bias remains the same: deterministic, parser-first, low-latency compr
 
 - Add a benchmark harness for profile latency, output size reduction, and token reduction.
 - Add golden fixtures for representative command classes: clean pass, noisy fail, giant diff, repeated logs, compiler output, and mixed stdout/stderr failures.
-- Extend `szr gain` with per-profile savings, p50/p95 duration, fallback rate, tee rate, and failure rate.
+- Extend `szr spread` with per-profile savings, p50/p95 duration, fallback rate, tee rate, and failure rate.
 - Add `szr bench` so profile changes can be compared against stable fixtures.
 - Add a compression quality score that flags suspicious cases such as zero actionable lines, missing failure identifiers, or excessive fallback usage.
 

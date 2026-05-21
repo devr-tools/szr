@@ -211,7 +211,7 @@ echo "file.go:20:match two"
 	}
 }
 
-func TestCLIErrorsAndGain(t *testing.T) {
+func TestCLIErrorsAndSpread(t *testing.T) {
 	app := newTestApp(t)
 	binDir := t.TempDir()
 	t.Setenv("PATH", binDir)
@@ -243,7 +243,7 @@ echo "file.go:12:match one"
 	}{
 		{"proxy missing", []string{"proxy"}, 2, nil, []string{"missing command for proxy"}},
 		{"explain missing", []string{"explain"}, 2, nil, []string{"explain requires a command"}},
-		{"gain bad flag", []string{"gain", "--bad"}, 2, nil, []string{"unknown gain flag"}},
+		{"spread bad flag", []string{"spread", "--bad"}, 2, nil, []string{"unknown spread flag"}},
 		{"read missing", []string{"read"}, 2, nil, []string{"read requires a file"}},
 		{"read missing level", []string{"read", "-l"}, 2, nil, []string{"missing value for --level"}},
 		{"read missing max-lines", []string{"read", "--max-lines"}, 2, nil, []string{"missing value for --max-lines"}},
@@ -280,29 +280,29 @@ echo "file.go:12:match one"
 		})
 	}
 
-	code, stdout, stderr := runApp(t, app, "gain")
+	code, stdout, stderr := runApp(t, app, "spread")
 	if code != 0 || !strings.Contains(stdout, "commands:") || stderr != "" {
-		t.Fatalf("unexpected gain output stdout=%q stderr=%q code=%d", stdout, stderr, code)
+		t.Fatalf("unexpected spread output stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
 
-	code, stdout, stderr = runApp(t, app, "gain", "--history")
+	code, stdout, stderr = runApp(t, app, "spread", "--history")
 	if code != 0 || !strings.Contains(stdout, "recent:") {
-		t.Fatalf("unexpected gain history output stdout=%q stderr=%q code=%d", stdout, stderr, code)
+		t.Fatalf("unexpected spread history output stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
 
-	code, stdout, stderr = runApp(t, app, "gain", "--json")
+	code, stdout, stderr = runApp(t, app, "spread", "--json")
 	if code != 0 || stderr != "" {
-		t.Fatalf("unexpected gain json output stdout=%q stderr=%q code=%d", stdout, stderr, code)
+		t.Fatalf("unexpected spread json output stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
 	var payload history.Summary
 	if err := json.Unmarshal([]byte(stdout), &payload); err != nil || payload.Commands == 0 {
-		t.Fatalf("unexpected gain json payload: %#v err=%v", payload, err)
+		t.Fatalf("unexpected spread json payload: %#v err=%v", payload, err)
 	}
 
 	emptyApp := newTestApp(t)
-	code, stdout, stderr = runApp(t, emptyApp, "gain")
+	code, stdout, stderr = runApp(t, emptyApp, "spread")
 	if code != 0 || strings.TrimSpace(stdout) != "no tracked commands yet" || stderr != "" {
-		t.Fatalf("unexpected empty gain output stdout=%q stderr=%q code=%d", stdout, stderr, code)
+		t.Fatalf("unexpected empty spread output stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
 
 	badRoot := t.TempDir()
@@ -318,8 +318,13 @@ echo "file.go:12:match one"
 	}
 	badStore := history.New(badRoot)
 	badApp := cli.NewWithDependencies("test", config.Default(), badPaths, badStore, appEngineForCoverage(t, badPaths))
-	code, stdout, stderr = runApp(t, badApp, "gain")
+	code, stdout, stderr = runApp(t, badApp, "spread")
 	if code != 1 || stdout != "" || !strings.Contains(stderr, "failed to read history") {
-		t.Fatalf("unexpected bad gain output stdout=%q stderr=%q code=%d", stdout, stderr, code)
+		t.Fatalf("unexpected bad spread output stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+
+	code, stdout, stderr = runApp(t, app, "gain")
+	if code != 0 || !strings.Contains(stdout, "commands:") || stderr != "" {
+		t.Fatalf("unexpected gain alias output stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
 }

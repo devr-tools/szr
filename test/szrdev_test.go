@@ -5,26 +5,28 @@ import (
 	"strings"
 	"testing"
 
-	szrpkg "szr/pkg/szr"
+	"szr/internal/szrdev"
 )
 
-func TestSZRRun(t *testing.T) {
+func TestSZRDevRun(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 
 	var code int
 	stdout, stderr := captureOutput(t, func() {
-		code = szrpkg.Run(context.Background(), "1.2.3", []string{"--version"})
+		code = szrdev.Run(context.Background(), []string{"--version"})
 	})
 	if code != 0 {
 		t.Fatalf("unexpected code: %d", code)
 	}
-	if !strings.Contains(stdout, "szr 1.2.3") || stderr != "" {
+	if !strings.Contains(stdout, "szr dev") || stderr != "" {
 		t.Fatalf("unexpected output stdout=%q stderr=%q", stdout, stderr)
 	}
 }
 
-func TestSZRAppRun(t *testing.T) {
-	app := szrpkg.NewWithCLI(newTestApp(t))
+func TestSZRDevAppRun(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	app := szrdev.New()
 	var code int
 	stdout, stderr := captureOutput(t, func() {
 		code = app.Run(context.Background(), []string{"--version"})
@@ -32,7 +34,7 @@ func TestSZRAppRun(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("unexpected code: %d", code)
 	}
-	if !strings.Contains(stdout, "szr test") || stderr != "" {
+	if !strings.Contains(stdout, "szr dev") || stderr != "" {
 		t.Fatalf("unexpected output stdout=%q stderr=%q", stdout, stderr)
 	}
 }

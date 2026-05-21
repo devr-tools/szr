@@ -13,24 +13,28 @@
 ## Current structure
 
 ```text
+pkg/szr
 cmd/szr
+cmd/szr-dev
 internal/cli
 internal/config
 internal/engine
 internal/filters
 internal/history
 internal/profiles
+internal/szrdev
 ```
 
 ## Execution flow
 
-1. The CLI parses global flags and dispatches a subcommand.
-2. External commands are converted into an `engine.Invocation`.
-3. The profile registry matches the invocation.
-4. The engine optionally rewrites the command for a better machine-readable form.
-5. The command runs and the selected renderer compresses the output.
-6. A local history record is appended for `szr gain`.
-7. On failures, raw output can be tee'd into the local data directory.
+1. `cmd/szr/main.go` calls the public `pkg/szr` package.
+2. The CLI parses global flags and dispatches a subcommand.
+3. External commands are converted into an `engine.Invocation`.
+4. The profile registry matches the invocation.
+5. The engine optionally rewrites the command for a better machine-readable form.
+6. The command runs and the selected renderer compresses the output.
+7. A local history record is appended for `szr spread`.
+8. On failures, raw output can be tee'd into the local data directory.
 
 ## Built-in profile strategy
 
@@ -47,6 +51,7 @@ internal/profiles
 - Local file helpers like `read`, `json`, and `log` are implemented directly in Go instead of always shelling out.
 - The analytics store is deliberately simple JSONL first; it can be swapped for SQLite later without changing the CLI surface.
 - `szr explain` makes the filter decision visible, which is useful when the registry grows.
+- `pkg/szr` keeps the public embedding surface explicit, while `internal/szrdev` contains developer-only launcher wiring.
 
 ## Next steps
 

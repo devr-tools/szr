@@ -15,7 +15,7 @@ The first working scaffold is in place:
 - `szr git status`, `szr git log`, and `szr git diff` use dedicated profiles.
 - `szr go test` forces `-json` and summarizes package-level failures.
 - `szr read`, `szr grep`, `szr json`, `szr log`, and `szr ls` are implemented directly in Go.
-- `szr gain` tracks token savings in local JSONL history.
+- `szr spread` tracks token savings in local JSONL history.
 - `szr explain <cmd...>` shows which profile the engine would use and why.
 
 ## Why build this in Go
@@ -33,13 +33,14 @@ szr git diff
 szr go test ./...
 szr grep "TODO" .
 szr read internal/cli/app.go --level aggressive
-szr gain --history
+szr spread --history
 szr explain go test ./...
 ```
 
 ## Local Development
 
 The test suite now lives under `test/`, with coverage enforced against `./internal/...`.
+The public Go package lives under `pkg/szr`, while `cmd/szr-dev` is the developer-only launcher path.
 
 ```bash
 make test
@@ -52,12 +53,15 @@ make prepush
 
 The codebase is organized around a small execution engine:
 
-- `cmd/szr`: entrypoint
+- `pkg/szr`: public package entrypoint for embedding or thin launchers
+- `cmd/szr`: binary wrapper with `main.go` only
+- `cmd/szr-dev`: developer-only binary wrapper
 - `internal/cli`: subcommand parsing and dispatch
 - `internal/engine`: profile matching, command execution, tee handling
 - `internal/profiles`: built-in profile registry
 - `internal/filters`: text, JSON, grep, git, and test compaction logic
-- `internal/history`: local tracking for `szr gain`
+- `internal/history`: local tracking for `szr spread`
+- `internal/szrdev`: developer-only launcher wiring
 - `internal/config`: config and runtime path resolution
 
 More detail lives in [docs/ARCHITECTURE.md](/Users/alex/Documents/GitHub/szr/docs/ARCHITECTURE.md).

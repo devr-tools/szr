@@ -4,12 +4,11 @@ import (
 	"context"
 	"os"
 
-	"szr/internal/cli"
+	szrpkg "szr/pkg/szr"
 )
 
 var version = "dev"
 
 func main() {
-	app := cli.New(version)
-	os.Exit(app.Run(context.Background(), os.Args[1:]))
+	os.Exit(szrpkg.Run(context.Background(), version, os.Args[1:]))
 }

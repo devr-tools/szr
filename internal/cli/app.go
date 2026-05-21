@@ -75,8 +75,8 @@ func (a *App) Run(ctx context.Context, args []string) int {
 	case "--version", "version":
 		fmt.Println("szr", a.version)
 		return 0
-	case "gain":
-		return a.runGain(rest[1:])
+	case "spread", "gain":
+		return a.runSpread(rest[1:])
 	case "profiles":
 		return a.runProfiles()
 	case "doctor":

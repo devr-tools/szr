@@ -10,12 +10,12 @@ Usage:
   szr go test ./...
   szr grep "pattern" .
   szr read file.go --level aggressive
-  szr gain --history
+  szr spread --history
   szr proxy <cmd...>
 
 Core commands:
   git, go, run, test, summary, proxy, explain
   ls, read, grep, json, log
-  gain, profiles, doctor
+  spread, profiles, doctor
 ` + "\n")
 }

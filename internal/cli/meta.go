@@ -10,7 +10,7 @@ import (
 	"szr/internal/history"
 )
 
-func (a *App) runGain(args []string) int {
+func (a *App) runSpread(args []string) int {
 	showHistory := false
 	asJSON := false
 	for _, arg := range args {
@@ -20,7 +20,7 @@ func (a *App) runGain(args []string) int {
 		case "--json":
 			asJSON = true
 		default:
-			fmt.Fprintf(os.Stderr, "szr: unknown gain flag %s\n", arg)
+			fmt.Fprintf(os.Stderr, "szr: unknown spread flag %s\n", arg)
 			return 2
 		}
 	}
