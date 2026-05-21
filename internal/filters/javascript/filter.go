@@ -84,8 +84,8 @@ func SummarizeJSTooling(input string, maxLines int) string {
 		}
 	}
 
-	lines = uniqueStrings(lines)
-	summaries = uniqueStrings(summaries)
+	lines = uniqueStrings(shared.FoldConsecutiveLines(lines))
+	summaries = uniqueStrings(shared.FoldConsecutiveLines(summaries))
 	if len(lines) == 0 && len(summaries) == 0 {
 		return CompactLines(clean, maxLines)
 	}
@@ -213,7 +213,8 @@ func jsSuiteDetails(suite jsTestSuite) []string {
 }
 
 func failureHighlights(message string) []string {
-	interesting := []string{}
+	roots := []string{}
+	frames := []string{}
 	for _, line := range nonEmptyLines(message) {
 		trimmed := strings.TrimSpace(line)
 		switch {
@@ -223,22 +224,25 @@ func failureHighlights(message string) []string {
 			strings.Contains(trimmed, "AssertionError"),
 			strings.Contains(trimmed, "Error:"),
 			strings.Contains(trimmed, ".test."),
-			strings.Contains(trimmed, ".spec."),
-			strings.HasPrefix(trimmed, "at "):
-			interesting = append(interesting, trimmed)
+			strings.Contains(trimmed, ".spec."):
+			roots = append(roots, trimmed)
+		case strings.HasPrefix(trimmed, "at "):
+			frames = append(frames, trimmed)
 		}
 	}
 
-	if len(interesting) == 0 {
+	if len(roots) == 0 && len(frames) == 0 {
+		interesting := []string{}
 		for _, line := range nonEmptyLines(message) {
 			interesting = append(interesting, strings.TrimSpace(line))
 			if len(interesting) == 2 {
 				break
 			}
 		}
+		return uniqueStrings(shared.FoldConsecutiveLines(interesting))
 	}
 
-	return uniqueStrings(interesting)
+	return uniqueStrings(append(shared.FoldConsecutiveLines(roots), shared.SelectUniqueAnchoredLines(frames, 2)...))
 }
 
 func summarizeJSTestText(input string, maxLines int) string {

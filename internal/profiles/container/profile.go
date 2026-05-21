@@ -41,9 +41,9 @@ func Profiles(maxLines int) []engine.Profile {
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return containerfilter.SummarizeDockerPS(exec.Stdout, maxLines)
 			},
-			StreamRender: func(_ engine.Invocation, _ engine.OutputBudget) engine.StreamReducer {
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
 				return shared.NewBufferedTextReducer(true, false, func(input string) string {
-					return containerfilter.SummarizeDockerPS(input, maxLines)
+					return containerfilter.SummarizeDockerPS(input, budget.MaxLines)
 				})
 			},
 			ParseBytes: profilekit.ParseStdout,
@@ -84,9 +84,9 @@ func Profiles(maxLines int) []engine.Profile {
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return containerfilter.SummarizeDockerLogs(exec.Stdout+"\n"+exec.Stderr, maxLines)
 			},
-			StreamRender: func(_ engine.Invocation, _ engine.OutputBudget) engine.StreamReducer {
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
 				return shared.NewBufferedTextReducer(true, true, func(input string) string {
-					return containerfilter.SummarizeDockerLogs(input, maxLines)
+					return containerfilter.SummarizeDockerLogs(input, budget.MaxLines)
 				})
 			},
 			ParseBytes: profilekit.ParseCombined,

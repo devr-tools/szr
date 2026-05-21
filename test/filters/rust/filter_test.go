@@ -63,3 +63,21 @@ func TestSummarizeCargoBuild(t *testing.T) {
 		}
 	}
 }
+
+func TestSummarizeCargoBuildFoldsRepeatedHints(t *testing.T) {
+	input := strings.Join([]string{
+		"error[E0432]: unresolved import `missing::Thing`",
+		"--> src/lib.rs:4:5",
+		"help: consider importing this module instead",
+		"help: consider importing this module instead",
+		"note: `#[warn(unused_imports)]` on by default",
+	}, "\n")
+
+	got := rustfilter.SummarizeCargoBuild(input, 6)
+	if !strings.Contains(got, "help: consider importing this module instead (x2)") {
+		t.Fatalf("expected folded cargo hints, got %q", got)
+	}
+	if strings.Count(got, "--> src/lib.rs:4:5") != 1 {
+		t.Fatalf("expected unique cargo stack anchor, got %q", got)
+	}
+}

@@ -98,3 +98,22 @@ func TestSummarizePythonTooling(t *testing.T) {
 		}
 	}
 }
+
+func TestSummarizePytestFoldsRepeatedFrames(t *testing.T) {
+	input := strings.Join([]string{
+		"collected 1 item",
+		"FAILED tests/test_api.py::test_call - RuntimeError: boom",
+		"RuntimeError: boom",
+		"tests/test_api.py:14: RuntimeError",
+		"tests/test_api.py:14: RuntimeError",
+		">       available fixtures: cache, capfd",
+	}, "\n")
+
+	got := pyfilter.SummarizePytest(input, 6)
+	if strings.Count(got, "tests/test_api.py:14: RuntimeError") != 1 {
+		t.Fatalf("expected folded pytest stack anchors, got %q", got)
+	}
+	if !strings.Contains(got, "available fixtures: cache, capfd") {
+		t.Fatalf("expected fixture hint retention, got %q", got)
+	}
+}

@@ -35,12 +35,21 @@ func SummarizeCTest(input string, maxLines int) string {
 		}
 	}
 
-	lines = shared.UniqueStrings(lines)
-	summaries = shared.UniqueStrings(summaries)
+	lines = shared.UniqueStrings(shared.FoldConsecutiveLines(lines))
+	summaries = shared.UniqueStrings(shared.FoldConsecutiveLines(summaries))
 	if len(lines) == 0 && len(summaries) == 0 {
 		return shared.SummarizeGenericFailure(clean, maxLines)
 	}
-	return shared.JoinLimitedLines(append(lines, summaries...), maxLines)
+	stackLines := []string{}
+	rootLines := []string{}
+	for _, line := range lines {
+		if shared.DiagnosticAnchor(line) != "" {
+			stackLines = append(stackLines, line)
+			continue
+		}
+		rootLines = append(rootLines, line)
+	}
+	return shared.JoinLimitedLines(append(append(rootLines, shared.SelectUniqueAnchoredLines(stackLines, maxLines/3+1)...), summaries...), maxLines)
 }
 
 func SummarizeClangTooling(input string, maxLines int) string {
@@ -75,10 +84,19 @@ func SummarizeClangTooling(input string, maxLines int) string {
 		}
 	}
 
-	lines = shared.UniqueStrings(lines)
-	summaries = shared.UniqueStrings(summaries)
+	lines = shared.UniqueStrings(shared.FoldConsecutiveLines(lines))
+	summaries = shared.UniqueStrings(shared.FoldConsecutiveLines(summaries))
 	if len(lines) == 0 && len(summaries) == 0 {
 		return shared.SummarizeGenericFailure(clean, maxLines)
 	}
-	return shared.JoinLimitedLines(append(lines, summaries...), maxLines)
+	stackLines := []string{}
+	rootLines := []string{}
+	for _, line := range lines {
+		if shared.DiagnosticAnchor(line) != "" {
+			stackLines = append(stackLines, line)
+			continue
+		}
+		rootLines = append(rootLines, line)
+	}
+	return shared.JoinLimitedLines(append(append(rootLines, shared.SelectUniqueAnchoredLines(stackLines, maxLines/3+1)...), summaries...), maxLines)
 }

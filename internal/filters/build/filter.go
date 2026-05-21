@@ -55,13 +55,24 @@ func SummarizeBuildSystem(input string, maxLines int) string {
 		}
 	}
 
-	lines = shared.UniqueStrings(lines)
-	summaries = shared.UniqueStrings(summaries)
+	lines = shared.UniqueStrings(shared.FoldConsecutiveLines(lines))
+	summaries = shared.UniqueStrings(shared.FoldConsecutiveLines(summaries))
 	if len(lines) == 0 && len(summaries) == 0 {
 		return shared.SummarizeGenericFailure(clean, maxLines)
 	}
 
-	out := append([]string{}, lines...)
+	anchors := []string{}
+	other := []string{}
+	for _, line := range lines {
+		if shared.DiagnosticAnchor(line) != "" {
+			anchors = append(anchors, line)
+			continue
+		}
+		other = append(other, line)
+	}
+
+	out := append([]string{}, other...)
+	out = append(out, shared.SelectUniqueAnchoredLines(anchors, maxLines/3+1)...)
 	out = append(out, summaries...)
 	return shared.JoinLimitedLines(out, maxLines)
 }

@@ -51,9 +51,9 @@ func SummarizeCargoTest(input string, maxLines int) string {
 		}
 	}
 
-	summaries = uniqueStrings(summaries)
-	failures = uniqueStrings(failures)
-	details = uniqueStrings(details)
+	summaries = uniqueStrings(shared.FoldConsecutiveLines(summaries))
+	failures = uniqueStrings(shared.FoldConsecutiveLines(failures))
+	details = uniqueStrings(shared.FoldConsecutiveLines(details))
 
 	if len(failures) == 0 && len(details) == 0 {
 		if len(summaries) > 0 {
@@ -62,9 +62,25 @@ func SummarizeCargoTest(input string, maxLines int) string {
 		return shared.CompactLines(input, maxLines)
 	}
 
+	stackDetails := []string{}
+	hints := []string{}
+	rootDetails := []string{}
+	for _, line := range details {
+		switch {
+		case strings.HasPrefix(line, "= help:"), strings.HasPrefix(line, "= note:"), strings.HasPrefix(line, "help:"), strings.HasPrefix(line, "note:"):
+			hints = append(hints, line)
+		case shared.DiagnosticAnchor(line) != "" || strings.HasPrefix(line, "--> "):
+			stackDetails = append(stackDetails, line)
+		default:
+			rootDetails = append(rootDetails, line)
+		}
+	}
+
 	out := append([]string{}, summaries...)
 	out = append(out, failures...)
-	out = append(out, details...)
+	out = append(out, rootDetails...)
+	out = append(out, shared.SelectUniqueAnchoredLines(stackDetails, maxLines/3+1)...)
+	out = append(out, hints...)
 	return joinLimitedLines(out, maxLines)
 }
 
@@ -96,9 +112,9 @@ func SummarizeCargoBuild(input string, maxLines int) string {
 		}
 	}
 
-	summaries = uniqueStrings(summaries)
-	diagnostics = uniqueStrings(diagnostics)
-	details = uniqueStrings(details)
+	summaries = uniqueStrings(shared.FoldConsecutiveLines(summaries))
+	diagnostics = uniqueStrings(shared.FoldConsecutiveLines(diagnostics))
+	details = uniqueStrings(shared.FoldConsecutiveLines(details))
 
 	if len(diagnostics) == 0 && len(details) == 0 {
 		if len(summaries) > 0 {
@@ -107,8 +123,24 @@ func SummarizeCargoBuild(input string, maxLines int) string {
 		return shared.CompactLines(input, maxLines)
 	}
 
+	stackDetails := []string{}
+	hints := []string{}
+	rootDetails := []string{}
+	for _, line := range details {
+		switch {
+		case strings.HasPrefix(line, "= help:"), strings.HasPrefix(line, "= note:"), strings.HasPrefix(line, "help:"), strings.HasPrefix(line, "note:"):
+			hints = append(hints, line)
+		case shared.DiagnosticAnchor(line) != "" || strings.HasPrefix(line, "--> "):
+			stackDetails = append(stackDetails, line)
+		default:
+			rootDetails = append(rootDetails, line)
+		}
+	}
+
 	out := append([]string{}, diagnostics...)
-	out = append(out, details...)
+	out = append(out, rootDetails...)
+	out = append(out, shared.SelectUniqueAnchoredLines(stackDetails, maxLines/3+1)...)
+	out = append(out, hints...)
 	out = append(out, summaries...)
 	return joinLimitedLines(out, maxLines)
 }

@@ -17,9 +17,9 @@ func SummarizePytest(input string, maxLines int) string {
 		return "ok"
 	}
 
-	summaries := uniqueStrings(collectPytestSummaries(lines))
-	failures := uniqueStrings(collectPytestShortFailures(lines))
-	details := uniqueStrings(collectPytestDetails(lines))
+	summaries := uniqueStrings(shared.FoldConsecutiveLines(collectPytestSummaries(lines)))
+	failures := uniqueStrings(shared.FoldConsecutiveLines(collectPytestShortFailures(lines)))
+	details := uniqueStrings(shared.FoldConsecutiveLines(collectPytestDetails(lines)))
 
 	if len(failures) == 0 && len(details) == 0 {
 		if len(summaries) > 0 {
@@ -28,13 +28,28 @@ func SummarizePytest(input string, maxLines int) string {
 		return shared.CompactLines(clean, maxLines)
 	}
 
+	rootDetails := []string{}
+	stackDetails := []string{}
+	hintDetails := []string{}
+	for _, line := range shared.FoldConsecutiveLines(details) {
+		switch {
+		case strings.Contains(line, "available fixtures"),
+			strings.Contains(strings.ToLower(line), "did you mean"):
+			hintDetails = append(hintDetails, clip(line, 160))
+		case shared.DiagnosticAnchor(line) != "":
+			stackDetails = append(stackDetails, clip(line, 160))
+		default:
+			rootDetails = append(rootDetails, clip(line, 160))
+		}
+	}
+
 	out := append([]string{}, summaries...)
-	for _, line := range failures {
+	for _, line := range shared.FoldConsecutiveLines(failures) {
 		out = append(out, clip(line, 160))
 	}
-	for _, line := range details {
-		out = append(out, clip(line, 160))
-	}
+	out = append(out, rootDetails...)
+	out = append(out, shared.SelectUniqueAnchoredLines(stackDetails, maxLines/3+1)...)
+	out = append(out, hintDetails...)
 	return joinLimitedLines(out, maxLines)
 }
 
@@ -78,8 +93,8 @@ func SummarizePythonTooling(input string, maxLines int) string {
 		}
 	}
 
-	lines = uniqueStrings(lines)
-	summaries = uniqueStrings(summaries)
+	lines = uniqueStrings(shared.FoldConsecutiveLines(lines))
+	summaries = uniqueStrings(shared.FoldConsecutiveLines(summaries))
 	if len(lines) == 0 && len(summaries) == 0 {
 		return shared.SummarizeGenericFailure(clean, maxLines)
 	}

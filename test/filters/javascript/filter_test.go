@@ -169,3 +169,14 @@ func TestSummarizeJSTooling(t *testing.T) {
 		}
 	}
 }
+
+func TestSummarizeJSTestFoldsRepeatedFrames(t *testing.T) {
+	report := `{"numPassedTestSuites":0,"numFailedTestSuites":1,"numPassedTests":0,"numFailedTests":1,"numPendingTests":0,"numTodoTests":0,"numTotalTests":1,"success":false,"testResults":[{"name":"src/math.test.ts","status":"failed","message":"","assertionResults":[{"ancestorTitles":["math"],"fullName":"math subtracts","title":"subtracts","status":"failed","failureMessages":["Error: expect(received).toBe(expected)\nExpected: 2\nReceived: 3\nat src/math.test.ts:12:3\nat src/math.test.ts:12:3\nat src/other.test.ts:9:1"]}]}]}`
+	got := jsfilter.SummarizeJSTest(report, 8)
+	if strings.Count(got, "at src/math.test.ts:12:3") != 1 {
+		t.Fatalf("expected folded JS stack anchors, got %q", got)
+	}
+	if !strings.Contains(got, "at src/other.test.ts:9:1") {
+		t.Fatalf("expected secondary JS frame retention, got %q", got)
+	}
+}

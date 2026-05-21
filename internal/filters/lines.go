@@ -130,6 +130,88 @@ func JoinLimitedLines(lines []string, maxLines int) string {
 	return joinLimitedLines(lines, maxLines)
 }
 
+func FoldConsecutiveLines(lines []string) []string {
+	if len(lines) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(lines))
+	current := strings.TrimSpace(lines[0])
+	count := 0
+	flush := func() {
+		if current == "" || count == 0 {
+			return
+		}
+		if count > 1 {
+			out = append(out, fmt.Sprintf("%s (x%d)", current, count))
+			return
+		}
+		out = append(out, current)
+	}
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		if trimmed == current {
+			count++
+			continue
+		}
+		flush()
+		current = trimmed
+		count = 1
+	}
+	flush()
+	return out
+}
+
+func SelectUniqueAnchoredLines(lines []string, maxFrames int) []string {
+	if maxFrames <= 0 {
+		return nil
+	}
+	out := []string{}
+	seen := map[string]struct{}{}
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		key := DiagnosticAnchor(trimmed)
+		if key == "" {
+			key = trimmed
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, trimmed)
+		if len(out) >= maxFrames {
+			break
+		}
+	}
+	return out
+}
+
+func DiagnosticAnchor(line string) string {
+	lower := strings.ToLower(line)
+	for _, ext := range []string{".go:", ".py:", ".rs:", ".ts:", ".tsx:", ".js:", ".jsx:", ".java:", ".c:", ".cc:", ".cpp:", ".h:", ".hpp:"} {
+		idx := strings.Index(lower, ext)
+		if idx < 0 {
+			continue
+		}
+		start := idx
+		for start > 0 && !strings.ContainsRune(" \t([{\"'", rune(line[start-1])) {
+			start--
+		}
+		end := idx + len(ext)
+		for end < len(line) && !strings.ContainsRune(" \t)]}\"'", rune(line[end])) {
+			end++
+		}
+		return line[start:end]
+	}
+	return ""
+}
+
 type CompactLineReducer struct {
 	scanner     lineScanner
 	maxLines    int

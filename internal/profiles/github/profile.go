@@ -27,9 +27,9 @@ func Profiles(maxLines int) []engine.Profile {
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return ghfilter.SummarizePRView(exec.Stdout, maxLines)
 			},
-			StreamRender: func(_ engine.Invocation, _ engine.OutputBudget) engine.StreamReducer {
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
 				return newBufferedStdoutReducer(func(input string) string {
-					return ghfilter.SummarizePRView(input, maxLines)
+					return ghfilter.SummarizePRView(input, budget.MaxLines)
 				})
 			},
 			ParseBytes: profilekit.ParseStdout,
@@ -54,9 +54,9 @@ func Profiles(maxLines int) []engine.Profile {
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return ghfilter.SummarizeRunLog(exec.Stdout+"\n"+exec.Stderr, maxLines)
 			},
-			StreamRender: func(_ engine.Invocation, _ engine.OutputBudget) engine.StreamReducer {
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
 				return newBufferedCombinedReducer(func(input string) string {
-					return ghfilter.SummarizeRunLog(input, maxLines)
+					return ghfilter.SummarizeRunLog(input, budget.MaxLines)
 				})
 			},
 			ParseBytes: profilekit.ParseCombined,
@@ -84,9 +84,9 @@ func Profiles(maxLines int) []engine.Profile {
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return ghfilter.SummarizeRunView(exec.Stdout+"\n"+exec.Stderr, maxLines)
 			},
-			StreamRender: func(_ engine.Invocation, _ engine.OutputBudget) engine.StreamReducer {
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
 				return newBufferedCombinedReducer(func(input string) string {
-					return ghfilter.SummarizeRunView(input, maxLines)
+					return ghfilter.SummarizeRunView(input, budget.MaxLines)
 				})
 			},
 			ParseBytes: profilekit.ParseCombined,

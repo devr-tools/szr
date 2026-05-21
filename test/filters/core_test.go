@@ -19,6 +19,20 @@ func TestLineHelpers(t *testing.T) {
 	if deduped != "a (x2)\nb\n... +1 more unique lines" {
 		t.Fatalf("unexpected dedupe: %q", deduped)
 	}
+
+	folded := filters.FoldConsecutiveLines([]string{"warn", "warn", "error", "error", "error", "hint"})
+	if got := strings.Join(folded, ","); got != "warn (x2),error (x3),hint" {
+		t.Fatalf("unexpected folded lines: %q", got)
+	}
+
+	anchors := filters.SelectUniqueAnchoredLines([]string{
+		"at src/app.ts:10:2",
+		"at src/app.ts:10:2",
+		"at src/other.ts:4:1",
+	}, 3)
+	if got := strings.Join(anchors, ","); got != "at src/app.ts:10:2,at src/other.ts:4:1" {
+		t.Fatalf("unexpected anchored lines: %q", got)
+	}
 }
 
 func TestFailureHelpers(t *testing.T) {

@@ -34,9 +34,9 @@ func Profiles(maxLines int) []engine.Profile {
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return jsfilter.SummarizeJSTest(exec.Stdout+"\n"+exec.Stderr, maxLines)
 			},
-			StreamRender: func(_ engine.Invocation, _ engine.OutputBudget) engine.StreamReducer {
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
 				return shared.NewBufferedTextReducer(true, true, func(input string) string {
-					return jsfilter.SummarizeJSTest(input, maxLines)
+					return jsfilter.SummarizeJSTest(input, budget.MaxLines)
 				})
 			},
 			ParseBytes: profilekit.ParseCombined,
@@ -61,9 +61,9 @@ func Profiles(maxLines int) []engine.Profile {
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return jsfilter.SummarizeJSTooling(exec.Stdout+"\n"+exec.Stderr, maxLines)
 			},
-			StreamRender: func(_ engine.Invocation, _ engine.OutputBudget) engine.StreamReducer {
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
 				return shared.NewBufferedTextReducer(true, true, func(input string) string {
-					return jsfilter.SummarizeJSTooling(input, maxLines)
+					return jsfilter.SummarizeJSTooling(input, budget.MaxLines)
 				})
 			},
 			ParseBytes: profilekit.ParseCombined,
@@ -91,9 +91,9 @@ func Profiles(maxLines int) []engine.Profile {
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return jsfilter.SummarizeJSTest(exec.Stdout+"\n"+exec.Stderr, maxLines)
 			},
-			StreamRender: func(_ engine.Invocation, _ engine.OutputBudget) engine.StreamReducer {
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
 				return shared.NewBufferedTextReducer(true, true, func(input string) string {
-					return jsfilter.SummarizeJSTest(input, maxLines)
+					return jsfilter.SummarizeJSTest(input, budget.MaxLines)
 				})
 			},
 			ParseBytes: profilekit.ParseCombined,
@@ -121,9 +121,9 @@ func Profiles(maxLines int) []engine.Profile {
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return jsfilter.SummarizeJSTest(exec.Stdout+"\n"+exec.Stderr, maxLines)
 			},
-			StreamRender: func(_ engine.Invocation, _ engine.OutputBudget) engine.StreamReducer {
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
 				return shared.NewBufferedTextReducer(true, true, func(input string) string {
-					return jsfilter.SummarizeJSTest(input, maxLines)
+					return jsfilter.SummarizeJSTest(input, budget.MaxLines)
 				})
 			},
 			ParseBytes: profilekit.ParseCombined,

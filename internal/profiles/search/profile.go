@@ -24,9 +24,9 @@ func Profiles(maxLines int, maxGroups int) []engine.Profile {
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return filters.SummarizeRipgrep(exec.Stdout+"\n"+exec.Stderr, maxGroups, maxLines)
 			},
-			StreamRender: func(_ engine.Invocation, _ engine.OutputBudget) engine.StreamReducer {
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
 				return filters.NewBufferedTextReducer(true, true, func(input string) string {
-					return filters.SummarizeRipgrep(input, maxGroups, maxLines)
+					return filters.SummarizeRipgrep(input, maxGroups, budget.MaxLines)
 				})
 			},
 			ParseBytes: profilekit.ParseCombined,

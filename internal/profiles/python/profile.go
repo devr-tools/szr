@@ -27,9 +27,9 @@ func Profiles(maxLines int) []engine.Profile {
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return pyfilter.SummarizePytest(exec.Stdout+"\n"+exec.Stderr, maxLines)
 			},
-			StreamRender: func(_ engine.Invocation, _ engine.OutputBudget) engine.StreamReducer {
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
 				return shared.NewBufferedTextReducer(true, true, func(input string) string {
-					return pyfilter.SummarizePytest(input, maxLines)
+					return pyfilter.SummarizePytest(input, budget.MaxLines)
 				})
 			},
 			ParseBytes: profilekit.ParseCombined,
@@ -55,9 +55,9 @@ func Profiles(maxLines int) []engine.Profile {
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return pyfilter.SummarizePythonTooling(exec.Stdout+"\n"+exec.Stderr, maxLines)
 			},
-			StreamRender: func(_ engine.Invocation, _ engine.OutputBudget) engine.StreamReducer {
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
 				return shared.NewBufferedTextReducer(true, true, func(input string) string {
-					return pyfilter.SummarizePythonTooling(input, maxLines)
+					return pyfilter.SummarizePythonTooling(input, budget.MaxLines)
 				})
 			},
 			ParseBytes: profilekit.ParseCombined,
