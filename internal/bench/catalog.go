@@ -12,6 +12,8 @@ type Spec struct {
 	StdoutFile       string
 	StderrFile       string
 	ExpectedContains []string
+	MinTokenSavings  float64
+	MinQualityScore  int
 }
 
 func Specs() []Spec {
@@ -31,6 +33,8 @@ var builtinSpecs = []Spec{
 			"packages: pass=3 fail=0",
 			"all tests passed",
 		},
+		MinTokenSavings: 60,
+		MinQualityScore: 95,
 	},
 	{
 		Name:        "noisy-fail",
@@ -46,6 +50,8 @@ var builtinSpecs = []Spec{
 			"Error: expected primary button to be visible",
 			"error Command failed with exit code 1.",
 		},
+		MinTokenSavings: 20,
+		MinQualityScore: 80,
 	},
 	{
 		Name:        "diff-stat",
@@ -60,6 +66,24 @@ var builtinSpecs = []Spec{
 			"cmd/szr/main.go",
 			"2 files changed, 13 insertions(+), 4 deletions(-)",
 		},
+		MinTokenSavings: 15,
+		MinQualityScore: 70,
+	},
+	{
+		Name:        "giant-diff",
+		Class:       "giant-diff",
+		Description: "Large git diff with many files and stat lines that should collapse to a stable preview.",
+		ProfileName: "git-diff",
+		Command:     []string{"git", "diff", "--stat"},
+		Display:     []string{"git", "diff"},
+		StdoutFile:  "testdata/giant_diff.txt",
+		ExpectedContains: []string{
+			"files=12",
+			"internal/parser/lexer.go",
+			"internal/parser/token.go",
+		},
+		MinTokenSavings: 50,
+		MinQualityScore: 75,
 	},
 	{
 		Name:        "repeated-logs",
@@ -73,6 +97,8 @@ var builtinSpecs = []Spec{
 			"2026-05-20T21:00:00Z INFO worker.1 step=compile status=running",
 			"... +8 more lines",
 		},
+		MinTokenSavings: 30,
+		MinQualityScore: 70,
 	},
 	{
 		Name:        "compiler-diagnostics",
@@ -88,5 +114,25 @@ var builtinSpecs = []Spec{
 			"internal/engine/runner.go:18:2: error: undefined: missingSymbol",
 			"warning: deprecated helper benchmarkHarness will be removed",
 		},
+		MinTokenSavings: 10,
+		MinQualityScore: 80,
+	},
+	{
+		Name:        "mixed-stdio-fail",
+		Class:       "mixed-stdout-stderr-fail",
+		Description: "Failure that spreads actionable identifiers across stdout and stderr with summary noise.",
+		ProfileName: "generic-test",
+		Command:     []string{"test", "pnpm", "exec", "playwright", "test"},
+		Display:     []string{"test", "pnpm", "exec", "playwright", "test"},
+		ExitCode:    1,
+		StdoutFile:  "testdata/mixed_stdio_fail.stdout.txt",
+		StderrFile:  "testdata/mixed_stdio_fail.stderr.txt",
+		ExpectedContains: []string{
+			"FAIL tests/e2e/checkout.spec.ts > checkout flow > submits order",
+			"TimeoutError: locator.click: Timeout 5000ms exceeded.",
+			"Error: worker exited with code 1",
+		},
+		MinTokenSavings: 20,
+		MinQualityScore: 85,
 	},
 }

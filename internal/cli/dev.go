@@ -78,19 +78,35 @@ func (a *App) runInstall(args []string) int {
 }
 
 type benchResult struct {
-	FixtureName     string  `json:"fixture_name"`
-	Class           string  `json:"class"`
-	ProfileName     string  `json:"profile_name"`
-	DurationMS      int64   `json:"duration_ms"`
-	RawBytes        int     `json:"raw_bytes"`
-	FilteredBytes   int     `json:"filtered_bytes"`
-	SavedBytes      int     `json:"saved_bytes"`
-	ByteSavingsPct  float64 `json:"byte_savings_pct"`
-	RawTokens       int     `json:"raw_tokens"`
-	FilteredTokens  int     `json:"filtered_tokens"`
-	SavedTokens     int     `json:"saved_tokens"`
-	TokenSavingsPct float64 `json:"token_savings_pct"`
-	ExpectedOK      bool    `json:"expected_ok"`
+	FixtureName        string   `json:"fixture_name"`
+	Class              string   `json:"class"`
+	ProfileName        string   `json:"profile_name"`
+	CommandFingerprint string   `json:"command_fingerprint"`
+	DurationMS         int64    `json:"duration_ms"`
+	DurationP50US      int64    `json:"duration_p50_us"`
+	DurationP95US      int64    `json:"duration_p95_us"`
+	DurationMaxUS      int64    `json:"duration_max_us"`
+	Samples            int      `json:"samples"`
+	RawBytes           int      `json:"raw_bytes"`
+	ParsedBytes        int      `json:"parsed_bytes"`
+	FilteredBytes      int      `json:"filtered_bytes"`
+	EmittedBytes       int      `json:"emitted_bytes"`
+	SavedBytes         int      `json:"saved_bytes"`
+	ByteSavingsPct     float64  `json:"byte_savings_pct"`
+	RawTokens          int      `json:"raw_tokens"`
+	FilteredTokens     int      `json:"filtered_tokens"`
+	SavedTokens        int      `json:"saved_tokens"`
+	TokenSavingsPct    float64  `json:"token_savings_pct"`
+	FallbackRatePct    float64  `json:"fallback_rate_pct"`
+	TeeRatePct         float64  `json:"tee_rate_pct"`
+	FailureRatePct     float64  `json:"failure_rate_pct"`
+	QualityScore       int      `json:"quality_score"`
+	QualityIssues      []string `json:"quality_issues,omitempty"`
+	ProfileConfidence  string   `json:"profile_confidence"`
+	ExpectedOK         bool     `json:"expected_ok"`
+	TokenSavingsOK     bool     `json:"token_savings_ok"`
+	QualityOK          bool     `json:"quality_ok"`
+	OK                 bool     `json:"ok"`
 }
 
 func (a *App) runBench(args []string) int {
@@ -124,19 +140,35 @@ func (a *App) runBench(args []string) int {
 			return 1
 		}
 		results = append(results, benchResult{
-			FixtureName:     measurement.FixtureName,
-			Class:           measurement.Class,
-			ProfileName:     measurement.ProfileName,
-			DurationMS:      measurement.Duration.Milliseconds(),
-			RawBytes:        measurement.RawBytes,
-			FilteredBytes:   measurement.FilteredBytes,
-			SavedBytes:      measurement.SavedBytes,
-			ByteSavingsPct:  measurement.ByteSavingsPct,
-			RawTokens:       measurement.RawTokens,
-			FilteredTokens:  measurement.FilteredTokens,
-			SavedTokens:     measurement.SavedTokens,
-			TokenSavingsPct: measurement.TokenSavingsPct,
-			ExpectedOK:      benchExpectationOK(measurement.Rendered, fixture.ExpectedContains),
+			FixtureName:        measurement.FixtureName,
+			Class:              measurement.Class,
+			ProfileName:        measurement.ProfileName,
+			CommandFingerprint: measurement.CommandFingerprint,
+			DurationMS:         measurement.Duration.Milliseconds(),
+			DurationP50US:      measurement.Durations.P50.Microseconds(),
+			DurationP95US:      measurement.Durations.P95.Microseconds(),
+			DurationMaxUS:      measurement.Durations.Max.Microseconds(),
+			Samples:            measurement.Durations.Samples,
+			RawBytes:           measurement.RawBytes,
+			ParsedBytes:        measurement.ParsedBytes,
+			FilteredBytes:      measurement.FilteredBytes,
+			EmittedBytes:       measurement.EmittedBytes,
+			SavedBytes:         measurement.SavedBytes,
+			ByteSavingsPct:     measurement.ByteSavingsPct,
+			RawTokens:          measurement.RawTokens,
+			FilteredTokens:     measurement.FilteredTokens,
+			SavedTokens:        measurement.SavedTokens,
+			TokenSavingsPct:    measurement.TokenSavingsPct,
+			FallbackRatePct:    measurement.FallbackRate,
+			TeeRatePct:         measurement.TeeRate,
+			FailureRatePct:     measurement.FailureRate,
+			QualityScore:       measurement.Quality.Score,
+			QualityIssues:      append([]string(nil), measurement.Quality.Issues...),
+			ProfileConfidence:  measurement.Quality.ProfileConfidence,
+			ExpectedOK:         measurement.Expectation.ContainsOK,
+			TokenSavingsOK:     measurement.Expectation.TokenSavingsOK,
+			QualityOK:          measurement.Expectation.QualityOK,
+			OK:                 measurement.Expectation.OK,
 		})
 	}
 
@@ -150,15 +182,19 @@ func (a *App) runBench(args []string) int {
 	exitCode := 0
 	for _, result := range results {
 		fmt.Printf(
-			"%s profile=%s tokens=%.1f%% bytes=%.1f%% dur=%dms ok=%t\n",
+			"%s profile=%s tokens=%.1f%% bytes=%.1f%% parsed=%dB dur_p50=%dus dur_p95=%dus quality=%d fallback=%.0f%% ok=%t\n",
 			result.FixtureName,
 			result.ProfileName,
 			result.TokenSavingsPct,
 			result.ByteSavingsPct,
-			result.DurationMS,
-			result.ExpectedOK,
+			result.ParsedBytes,
+			result.DurationP50US,
+			result.DurationP95US,
+			result.QualityScore,
+			result.FallbackRatePct,
+			result.OK,
 		)
-		if !result.ExpectedOK {
+		if !result.OK {
 			exitCode = 1
 		}
 	}
@@ -182,15 +218,6 @@ func selectBenchFixtures(fixtures []bench.Fixture, names []string) []bench.Fixtu
 		}
 	}
 	return filtered
-}
-
-func benchExpectationOK(rendered string, expected []string) bool {
-	for _, fragment := range expected {
-		if !strings.Contains(rendered, fragment) {
-			return false
-		}
-	}
-	return true
 }
 
 func printInstallPlan(plan installers.Plan) {

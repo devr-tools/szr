@@ -1,0 +1,6 @@
+[WebServer]
+warning: upstream /healthz returned 503 during retry window
+stderr | tests/e2e/checkout.spec.ts > checkout flow > submits order
+Error: POST /api/orders 500 Internal Server Error
+  at tests/e2e/checkout.spec.ts:96:11
+browser console: Failed to load resource: the server responded with a status of 500 ()

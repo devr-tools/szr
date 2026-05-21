@@ -1,0 +1,13 @@
+Running 4 tests using 2 workers
+
+  ok  tests/e2e/login.spec.ts:12:1 › login flow › opens dashboard (412ms)
+  ok  tests/e2e/catalog.spec.ts:31:1 › catalog flow › filters products (691ms)
+  x   tests/e2e/checkout.spec.ts:88:1 › checkout flow › submits order (5.4s)
+
+FAIL tests/e2e/checkout.spec.ts > checkout flow > submits order
+TimeoutError: locator.click: Timeout 5000ms exceeded.
+  at tests/e2e/checkout.spec.ts:102:18
+Retry #1 scheduled after network idle
+1 failed
+3 passed
+Error: worker exited with code 1

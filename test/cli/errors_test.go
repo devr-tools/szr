@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"szr/internal/cli"
 	"szr/internal/config"
@@ -78,7 +79,7 @@ func TestErrorsAndSpread(t *testing.T) {
 	}
 
 	code, stdout, stderr := testutil.RunApp(t, app, "spread")
-	if code != 0 || !strings.Contains(stdout, "commands:") || stderr != "" {
+	if code != 0 || !strings.Contains(stdout, "commands:") || !strings.Contains(stdout, "duration p50/p95:") || stderr != "" {
 		t.Fatalf("unexpected spread output stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
 
@@ -123,5 +124,106 @@ func TestErrorsAndSpread(t *testing.T) {
 	code, stdout, stderr = testutil.RunApp(t, app, "gain")
 	if code != 0 || !strings.Contains(stdout, "commands:") || stderr != "" {
 		t.Fatalf("unexpected gain alias output stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+}
+
+func TestSpreadReportingOutput(t *testing.T) {
+	paths := testutil.Paths(t.TempDir())
+	testutil.EnsurePaths(t, paths)
+	store := history.New(paths.HistoryFile)
+	records := []history.Record{
+		{
+			Timestamp:         time.Date(2026, 5, 20, 10, 0, 0, 0, time.UTC),
+			Command:           "szr git status --short",
+			Profile:           "git-status",
+			ProfileConfidence: "high",
+			DurationMS:        30,
+			ExitCode:          0,
+			RawBytesRead:      120,
+			BytesParsed:       60,
+			BytesEmitted:      20,
+			RawTokens:         100,
+			FilteredTokens:    20,
+			SavedTokens:       80,
+			SavingsPct:        80,
+		},
+		{
+			Timestamp:         time.Date(2026, 5, 20, 11, 0, 0, 0, time.UTC),
+			Command:           "szr go test ./...",
+			Profile:           "go-test-json",
+			ProfileConfidence: "high",
+			DurationMS:        90,
+			ExitCode:          1,
+			RawBytesRead:      180,
+			BytesParsed:       110,
+			BytesEmitted:      40,
+			RawTokens:         120,
+			FilteredTokens:    40,
+			SavedTokens:       80,
+			SavingsPct:        66.67,
+			TeePath:           "/tmp/go-test.log",
+		},
+		{
+			Timestamp:         time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC),
+			Command:           "szr custom command",
+			Profile:           "passthrough",
+			ProfileConfidence: "low",
+			DurationMS:        10,
+			ExitCode:          2,
+			RawBytesRead:      90,
+			BytesParsed:       90,
+			BytesEmitted:      60,
+			RawTokens:         60,
+			FilteredTokens:    60,
+			SavedTokens:       0,
+			SavingsPct:        0,
+			FallbackUsed:      true,
+		},
+	}
+	for _, rec := range records {
+		if err := store.Append(rec); err != nil {
+			t.Fatalf("append history record: %v", err)
+		}
+	}
+
+	app := cli.NewWithDependencies("test", config.Default(), paths, store, testutil.AppEngine(t, paths))
+
+	code, stdout, stderr := testutil.RunApp(t, app, "spread", "--history")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected spread output stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	for _, want := range []string{
+		"commands: 3",
+		"duration p50/p95: 30ms / 90ms",
+		"bytes read/parsed/emitted: 390 / 260 / 120",
+		"failure rate: 66.7% (2/3)",
+		"fallback rate: 33.3% (1/3)",
+		"tee rate: 33.3% (1/3)",
+		"profiles:",
+		"git-status  confidence=high count=1 saved=80 avg=80.0% p50/p95=30/30ms fail=0.0% fallback=0.0% tee=0.0%",
+		"go-test-json  confidence=high count=1 saved=80 avg=66.7% p50/p95=90/90ms fail=100.0% fallback=0.0% tee=100.0%",
+		"passthrough  confidence=low count=1 saved=0 avg=0.0% p50/p95=10/10ms fail=100.0% fallback=100.0% tee=0.0%",
+		"poor savings fingerprints:",
+		"recent:",
+		"2026-05-20T12:00:00Z  passthrough  confidence=low  10ms  exit=2  fallback=true  0.0%  szr custom command",
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("expected spread output %q in %q", want, stdout)
+		}
+	}
+
+	code, stdout, stderr = testutil.RunApp(t, app, "spread", "--json")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected spread json stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	var payload history.Summary
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("unmarshal spread json: %v", err)
+	}
+	if payload.DurationP50MS != 30 || payload.DurationP95MS != 90 || payload.Fallbacks != 1 || payload.TeeCount != 1 || payload.RawBytesRead != 390 || payload.BytesParsed != 260 || payload.BytesEmitted != 120 {
+		t.Fatalf("unexpected json summary: %#v", payload)
+	}
+	if len(payload.ProfileStats) != 3 {
+		t.Fatalf("unexpected json profile stats: %#v", payload.ProfileStats)
 	}
 }

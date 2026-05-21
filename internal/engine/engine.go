@@ -50,17 +50,23 @@ func (e *Engine) Execute(ctx context.Context, inv Invocation, passthrough bool) 
 	duration := time.Since(start)
 	rawCombined := combineStreams(stdout, stderr)
 	rendered := rawCombined
-	if !passthrough && profile.Render != nil {
-		rendered = profile.Render(inv, Execution{
-			Command:  command,
-			Stdout:   stdout,
-			Stderr:   stderr,
-			ExitCode: exitCode,
-			Duration: duration,
-		})
+	execResult := Execution{
+		Command:  command,
+		Stdout:   stdout,
+		Stderr:   stderr,
+		ExitCode: exitCode,
+		Duration: duration,
 	}
+	if !passthrough && profile.Render != nil {
+		rendered = profile.Render(inv, execResult)
+	}
+	fallbackUsed := false
 	if strings.TrimSpace(rendered) == "" {
 		rendered = rawCombined
+		fallbackUsed = !passthrough
+	}
+	if !passthrough && profile.Name == "passthrough" {
+		fallbackUsed = true
 	}
 
 	teePath := ""
@@ -74,18 +80,38 @@ func (e *Engine) Execute(ctx context.Context, inv Invocation, passthrough bool) 
 		}
 	}
 
+	rawBytesRead := len(rawCombined)
+	bytesParsed := rawBytesRead
+	if profile.ParseBytes != nil {
+		bytesParsed = profile.ParseBytes(execResult)
+	}
+	if bytesParsed < 0 {
+		bytesParsed = 0
+	}
+	bytesEmitted := len(rendered)
+	profileConfidence := profile.Confidence
+	if profileConfidence == "" {
+		profileConfidence = ConfidenceMedium
+	}
+
 	record := history.Record{
-		Timestamp:      time.Now(),
-		Command:        strings.Join(inv.Display, " "),
-		Profile:        profile.Name,
-		Cwd:            inv.Cwd,
-		DurationMS:     duration.Milliseconds(),
-		ExitCode:       exitCode,
-		RawBytes:       len(rawCombined),
-		FilteredBytes:  len(rendered),
-		RawTokens:      history.EstimateTokens(rawCombined),
-		FilteredTokens: history.EstimateTokens(rendered),
-		TeePath:        teePath,
+		Timestamp:          time.Now(),
+		Command:            strings.Join(inv.Display, " "),
+		CommandFingerprint: history.Fingerprint(strings.Join(inv.Display, " ")),
+		Profile:            profile.Name,
+		ProfileConfidence:  profileConfidence,
+		Cwd:                inv.Cwd,
+		DurationMS:         duration.Milliseconds(),
+		ExitCode:           exitCode,
+		RawBytes:           rawBytesRead,
+		FilteredBytes:      bytesEmitted,
+		RawBytesRead:       rawBytesRead,
+		BytesParsed:        bytesParsed,
+		BytesEmitted:       bytesEmitted,
+		RawTokens:          history.EstimateTokens(rawCombined),
+		FilteredTokens:     history.EstimateTokens(rendered),
+		FallbackUsed:       fallbackUsed,
+		TeePath:            teePath,
 	}
 	record.SavedTokens = record.RawTokens - record.FilteredTokens
 	if record.RawTokens > 0 {
@@ -94,12 +120,17 @@ func (e *Engine) Execute(ctx context.Context, inv Invocation, passthrough bool) 
 	_ = e.history.Append(record)
 
 	result := Result{
-		ProfileName: profile.Name,
-		Display:     strings.TrimRight(rendered, "\n"),
-		RawCombined: rawCombined,
-		ExitCode:    exitCode,
-		TeePath:     teePath,
-		Duration:    duration,
+		ProfileName:       profile.Name,
+		ProfileConfidence: profileConfidence,
+		Display:           strings.TrimRight(rendered, "\n"),
+		RawCombined:       rawCombined,
+		ExitCode:          exitCode,
+		TeePath:           teePath,
+		Duration:          duration,
+		FallbackUsed:      fallbackUsed,
+		RawBytesRead:      rawBytesRead,
+		BytesParsed:       bytesParsed,
+		BytesEmitted:      bytesEmitted,
 	}
 	if err != nil {
 		return result, err

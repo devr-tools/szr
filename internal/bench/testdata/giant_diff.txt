@@ -1,0 +1,46 @@
+diff --git a/internal/parser/lexer.go b/internal/parser/lexer.go
+index 1234567..89abcde 100644
+--- a/internal/parser/lexer.go
++++ b/internal/parser/lexer.go
+@@ -10,7 +10,16 @@ func lex(input string) []token {
+-	return nil
++	buf := make([]token, 0, 128)
++	for _, r := range input {
++		buf = append(buf, scanRune(r))
++	}
++	return compact(buf)
+ }
+diff --git a/internal/parser/parser.go b/internal/parser/parser.go
+index 1234567..89abcde 100644
+--- a/internal/parser/parser.go
++++ b/internal/parser/parser.go
+@@ -42,6 +42,10 @@ func parse(tokens []token) node {
+-	return node{}
++	root := node{}
++	root.kind = "file"
++	root.children = append(root.children, parseDecls(tokens)...)
++	return root
+ }
+diff --git a/internal/parser/ast.go b/internal/parser/ast.go
+diff --git a/internal/parser/format.go b/internal/parser/format.go
+diff --git a/internal/parser/errors.go b/internal/parser/errors.go
+diff --git a/internal/parser/reader.go b/internal/parser/reader.go
+diff --git a/internal/parser/token.go b/internal/parser/token.go
+diff --git a/internal/parser/token_test.go b/internal/parser/token_test.go
+diff --git a/internal/parser/parser_test.go b/internal/parser/parser_test.go
+diff --git a/internal/parser/fixtures/valid.txt b/internal/parser/fixtures/valid.txt
+diff --git a/internal/parser/fixtures/invalid.txt b/internal/parser/fixtures/invalid.txt
+diff --git a/internal/parser/fixtures/bench.txt b/internal/parser/fixtures/bench.txt
+ internal/parser/lexer.go               | 28 ++++++++++++++++++++----
+ internal/parser/parser.go              | 22 ++++++++++++++----
+ internal/parser/ast.go                 | 14 ++++++++---
+ internal/parser/format.go              | 18 ++++++++++----
+ internal/parser/errors.go              | 17 +++++++++----
+ internal/parser/reader.go              | 26 ++++++++++++++++----
+ internal/parser/token.go               | 24 +++++++++++++-----
+ internal/parser/token_test.go          | 31 ++++++++++++++++++------
+ internal/parser/parser_test.go         | 29 +++++++++++++++++-----
+ internal/parser/fixtures/valid.txt     | 19 ++++++++++++--
+ internal/parser/fixtures/invalid.txt   | 21 +++++++++++++---
+ internal/parser/fixtures/bench.txt     | 26 ++++++++++++++++----
+ 12 files changed, 214 insertions(+), 61 deletions(-)

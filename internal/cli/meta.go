@@ -46,17 +46,64 @@ func (a *App) runSpread(args []string) int {
 	fmt.Printf("commands: %d\n", summary.Commands)
 	fmt.Printf("avg savings: %.1f%%\n", summary.AveragePct)
 	fmt.Printf("tokens saved: %d\n", summary.SavedTokens)
-	fmt.Printf("failures: %d\n", summary.Failures)
+	fmt.Printf("duration p50/p95: %dms / %dms\n", summary.DurationP50MS, summary.DurationP95MS)
+	fmt.Printf("bytes read/parsed/emitted: %d / %d / %d\n", summary.RawBytesRead, summary.BytesParsed, summary.BytesEmitted)
+	fmt.Printf("failure rate: %.1f%% (%d/%d)\n", summary.FailureRate, summary.Failures, summary.Commands)
+	fmt.Printf("fallback rate: %.1f%% (%d/%d)\n", summary.FallbackRate, summary.Fallbacks, summary.Commands)
+	fmt.Printf("tee rate: %.1f%% (%d/%d)\n", summary.TeeRate, summary.TeeCount, summary.Commands)
 	if len(summary.TopCommands) > 0 {
 		fmt.Println("top commands:")
 		for _, cmd := range summary.TopCommands {
 			fmt.Printf("  %s (%d)\n", cmd.Command, cmd.Count)
 		}
 	}
+	if len(summary.ProfileStats) > 0 {
+		fmt.Println("profiles:")
+		for _, stat := range summary.ProfileStats {
+			fmt.Printf(
+				"  %s  confidence=%s count=%d saved=%d avg=%.1f%% p50/p95=%d/%dms fail=%.1f%% fallback=%.1f%% tee=%.1f%%\n",
+				stat.Name,
+				stat.Confidence,
+				stat.Commands,
+				stat.SavedTokens,
+				stat.AveragePct,
+				stat.DurationP50MS,
+				stat.DurationP95MS,
+				stat.FailureRate,
+				stat.FallbackRate,
+				stat.TeeRate,
+			)
+		}
+	}
+	if len(summary.FingerprintHotspots) > 0 {
+		fmt.Println("poor savings fingerprints:")
+		for _, stat := range summary.FingerprintHotspots {
+			fmt.Printf(
+				"  %s  profile=%s count=%d avg=%.1f%% p50/p95=%d/%dms fp=%s\n",
+				stat.Command,
+				stat.Profile,
+				stat.Commands,
+				stat.AveragePct,
+				stat.DurationP50MS,
+				stat.DurationP95MS,
+				stat.Fingerprint,
+			)
+		}
+	}
 	if showHistory {
 		fmt.Println("recent:")
 		for _, rec := range summary.Recent {
-			fmt.Printf("  %s  %s  %s  %.1f%%\n", rec.Timestamp.Format(time.RFC3339), rec.Profile, rec.Command, rec.SavingsPct)
+			fmt.Printf(
+				"  %s  %s  confidence=%s  %dms  exit=%d  fallback=%t  %.1f%%  %s\n",
+				rec.Timestamp.Format(time.RFC3339),
+				rec.Profile,
+				rec.ProfileConfidence,
+				rec.DurationMS,
+				rec.ExitCode,
+				rec.FallbackUsed,
+				rec.SavingsPct,
+				rec.Command,
+			)
 		}
 	}
 	return 0
@@ -64,6 +111,10 @@ func (a *App) runSpread(args []string) int {
 
 func (a *App) runProfiles() int {
 	for _, profile := range a.engine.Profiles() {
+		if profile.Confidence != "" {
+			fmt.Printf("%s\n  %s\n  confidence: %s\n", profile.Name, profile.Description, profile.Confidence)
+			continue
+		}
 		fmt.Printf("%s\n  %s\n", profile.Name, profile.Description)
 	}
 	return 0

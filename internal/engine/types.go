@@ -19,10 +19,15 @@ type Execution struct {
 }
 
 type Result struct {
-	ProfileName string
-	Display     string
-	RawCombined string
-	ExitCode    int
-	TeePath     string
-	Duration    time.Duration
+	ProfileName       string
+	ProfileConfidence string
+	Display           string
+	RawCombined       string
+	ExitCode          int
+	TeePath           string
+	Duration          time.Duration
+	FallbackUsed      bool
+	RawBytesRead      int
+	BytesParsed       int
+	BytesEmitted      int
 }

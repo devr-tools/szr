@@ -13,8 +13,8 @@ func TestFixturesAndHarness(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fixtures: %v", err)
 	}
-	if len(fixtures) != 5 {
-		t.Fatalf("expected 5 fixtures, got %d", len(fixtures))
+	if len(fixtures) != 7 {
+		t.Fatalf("expected 7 fixtures, got %d", len(fixtures))
 	}
 
 	specs := bench.Specs()
@@ -53,17 +53,32 @@ func TestFixturesAndHarness(t *testing.T) {
 			if measurement.Duration < 0 {
 				t.Fatalf("unexpected negative duration: %v", measurement.Duration)
 			}
+			if measurement.Durations.Samples != 9 {
+				t.Fatalf("expected 9 timing samples, got %#v", measurement.Durations)
+			}
+			if measurement.Durations.Min > measurement.Durations.P50 || measurement.Durations.P50 > measurement.Durations.P95 || measurement.Durations.P95 > measurement.Durations.Max {
+				t.Fatalf("unexpected duration ordering: %#v", measurement.Durations)
+			}
 			if measurement.ProfileName != fixture.ProfileName || measurement.FixtureName != fixture.Name {
 				t.Fatalf("unexpected measurement identity: %#v", measurement)
 			}
-			if measurement.RawBytes <= 0 || measurement.RawTokens <= 0 {
+			if measurement.RawBytes <= 0 || measurement.RawTokens <= 0 || measurement.ParsedBytes <= 0 {
 				t.Fatalf("expected positive raw metrics: %#v", measurement)
 			}
-			if measurement.FilteredBytes <= 0 || measurement.FilteredTokens <= 0 {
+			if measurement.FilteredBytes <= 0 || measurement.FilteredTokens <= 0 || measurement.EmittedBytes <= 0 {
 				t.Fatalf("expected positive filtered metrics: %#v", measurement)
 			}
 			if measurement.TokenSavingsPct <= 0 {
 				t.Fatalf("expected token savings for %s, got %#v", fixture.Name, measurement)
+			}
+			if measurement.CommandFingerprint == "" {
+				t.Fatalf("expected command fingerprint: %#v", measurement)
+			}
+			if measurement.Quality.Score < fixture.MinQualityScore {
+				t.Fatalf("expected quality score >= %d for %s, got %#v", fixture.MinQualityScore, fixture.Name, measurement.Quality)
+			}
+			if !measurement.Expectation.OK {
+				t.Fatalf("expected measurement expectation to pass for %s, got %#v", fixture.Name, measurement.Expectation)
 			}
 			for _, fragment := range fixture.ExpectedContains {
 				if !strings.Contains(measurement.Rendered, fragment) {
@@ -107,6 +122,12 @@ func TestHarnessEdgeCases(t *testing.T) {
 	}
 	if measurement.ByteRatio != 0 || measurement.TokenRatio != 0 || measurement.ByteSavingsPct != 0 || measurement.TokenSavingsPct != 0 {
 		t.Fatalf("expected zero ratios for empty measurement, got %#v", measurement)
+	}
+	if measurement.Quality.Score != 40 {
+		t.Fatalf("expected empty quality penalty, got %#v", measurement.Quality)
+	}
+	if len(measurement.Quality.Issues) == 0 || measurement.Quality.Issues[0] != "zero_actionable_lines" {
+		t.Fatalf("expected zero actionable line issue, got %#v", measurement.Quality)
 	}
 
 	if _, ok := harness.Profile("missing"); ok {

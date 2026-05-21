@@ -9,8 +9,12 @@ func (e *Engine) match(inv Invocation) Profile {
 	return Profile{
 		Name:        "passthrough",
 		Description: "Raw command passthrough with trimming.",
+		Confidence:  ConfidenceLow,
 		Render: func(_ Invocation, exec Execution) string {
 			return combineStreams(exec.Stdout, exec.Stderr)
+		},
+		ParseBytes: func(exec Execution) int {
+			return len(combineStreams(exec.Stdout, exec.Stderr))
 		},
 		Explain: []string{
 			"No specialized profile matched.",

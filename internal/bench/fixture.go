@@ -10,6 +10,8 @@ type Fixture struct {
 	Invocation       engine.Invocation
 	Execution        engine.Execution
 	ExpectedContains []string
+	MinTokenSavings  float64
+	MinQualityScore  int
 }
 
 func (f Fixture) RawCombined() string {

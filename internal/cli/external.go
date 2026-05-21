@@ -34,7 +34,18 @@ func (a *App) runExternal(ctx context.Context, flags globalFlags, name string, a
 	}
 	result, err := a.engine.Execute(ctx, inv, passthrough)
 	if flags.verbose >= 2 {
-		fmt.Fprintf(os.Stderr, "[szr] profile=%s duration=%s exit=%d\n", result.ProfileName, result.Duration.Round(time.Millisecond), result.ExitCode)
+		fmt.Fprintf(
+			os.Stderr,
+			"[szr] profile=%s confidence=%s duration=%s exit=%d fallback=%t bytes=%d/%d/%d\n",
+			result.ProfileName,
+			result.ProfileConfidence,
+			result.Duration.Round(time.Millisecond),
+			result.ExitCode,
+			result.FallbackUsed,
+			result.RawBytesRead,
+			result.BytesParsed,
+			result.BytesEmitted,
+		)
 	}
 	if flags.verbose >= 3 && result.RawCombined != "" {
 		fmt.Fprintf(os.Stderr, "[szr] raw:\n%s\n", result.RawCombined)
@@ -65,6 +76,9 @@ func (a *App) runExplain(flags globalFlags, args []string) int {
 	})
 	fmt.Printf("profile: %s\n", profile.Name)
 	fmt.Printf("about: %s\n", profile.Description)
+	if profile.Confidence != "" {
+		fmt.Printf("confidence: %s\n", profile.Confidence)
+	}
 	for _, line := range profile.Explain {
 		fmt.Printf("- %s\n", line)
 	}

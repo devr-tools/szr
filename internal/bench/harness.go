@@ -12,6 +12,11 @@ type Harness struct {
 	profiles map[string]engine.Profile
 }
 
+type renderOutcome struct {
+	Rendered string
+	Fallback bool
+}
+
 func NewHarness(maxLines int) *Harness {
 	return NewHarnessWithProfiles(profiles.Builtins(maxLines))
 }
@@ -30,17 +35,30 @@ func (h *Harness) Profile(name string) (engine.Profile, bool) {
 }
 
 func (h *Harness) Render(fixture Fixture) (string, error) {
+	outcome, err := h.renderWithMeta(fixture)
+	if err != nil {
+		return "", err
+	}
+	return outcome.Rendered, nil
+}
+
+func (h *Harness) renderWithMeta(fixture Fixture) (renderOutcome, error) {
 	profile, ok := h.Profile(fixture.ProfileName)
 	if !ok {
-		return "", fmt.Errorf("unknown profile %q", fixture.ProfileName)
+		return renderOutcome{}, fmt.Errorf("unknown profile %q", fixture.ProfileName)
 	}
 
 	rendered := fixture.RawCombined()
+	fallback := false
 	if profile.Render != nil {
 		rendered = profile.Render(fixture.Invocation, fixture.Execution)
 	}
 	if strings.TrimSpace(rendered) == "" {
 		rendered = fixture.RawCombined()
+		fallback = true
 	}
-	return rendered, nil
+	if !fallback && normalizedText(rendered) == normalizedText(parsedProfileInput(fixture)) {
+		fallback = true
+	}
+	return renderOutcome{Rendered: rendered, Fallback: fallback}, nil
 }

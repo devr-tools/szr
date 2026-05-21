@@ -21,7 +21,7 @@ func TestBenchCommands(t *testing.T) {
 	if code != 0 || stderr != "" {
 		t.Fatalf("unexpected bench output stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
-	for _, want := range []string{"clean-pass", "profile=go-test-json", "ok=true"} {
+	for _, want := range []string{"clean-pass", "profile=go-test-json", "dur_p50=", "quality=", "ok=true"} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("expected bench stdout to contain %q, got %q", want, stdout)
 		}
@@ -37,6 +37,11 @@ func TestBenchCommands(t *testing.T) {
 	}
 	if len(payload) != 1 || payload[0]["fixture_name"] != "clean-pass" {
 		t.Fatalf("unexpected bench json payload: %#v", payload)
+	}
+	for _, key := range []string{"duration_p50_us", "duration_p95_us", "quality_score", "ok", "command_fingerprint"} {
+		if _, ok := payload[0][key]; !ok {
+			t.Fatalf("expected bench json key %q in payload %#v", key, payload[0])
+		}
 	}
 }
 
@@ -60,7 +65,7 @@ func TestBenchCoverageEdges(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
 		t.Fatalf("decode bench all json: %v", err)
 	}
-	if len(payload) != 5 {
+	if len(payload) != 7 {
 		t.Fatalf("expected all benchmark fixtures, got %#v", payload)
 	}
 }

@@ -52,6 +52,8 @@ func LoadFixtures(readFile ReadFileFunc, specs []Spec) ([]Fixture, error) {
 			Invocation:       engine.Invocation{Command: append([]string(nil), spec.Command...), Display: append([]string(nil), spec.Display...), Cwd: spec.Cwd},
 			Execution:        engine.Execution{Stdout: stdout, Stderr: stderr, ExitCode: spec.ExitCode},
 			ExpectedContains: append([]string(nil), spec.ExpectedContains...),
+			MinTokenSavings:  spec.MinTokenSavings,
+			MinQualityScore:  spec.MinQualityScore,
 		})
 	}
 	return fixtures, nil

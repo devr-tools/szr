@@ -15,6 +15,7 @@ func jsProfiles(maxLines int) []engine.Profile {
 		{
 			Name:        "js-package-test",
 			Description: "Detects Jest and Vitest behind package-manager test scripts and forwards structured reporter flags.",
+			Confidence:  engine.ConfidenceMedium,
 			Match: func(inv engine.Invocation) bool {
 				return isPackageManagerTest(inv.Display)
 			},
@@ -28,6 +29,7 @@ func jsProfiles(maxLines int) []engine.Profile {
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return filters.SummarizeJSTest(exec.Stdout+"\n"+exec.Stderr, maxLines)
 			},
+			ParseBytes: parseCombined,
 			Explain: []string{
 				"Inspects the local `package.json` test script to detect `vitest` or `jest` behind `npm`, `pnpm`, and `yarn` wrappers.",
 				"Uses package-manager-specific argument forwarding so structured runner output is requested without changing the user-facing command family.",
@@ -36,6 +38,7 @@ func jsProfiles(maxLines int) []engine.Profile {
 		{
 			Name:        "vitest-json",
 			Description: "Requests the Vitest JSON reporter and preserves failing suite details.",
+			Confidence:  engine.ConfidenceHigh,
 			Match: func(inv engine.Invocation) bool {
 				return len(inv.Display) > 0 && inv.Display[0] == "vitest"
 			},
@@ -48,6 +51,7 @@ func jsProfiles(maxLines int) []engine.Profile {
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return filters.SummarizeJSTest(exec.Stdout+"\n"+exec.Stderr, maxLines)
 			},
+			ParseBytes: parseCombined,
 			Explain: []string{
 				"Prefers Vitest's JSON reporter when the command did not already request another structured mode.",
 				"Condenses passing noise and keeps failed suites, test names, assertion lines, and file paths.",
@@ -56,6 +60,7 @@ func jsProfiles(maxLines int) []engine.Profile {
 		{
 			Name:        "jest-json",
 			Description: "Requests Jest JSON output and condenses the report into failing suite signal.",
+			Confidence:  engine.ConfidenceHigh,
 			Match: func(inv engine.Invocation) bool {
 				return len(inv.Display) > 0 && inv.Display[0] == "jest"
 			},
@@ -68,6 +73,7 @@ func jsProfiles(maxLines int) []engine.Profile {
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return filters.SummarizeJSTest(exec.Stdout+"\n"+exec.Stderr, maxLines)
 			},
+			ParseBytes: parseCombined,
 			Explain: []string{
 				"Adds Jest's `--json` mode unless the user already asked for JSON or an alternate reporter.",
 				"Summarizes failed suites and assertions while collapsing passing chatter.",
