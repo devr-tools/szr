@@ -67,34 +67,27 @@ That keeps global binary installation separate from repo-specific agent/editor w
 ## Usage
 
 ```bash
+# Install szr
+go install ./cmd/szr
+szr self doctor
+
+# Bootstrap this repo for agent/shell use
+szr install codex
+szr install shell
+
+# Run your usual commands through szr
 szr git status
 szr git diff
 szr go test ./...
-szr cargo test
-szr pytest -k failing_case
-szr ruff check .
-szr mypy src
-szr make test
-szr ctest
-szr docker logs api
-szr kubectl get pods
-szr gh run view 123
-szr gh run view 123 --log
-szr npm test
-szr turbo run build
-szr git apply fix.patch
-szr rg TODO internal
-szr grep "TODO" .
-szr read internal/cli/app.go --level aggressive
+
+# Check token savings and command history
+szr spread
 szr spread --history
-szr tee
+
+# Useful follow-ups
 szr tee --latest
-szr self install
-szr self doctor
-szr install codex
-szr install shell
-szr bench clean-pass
 szr explain go test ./...
+szr commands
 ```
 
 ## Local Development
@@ -111,30 +104,4 @@ make prepush
 
 ## Architecture
 
-The codebase is organized around a small execution engine:
-
-- `pkg/szr`: public package entrypoint for embedding or thin launchers
-- `cmd/szr`: binary wrapper with `main.go` only
-- `cmd/szr-dev`: developer-only binary wrapper
-- `internal/bench`: benchmark fixtures and measurement harness
-- `internal/cli`: subcommand parsing and dispatch
-- `internal/engine`: profile matching, command execution, tee handling
-- `internal/installers`: repo-local bootstrap generation for agent/editor targets
-- `internal/profiles`: built-in profile registry
-- `internal/filters`: text, JSON, grep, git, and test compaction logic
-- `internal/history`: local tracking for `szr spread`
-- `internal/rules`: project-local rule DSL parsing and validation
-- `internal/szrdev`: developer-only launcher wiring
-- `internal/config`: config and runtime path resolution
-
 More detail lives in [docs/ARCHITECTURE.md](/Users/alex/Documents/GitHub/szr/docs/ARCHITECTURE.md).
-
-## Roadmap
-
-The current roadmap is organized around three goals:
-
-- lower wrapper latency so `szr` stays on the hot path
-- expand parser-first coverage beyond the current Go, Git, Rust, Python, JS/TS, build, C/C++, patch, container, Kubernetes, and GitHub command families
-- improve compression quality without hiding actionable failure lines, and extend the bench harness as profiles grow
-
-The detailed plan lives in [docs/ROADMAP.md](/Users/alex/Documents/GitHub/szr/docs/ROADMAP.md).
