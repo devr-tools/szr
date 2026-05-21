@@ -10,12 +10,31 @@ import (
 
 func TestBuiltInProfiles(t *testing.T) {
 	list := profiles.Builtins(3)
-	if len(list) != 33 {
-		t.Fatalf("expected 33 profiles, got %d", len(list))
+	if len(list) != 35 {
+		t.Fatalf("expected 35 profiles, got %d", len(list))
+	}
+
+	directoryListing := testutil.FindProfile(t, list, "directory-listing")
+	if !directoryListing.Match(engine.Invocation{Command: []string{"ls"}}) || !directoryListing.Match(engine.Invocation{Command: []string{"tree"}}) {
+		t.Fatal("directory-listing should match ls and tree")
+	}
+	if got := directoryListing.Prepare(engine.Invocation{Command: []string{"ls", "docs"}}); len(got) < 4 || got[len(got)-2] != "-1" || got[len(got)-1] != "-p" {
+		t.Fatalf("expected ls prepare to normalize output, got %#v", got)
+	}
+	if got := directoryListing.Render(engine.Invocation{Command: []string{"ls"}}, engine.Execution{Stdout: "cmd/\ndocs/\nREADME.md\n"}); got == "" {
+		t.Fatal("expected directory-listing render output")
+	}
+
+	catRead := testutil.FindProfile(t, list, "cat-read")
+	if !catRead.Match(engine.Invocation{Command: []string{"cat", "README.md"}}) || catRead.Match(engine.Invocation{Command: []string{"cat", "-n", "README.md"}}) {
+		t.Fatal("unexpected cat-read match behavior")
+	}
+	if got := catRead.Render(engine.Invocation{Command: []string{"cat", "README.md"}}, engine.Execution{Stdout: "# Title\n\nBody\n"}); got == "" {
+		t.Fatal("expected cat-read render output")
 	}
 
 	goTest := testutil.FindProfile(t, list, "go-test-json")
-	if !goTest.Match(engine.Invocation{Display: []string{"go", "test"}}) {
+	if !goTest.Match(engine.Invocation{Display: []string{"go", "test"}}) || !goTest.Match(engine.Invocation{Command: []string{"go", "test"}}) {
 		t.Fatal("go-test-json should match")
 	}
 	if len(goTest.Prepare(engine.Invocation{Command: []string{"go", "test", "./..."}})) != 4 {
@@ -63,7 +82,7 @@ func TestBuiltInProfiles(t *testing.T) {
 	}
 
 	cargoTest := testutil.FindProfile(t, list, "cargo-test")
-	if !cargoTest.Match(engine.Invocation{Display: []string{"cargo", "test"}}) {
+	if !cargoTest.Match(engine.Invocation{Display: []string{"cargo", "test"}}) || !cargoTest.Match(engine.Invocation{Command: []string{"cargo", "test"}}) {
 		t.Fatal("cargo-test should match cargo test")
 	}
 	if cargoTest.Match(engine.Invocation{Display: []string{"cargo", "build"}}) {
@@ -246,6 +265,12 @@ func TestBuiltInProfiles(t *testing.T) {
 	genericTest := testutil.FindProfile(t, list, "generic-test")
 	if !genericTest.Match(engine.Invocation{Display: []string{"test", "pytest"}}) || genericTest.Match(engine.Invocation{Display: nil}) {
 		t.Fatal("unexpected generic-test match behavior")
+	}
+	if genericTest.Match(engine.Invocation{Display: []string{"test", "cargo", "test"}, Command: []string{"cargo", "test"}}) {
+		t.Fatal("generic-test should defer to specialized wrapped cargo test handling")
+	}
+	if genericTest.Match(engine.Invocation{Display: []string{"test", "npm", "test"}, Command: []string{"npm", "test"}}) {
+		t.Fatal("generic-test should defer to specialized wrapped js test handling")
 	}
 	if got := genericTest.Render(engine.Invocation{}, engine.Execution{Stdout: "FAIL one"}); got == "" {
 		t.Fatal("expected generic-test render output")

@@ -1,0 +1,11 @@
+f71d6ac Add stable Homebrew formula
+edc8770 Add release automation
+90606f9 Add GitHub release workflow
+1ba5be7 save
+2f82a12 save
+e7f01b3 save
+0fce2b1 Tighten git reducers
+0a932fd Add tree benchmark fixture
+ff1209a Improve read previews
+ab77c33 Fold repeated logs
+88fca91 Add compare command

@@ -17,6 +17,8 @@ func SummarizeCargoTest(input string, maxLines int) string {
 	}
 
 	summaries := []string{}
+	resultLine := ""
+	rerunLine := ""
 	failures := []string{}
 	details := []string{}
 	inFailureList := false
@@ -26,9 +28,11 @@ func SummarizeCargoTest(input string, maxLines int) string {
 		case strings.HasPrefix(trimmed, "running "):
 			summaries = append(summaries, clip(trimmed, 160))
 		case strings.HasPrefix(trimmed, "test result:"):
-			summaries = append(summaries, clip(trimmed, 160))
+			resultLine = clip(trimmed, 160)
+			summaries = append(summaries, resultLine)
 		case strings.HasPrefix(trimmed, "error: test failed"):
-			summaries = append(summaries, clip(trimmed, 160))
+			rerunLine = clip(trimmed, 160)
+			summaries = append(summaries, rerunLine)
 		case strings.HasPrefix(trimmed, "Finished `test`"):
 			summaries = append(summaries, clip(trimmed, 160))
 		case strings.HasPrefix(trimmed, "failures:"):
@@ -56,6 +60,12 @@ func SummarizeCargoTest(input string, maxLines int) string {
 	details = uniqueStrings(shared.FoldConsecutiveLines(details))
 
 	if len(failures) == 0 && len(details) == 0 {
+		if resultLine != "" {
+			return resultLine
+		}
+		if rerunLine != "" {
+			return rerunLine
+		}
 		if len(summaries) > 0 {
 			return joinLimitedLines(summaries, maxLines)
 		}
@@ -69,6 +79,8 @@ func SummarizeCargoTest(input string, maxLines int) string {
 		switch {
 		case strings.HasPrefix(line, "= help:"), strings.HasPrefix(line, "= note:"), strings.HasPrefix(line, "help:"), strings.HasPrefix(line, "note:"):
 			hints = append(hints, line)
+		case strings.HasPrefix(line, "thread '"), strings.Contains(line, " panicked at "):
+			rootDetails = append(rootDetails, line)
 		case shared.DiagnosticAnchor(line) != "" || strings.HasPrefix(line, "--> "):
 			stackDetails = append(stackDetails, line)
 		default:
@@ -76,10 +88,16 @@ func SummarizeCargoTest(input string, maxLines int) string {
 		}
 	}
 
-	out := append([]string{}, summaries...)
-	out = append(out, failures...)
+	failures = pruneCargoFailureNames(failures)
+	out := append([]string{}, failures...)
 	out = append(out, rootDetails...)
 	out = append(out, shared.SelectUniqueAnchoredLines(stackDetails, maxLines/3+1)...)
+	if resultLine != "" {
+		out = append(out, resultLine)
+	}
+	if rerunLine != "" {
+		out = append(out, rerunLine)
+	}
 	out = append(out, hints...)
 	return joinLimitedLines(out, maxLines)
 }
@@ -216,4 +234,26 @@ func joinLimitedLines(lines []string, maxLines int) string {
 
 func isDividerLine(line string) bool {
 	return strings.Trim(line, "=-_ ") == ""
+}
+
+func pruneCargoFailureNames(lines []string) []string {
+	if len(lines) <= 1 {
+		return lines
+	}
+	explicit := map[string]struct{}{}
+	for _, line := range lines {
+		if strings.HasPrefix(line, "test ") && strings.Contains(line, " ... FAILED") {
+			name := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(line, "test "), " ... FAILED"))
+			explicit[name] = struct{}{}
+		}
+	}
+
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if _, ok := explicit[line]; ok {
+			continue
+		}
+		out = append(out, line)
+	}
+	return out
 }

@@ -22,7 +22,7 @@ func Profiles(maxLines int) []engine.Profile {
 			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 12)),
 			LatencyBudget:    profilekit.LatencyBudget(35),
 			Match: func(inv engine.Invocation) bool {
-				return len(inv.Display) >= 2 && inv.Display[0] == "bun" && inv.Display[1] == "test"
+				return profilekit.HasCommand(inv.Command, "bun", "test") || profilekit.HasCommand(inv.Display, "bun", "test")
 			},
 			Prepare: func(inv engine.Invocation) []string {
 				return inv.Command
@@ -49,10 +49,10 @@ func Profiles(maxLines int) []engine.Profile {
 			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 12)),
 			LatencyBudget:    profilekit.LatencyBudget(35),
 			Match: func(inv engine.Invocation) bool {
-				return isPackageManagerTest(inv.Display)
+				return isPackageManagerTest(inv.Command) || isPackageManagerTest(inv.Display)
 			},
 			Prepare: func(inv engine.Invocation) []string {
-				runner := detectPackageTestRunner(inv.Cwd)
+				runner := detectPackageTestRunner(inv.Cwd, inv.Command)
 				if runner == "" || hasStructuredJSArgs(inv.Command, runner) {
 					return inv.Command
 				}
@@ -107,7 +107,7 @@ func Profiles(maxLines int) []engine.Profile {
 			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 12)),
 			LatencyBudget:    profilekit.LatencyBudget(35),
 			Match: func(inv engine.Invocation) bool {
-				return len(inv.Display) > 0 && inv.Display[0] == "vitest"
+				return len(inv.Command) > 0 && inv.Command[0] == "vitest" || len(inv.Display) > 0 && inv.Display[0] == "vitest"
 			},
 			Prepare: func(inv engine.Invocation) []string {
 				if hasStructuredJSArgs(inv.Command, "vitest") {
@@ -137,7 +137,7 @@ func Profiles(maxLines int) []engine.Profile {
 			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 12)),
 			LatencyBudget:    profilekit.LatencyBudget(35),
 			Match: func(inv engine.Invocation) bool {
-				return len(inv.Display) > 0 && inv.Display[0] == "jest"
+				return len(inv.Command) > 0 && inv.Command[0] == "jest" || len(inv.Display) > 0 && inv.Display[0] == "jest"
 			},
 			Prepare: func(inv engine.Invocation) []string {
 				if hasStructuredJSArgs(inv.Command, "jest") {
@@ -213,7 +213,14 @@ func hasStructuredJSArgs(args []string, runner string) bool {
 	return containsAny(args, "--reporter=json", "--reporter", "json") || containsPrefix(args, "--reporter=") || containsPrefix(args, "--outputFile")
 }
 
-func detectPackageTestRunner(cwd string) string {
+func detectPackageTestRunner(cwd string, command []string) string {
+	if runner := detectPackageTestRunnerFromPackageJSON(cwd); runner != "" {
+		return runner
+	}
+	return detectPackageTestRunnerFromArgs(command)
+}
+
+func detectPackageTestRunnerFromPackageJSON(cwd string) string {
 	if cwd == "" {
 		return ""
 	}
@@ -222,19 +229,39 @@ func detectPackageTestRunner(cwd string) string {
 		Scripts map[string]string `json:"scripts"`
 	}
 
-	path := filepath.Join(cwd, "package.json")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return ""
-	}
+	for dir := cwd; dir != "" && dir != string(filepath.Separator); dir = filepath.Dir(dir) {
+		path := filepath.Join(dir, "package.json")
+		data, err := os.ReadFile(path)
+		if err != nil {
+			if next := filepath.Dir(dir); next == dir {
+				break
+			}
+			continue
+		}
 
-	var pkg packageJSON
-	if err := json.Unmarshal(data, &pkg); err != nil {
-		return ""
-	}
+		var pkg packageJSON
+		if err := json.Unmarshal(data, &pkg); err != nil {
+			return ""
+		}
 
-	script := strings.ToLower(strings.TrimSpace(pkg.Scripts["test"]))
+		script := strings.ToLower(strings.TrimSpace(pkg.Scripts["test"]))
+		switch {
+		case strings.Contains(script, "vitest"):
+			return "vitest"
+		case strings.Contains(script, "jest"):
+			return "jest"
+		default:
+			return ""
+		}
+	}
+	return ""
+}
+
+func detectPackageTestRunnerFromArgs(command []string) string {
+	script := strings.ToLower(strings.Join(command, " "))
 	switch {
+	case strings.Contains(script, "--runinband"):
+		return "jest"
 	case strings.Contains(script, "vitest"):
 		return "vitest"
 	case strings.Contains(script, "jest"):

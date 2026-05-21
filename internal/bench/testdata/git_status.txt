@@ -1,0 +1,18 @@
+## main...origin/main
+ M .github/workflows/ci.yml
+ M README.md
+ M docs/ROADMAP.md
+ M internal/cli/app.go
+ M internal/filters/git/filter.go
+ M internal/profiles/core.go
+ M internal/profiles/javascript/profile.go
+A  internal/filters/fs.go
+A  test/filters/read_test.go
+?? .github/dependabot.yml
+?? .github/pull_request_template.md
+?? docs/benchmarks/
+?? internal/bench/testdata/git_log.txt
+?? internal/bench/testdata/git_status.txt
+?? internal/bench/testdata/ls_listing.txt
+?? internal/bench/testdata/read_markdown.txt
+?? internal/bench/testdata/tree_listing.txt

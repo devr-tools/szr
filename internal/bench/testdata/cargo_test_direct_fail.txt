@@ -1,0 +1,24 @@
+Finished `test` profile [unoptimized + debuginfo] target(s) in 0.32s
+running 6 tests
+test tests::math::adds ... ok
+test tests::math::multiplies ... ok
+test tests::math::subtracts ... FAILED
+test tests::io::loads_fixture ... ok
+test tests::io::parses_header ... ok
+test tests::logic::handles_edge_case ... ok
+
+failures:
+
+---- tests::math::subtracts stdout ----
+thread 'tests::math::subtracts' panicked at src/lib.rs:42:5:
+assertion `left == right` failed
+  left: 3
+ right: 2
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+failures:
+    tests::math::subtracts
+
+test result: FAILED. 5 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--lib`

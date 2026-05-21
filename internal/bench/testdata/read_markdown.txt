@@ -1,0 +1,32 @@
+# Project Atlas
+
+Atlas is a developer CLI that compresses terminal output before it reaches an AI assistant.
+It focuses on preserving the next action rather than replaying every line verbatim.
+
+## Why
+
+Long command output is often mostly repetition, progress chatter, and boilerplate.
+Agents need the failures, file names, commands, and follow-up hints.
+
+## Install
+
+```bash
+brew install devr-tools/atlas/atlas
+atlas self doctor
+```
+
+## Quickstart
+
+- `atlas sync` pulls the latest workspace data.
+- `atlas test` runs the standard validation suite.
+- `atlas explain <cmd...>` shows why a profile matched.
+
+## Configuration
+
+Set `ATLAS_MODE=agent` to bias output toward shorter previews.
+Project-local rules can override built-in profiles.
+
+## Troubleshooting
+
+If a reducer becomes too aggressive, rerun the command with `atlas compare`.
+If a command is missing a specialized reducer, start with `atlas bench`.

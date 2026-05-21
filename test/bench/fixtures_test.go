@@ -13,8 +13,8 @@ func TestFixturesAndHarness(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fixtures: %v", err)
 	}
-	if len(fixtures) != 7 {
-		t.Fatalf("expected 7 fixtures, got %d", len(fixtures))
+	if len(fixtures) != 15 {
+		t.Fatalf("expected 15 fixtures, got %d", len(fixtures))
 	}
 
 	specs := bench.Specs()

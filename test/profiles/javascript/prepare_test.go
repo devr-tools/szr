@@ -28,6 +28,9 @@ func TestJSProfilesPrepare(t *testing.T) {
 	if !pm.Match(engine.Invocation{Display: []string{"npm", "test"}}) {
 		t.Fatal("expected npm test to match package profile")
 	}
+	if !pm.Match(engine.Invocation{Display: []string{"test", "npm", "test"}, Command: []string{"npm", "test"}}) {
+		t.Fatal("expected wrapped npm test to match package profile")
+	}
 	if !pm.Match(engine.Invocation{Display: []string{"pnpm", "run", "test"}}) {
 		t.Fatal("expected pnpm run test to match package profile")
 	}
@@ -90,6 +93,15 @@ func TestJSProfilesPrepare(t *testing.T) {
 	})
 	if want := []string{"pnpm", "test", "--", "--runInBand", "--json"}; !reflect.DeepEqual(pnpmPreserved, want) {
 		t.Fatalf("expected pnpm forwarded args to reuse existing separator: %#v", pnpmPreserved)
+	}
+
+	inferredJest := pm.Prepare(engine.Invocation{
+		Command: []string{"npm", "test", "--", "--runInBand"},
+		Display: []string{"test", "npm", "test", "--", "--runInBand"},
+		Cwd:     t.TempDir(),
+	})
+	if want := []string{"npm", "test", "--", "--runInBand", "--json"}; !reflect.DeepEqual(inferredJest, want) {
+		t.Fatalf("expected jest inference from args, got %#v", inferredJest)
 	}
 
 	missingPkg := pm.Prepare(engine.Invocation{

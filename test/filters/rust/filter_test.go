@@ -28,7 +28,6 @@ func TestSummarizeCargoTest(t *testing.T) {
 
 	got := rustfilter.SummarizeCargoTest(input, 7)
 	for _, want := range []string{
-		"running 3 tests",
 		"test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out",
 		"test tests::math::subtracts ... FAILED",
 		"thread 'tests::math::subtracts' panicked at src/lib.rs:42:5:",

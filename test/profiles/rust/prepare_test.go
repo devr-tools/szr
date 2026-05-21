@@ -16,16 +16,19 @@ func TestCargoProfilesPrepare(t *testing.T) {
 	if !cargoTest.Match(engine.Invocation{Display: []string{"cargo", "test"}}) {
 		t.Fatal("expected cargo test to match")
 	}
+	if !cargoTest.Match(engine.Invocation{Display: []string{"test", "cargo", "test"}, Command: []string{"cargo", "test"}}) {
+		t.Fatal("expected wrapped cargo test to match")
+	}
 	if cargoTest.Match(engine.Invocation{Display: []string{"cargo", "bench"}}) {
 		t.Fatal("did not expect cargo bench to match cargo-test profile")
 	}
-	if got := cargoTest.Prepare(engine.Invocation{Command: []string{"cargo", "test"}}); !reflect.DeepEqual(got, []string{"cargo", "test", "--message-format=short"}) {
+	if got := cargoTest.Prepare(engine.Invocation{Command: []string{"cargo", "test"}}); !reflect.DeepEqual(got, []string{"cargo", "test", "--message-format=short", "--quiet"}) {
 		t.Fatalf("unexpected cargo test prepare: %#v", got)
 	}
-	if got := cargoTest.Prepare(engine.Invocation{Command: []string{"cargo", "test", "--", "--nocapture"}}); !reflect.DeepEqual(got, []string{"cargo", "test", "--message-format=short", "--", "--nocapture"}) {
+	if got := cargoTest.Prepare(engine.Invocation{Command: []string{"cargo", "test", "--", "--nocapture"}}); !reflect.DeepEqual(got, []string{"cargo", "test", "--message-format=short", "--quiet", "--", "--nocapture"}) {
 		t.Fatalf("expected cargo test message format before --, got %#v", got)
 	}
-	if got := cargoTest.Prepare(engine.Invocation{Command: []string{"cargo", "test", "--message-format=json"}}); !reflect.DeepEqual(got, []string{"cargo", "test", "--message-format=json"}) {
+	if got := cargoTest.Prepare(engine.Invocation{Command: []string{"cargo", "test", "--message-format=json"}}); !reflect.DeepEqual(got, []string{"cargo", "test", "--message-format=json", "--quiet"}) {
 		t.Fatalf("expected explicit cargo message format to be preserved: %#v", got)
 	}
 
@@ -33,7 +36,7 @@ func TestCargoProfilesPrepare(t *testing.T) {
 	if !cargoBuild.Match(engine.Invocation{Display: []string{"cargo", "build"}}) || !cargoBuild.Match(engine.Invocation{Display: []string{"cargo", "clippy"}}) {
 		t.Fatal("expected cargo build profile to match build and clippy")
 	}
-	if got := cargoBuild.Prepare(engine.Invocation{Command: []string{"cargo", "clippy"}}); !reflect.DeepEqual(got, []string{"cargo", "clippy", "--message-format=short"}) {
+	if got := cargoBuild.Prepare(engine.Invocation{Command: []string{"cargo", "clippy"}}); !reflect.DeepEqual(got, []string{"cargo", "clippy", "--message-format=short", "--quiet"}) {
 		t.Fatalf("unexpected cargo clippy prepare: %#v", got)
 	}
 }

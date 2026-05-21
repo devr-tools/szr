@@ -1,0 +1,34 @@
+project
+|-- CHANGELOG.md
+|-- README.md
+|-- cmd
+|   |-- atlas
+|   |   `-- main.go
+|   `-- atlas-dev
+|       `-- main.go
+|-- docs
+|   |-- architecture.md
+|   |-- benchmark.md
+|   `-- roadmap.md
+|-- internal
+|   |-- cli
+|   |   |-- app.go
+|   |   `-- bench.go
+|   |-- filters
+|   |   |-- fs.go
+|   |   `-- git.go
+|   `-- profiles
+|       |-- core.go
+|       `-- git.go
+|-- scripts
+|   |-- install.sh
+|   `-- smoke.sh
+|-- src
+|   |-- atlas.ts
+|   |-- config.ts
+|   `-- util.ts
+`-- test
+    |-- bench_test.go
+    `-- cli_test.go
+
+11 directories, 19 files

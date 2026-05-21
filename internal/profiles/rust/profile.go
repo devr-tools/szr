@@ -17,10 +17,10 @@ func Profiles(maxLines int) []engine.Profile {
 			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 12)),
 			LatencyBudget:    profilekit.LatencyBudget(35),
 			Match: func(inv engine.Invocation) bool {
-				return profilekit.HasCommand(inv.Display, "cargo", "test")
+				return profilekit.HasCommand(inv.Command, "cargo", "test") || profilekit.HasCommand(inv.Display, "cargo", "test")
 			},
 			Prepare: func(inv engine.Invocation) []string {
-				return ensureCargoMessageFormat(inv.Command)
+				return ensureCargoQuiet(ensureCargoMessageFormat(inv.Command))
 			},
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return rustfilter.SummarizeCargoTest(exec.Stdout+"\n"+exec.Stderr, maxLines)
@@ -44,10 +44,13 @@ func Profiles(maxLines int) []engine.Profile {
 			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 10)),
 			LatencyBudget:    profilekit.LatencyBudget(30),
 			Match: func(inv engine.Invocation) bool {
-				return profilekit.HasCommand(inv.Display, "cargo", "build") || profilekit.HasCommand(inv.Display, "cargo", "clippy")
+				return profilekit.HasCommand(inv.Command, "cargo", "build") ||
+					profilekit.HasCommand(inv.Command, "cargo", "clippy") ||
+					profilekit.HasCommand(inv.Display, "cargo", "build") ||
+					profilekit.HasCommand(inv.Display, "cargo", "clippy")
 			},
 			Prepare: func(inv engine.Invocation) []string {
-				return ensureCargoMessageFormat(inv.Command)
+				return ensureCargoQuiet(ensureCargoMessageFormat(inv.Command))
 			},
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return rustfilter.SummarizeCargoBuild(exec.Stderr+"\n"+exec.Stdout, maxLines)
@@ -79,5 +82,21 @@ func ensureCargoMessageFormat(command []string) []string {
 	}
 	out := append([]string{}, command[:insertAt]...)
 	out = append(out, "--message-format=short")
+	return append(out, command[insertAt:]...)
+}
+
+func ensureCargoQuiet(command []string) []string {
+	if len(command) == 0 || profilekit.ContainsAny(command[1:], "-q", "--quiet", "-v", "--verbose") {
+		return command
+	}
+	insertAt := len(command)
+	for i, arg := range command {
+		if arg == "--" {
+			insertAt = i
+			break
+		}
+	}
+	out := append([]string{}, command[:insertAt]...)
+	out = append(out, "--quiet")
 	return append(out, command[insertAt:]...)
 }

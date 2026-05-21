@@ -190,9 +190,9 @@ func joinNonEmpty(left, right string) string {
 
 func profileConfidence(name string) string {
 	switch name {
-	case "git-status", "git-log", "go-test-json", "vitest-json", "jest-json":
+	case "git-status", "git-log", "go-test-json", "vitest-json", "jest-json", "cargo-test":
 		return "high"
-	case "git-diff", "go-build", "generic-test", "js-package-test":
+	case "git-diff", "go-build", "generic-test", "js-package-test", "directory-listing", "cat-read":
 		return "medium"
 	default:
 		return "low"
