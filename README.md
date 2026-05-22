@@ -19,8 +19,16 @@
     <img src="https://github.com/devr-tools/szr/actions/workflows/homebrew-validation.yml/badge.svg" alt="homebrew-validation.yml" />
   </a>
 
+  <a href="https://pkg.go.dev/github.com/devr-tools/szr">
+    <img src="https://pkg.go.dev/badge/github.com/devr-tools/szr.svg" alt="Go Reference" />
+  </a>
+
   <a href="https://goreportcard.com/report/github.com/devr-tools/szr">
     <img src="https://goreportcard.com/badge/github.com/devr-tools/szr" alt="Go Report Card" />
+  </a>
+
+  <a href="https://opensource.org/licenses/MIT">
+    <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT" />
   </a>
 
   <a href="https://www.linkedin.com/in/alxxjohn">
