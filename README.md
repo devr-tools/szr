@@ -6,14 +6,25 @@
   <a href="https://github.com/devr-tools/szr/actions/workflows/release.yml">
     <img src="https://github.com/devr-tools/szr/actions/workflows/release.yml/badge.svg?branch=main&event=release" alt="release.yml" />
   </a>
+
   <a href="https://github.com/devr-tools/szr/actions/workflows/cd.yml">
     <img src="https://github.com/devr-tools/szr/actions/workflows/cd.yml/badge.svg?branch=main" alt="cd.yml" />
   </a>
+
   <a href="https://github.com/devr-tools/szr/actions/workflows/ci.yml">
     <img src="https://github.com/devr-tools/szr/actions/workflows/ci.yml/badge.svg" alt="ci.yml" />
   </a>
+
   <a href="https://github.com/devr-tools/szr/actions/workflows/homebrew-validation.yml">
     <img src="https://github.com/devr-tools/szr/actions/workflows/homebrew-validation.yml/badge.svg" alt="homebrew-validation.yml" />
+  </a>
+
+  <a href="https://goreportcard.com/report/github.com/devr-tools/szr">
+    <img src="https://goreportcard.com/badge/github.com/devr-tools/szr" alt="Go Report Card" />
+  </a>
+
+  <a href="https://www.linkedin.com/in/alxxjohn">
+    <img src="https://img.shields.io/badge/LinkedIn-alxxjohn-blue?logo=linkedin" alt="LinkedIn" />
   </a>
 </p>
 
