@@ -122,16 +122,3 @@ jobs:
         with:
           name: dist-${{ steps.release.outputs.tag }}
           path: dist/*
-
-      - name: Notify Discord for stable releases
-        if: ${{ steps.release.outputs.prerelease == 'false' && secrets.DISCORD_WEBHOOK != '' }}
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          curl -sS \
-            -H "Content-Type: application/json" \
-            -d "{\"content\":\"szr ${{ steps.release.outputs.tag }} is live: https://github.com/${{ github.repository }}/releases/tag/${{ steps.release.outputs.tag }}\"}" \
-            "$DISCORD_WEBHOOK"
