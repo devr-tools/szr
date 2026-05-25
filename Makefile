@@ -27,7 +27,6 @@ help:
 		'make smoke      - run quick local CLI smoke checks for szr and szr-dev, including bench/install flows' \
 		'make ci         - run the host-mode local reproduction of the GitHub CI pipeline (override BASE_REF=...)' \
 		'make ci-docker  - build and run the pinned Linux CI container with semgrep and govulncheck required' \
-		'make ci         - run the local reproduction of the GitHub CI pipeline (override BASE_REF=...); also prints prerelease semver bump rules' \
 		'make commit     - interactively git add ., choose commit type, commit, and push the current branch' \
 		'make prepush    - run the quick local gate: fmt + test + cover + smoke' \
 		'make clean      - remove local build and coverage artifacts'
