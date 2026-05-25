@@ -13,6 +13,7 @@ permissions:
 
 env:
   GOCACHE: ${{ github.workspace }}/.gocache
+  GO111MODULE: "on"
   GOVULNCHECK_VERSION: v1.1.1
   GOCYCLO_VERSION: v0.6.0
   MIN_INTERNAL_COVERAGE: "80.0"
