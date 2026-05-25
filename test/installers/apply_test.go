@@ -1,6 +1,7 @@
 package installers_test
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -225,9 +226,10 @@ func TestApplyClaudePlanAndUninstall(t *testing.T) {
 		t.Fatalf("unexpected global CLAUDE.md content: %q", claudeMD)
 	}
 	settings := string(testutil.MustReadFile(t, filepath.Join(home, ".claude", "settings.json")))
-	if !strings.Contains(settings, "\"theme\": \"dark\"") || !strings.Contains(settings, "\"command\": \""+filepath.Join(home, ".claude", "hooks", "szr-rewrite.sh")+"\"") {
+	if !strings.Contains(settings, "\"theme\": \"dark\"") {
 		t.Fatalf("unexpected global settings.json content: %q", settings)
 	}
+	assertClaudeHookCommand(t, settings, filepath.Join(home, ".claude", "hooks", "szr-rewrite.sh"))
 	if _, err := os.Stat(filepath.Join(home, ".claude", "szr.md")); err != nil {
 		t.Fatalf("expected szr.md to exist: %v", err)
 	}
@@ -260,6 +262,31 @@ func TestApplyClaudePlanAndUninstall(t *testing.T) {
 			t.Fatalf("expected %s to be removed, got err=%v", path, err)
 		}
 	}
+}
+
+func assertClaudeHookCommand(t *testing.T, content, want string) {
+	t.Helper()
+
+	var payload struct {
+		Hooks struct {
+			PreToolUse []struct {
+				Hooks []struct {
+					Command string `json:"command"`
+				} `json:"hooks"`
+			} `json:"PreToolUse"`
+		} `json:"hooks"`
+	}
+	if err := json.Unmarshal([]byte(content), &payload); err != nil {
+		t.Fatalf("decode Claude settings.json: %v", err)
+	}
+	for _, entry := range payload.Hooks.PreToolUse {
+		for _, hook := range entry.Hooks {
+			if hook.Command == want {
+				return
+			}
+		}
+	}
+	t.Fatalf("expected Claude hook command %q in settings.json, got %q", want, content)
 }
 
 func TestApplyCursorAndGeminiPlansAndUninstall(t *testing.T) {
