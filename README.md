@@ -178,8 +178,27 @@ make test
 make cover
 make smoke
 make ci
+make commit
 make prepush
 ```
+
+`make commit` stages the current worktree with `git add .`, asks you to choose one of three commit lanes, prompts for the summary text, then commits and pushes the current branch:
+
+- `major` -> `feat!:` for breaking changes
+- `minor` -> `feat:` for new functionality
+- `patch` -> `fix:` for patch-level changes
+
+## Release Versioning
+
+Prereleases are produced from `develop` and non-`main`/`master` manual CD runs. The prerelease workflow computes the next semver bump from commit messages since the last stable tag:
+
+- `BREAKING CHANGE` or `type!:` -> major
+- `feat:` -> minor
+- anything else -> patch
+
+That produces release candidate tags like `v0.2.0-rc.123`.
+
+Stable releases are produced from `main` or `master` through release-please, which opens or updates the release PR and creates the final stable tag when those changes land.
 
 ## Contributing
 
