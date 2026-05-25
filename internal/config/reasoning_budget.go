@@ -35,5 +35,8 @@ func Normalize(cfg Config) (Config, error) {
 		return Config{}, err
 	}
 	cfg.ReasoningBudgetMode = mode
+	if cfg.UpdateCheck.IntervalHours <= 0 {
+		cfg.UpdateCheck.IntervalHours = Default().UpdateCheck.IntervalHours
+	}
 	return cfg, nil
 }

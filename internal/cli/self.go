@@ -1,16 +1,18 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
+	"time"
 
 	"github.com/devr-tools/szr/internal/config"
 	"github.com/devr-tools/szr/internal/history"
 	"github.com/devr-tools/szr/internal/selfinstall"
 )
 
-func (a *App) runSelf(flags globalFlags, args []string) int {
+func (a *App) runSelf(ctx context.Context, flags globalFlags, args []string) int {
 	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, "szr: self requires a subcommand")
 		return 2
@@ -19,8 +21,10 @@ func (a *App) runSelf(flags globalFlags, args []string) int {
 	switch args[0] {
 	case "install":
 		return a.runSelfInstall(args[1:])
+	case "update":
+		return a.runSelfUpdate(ctx, args[1:])
 	case "doctor":
-		return a.runDoctor(a.configForFlags(flags), args[1:])
+		return a.runDoctor(ctx, a.configForFlags(flags), args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "szr: unknown self subcommand %s\n", args[0])
 		return 2
@@ -142,7 +146,65 @@ func printSelfInstallPlan(plan selfinstall.Plan, updateShell bool) {
 	}
 }
 
-func (a *App) runDoctor(cfg config.Config, args []string) int {
+func (a *App) runSelfUpdate(ctx context.Context, args []string) int {
+	if len(args) != 0 {
+		fmt.Fprintf(os.Stderr, "szr: self update does not accept arguments\n")
+		return 2
+	}
+	if a.updater == nil {
+		fmt.Fprintln(os.Stderr, "szr: self update is unavailable in this build")
+		return 1
+	}
+	result, err := a.updater.SelfUpdate(ctx, os.Stdout, os.Stderr)
+	if err != nil {
+		if result.UpgradeCommand != "" {
+			fmt.Fprintf(os.Stderr, "szr: failed to update via %s: %v\n", result.UpgradeCommand, err)
+		} else {
+			fmt.Fprintf(os.Stderr, "szr: %v\n", err)
+		}
+		return 1
+	}
+	fmt.Printf("updated via: %s\n", result.Method)
+	if result.UpgradeCommand != "" {
+		fmt.Printf("command: %s\n", result.UpgradeCommand)
+	}
+	return 0
+}
+
+func (a *App) runDoctor(ctx context.Context, cfg config.Config, args []string) int {
+	showHistory, code := parseDoctorArgs(args)
+	if code != 0 {
+		return code
+	}
+
+	executablePath, plan, planErr := doctorInstallPlan()
+
+	fmt.Printf("version: %s\n", a.version)
+	if executablePath != "" {
+		fmt.Printf("executable: %s\n", executablePath)
+	}
+	printDoctorInstallPlan(plan, planErr)
+	fmt.Printf("config: %s\n", a.paths.ConfigFile)
+	fmt.Printf("config dir: %s\n", a.paths.ConfigDir)
+	fmt.Printf("data dir: %s\n", a.paths.DataDir)
+	fmt.Printf("history: %s\n", a.paths.HistoryFile)
+	fmt.Printf("tee dir: %s\n", a.paths.TeeDir)
+	fmt.Printf("reasoning budget mode: %s\n", cfg.ReasoningBudgetMode)
+	a.printDoctorUpdateStatus(ctx, cfg)
+	if a.paths.ProjectRuleFile != "" {
+		fmt.Printf("project rules: %s\n", a.paths.ProjectRuleFile)
+	}
+	printDoctorToolStatus()
+	if showHistory {
+		if err := a.printDoctorHistory(); err != nil {
+			fmt.Fprintf(os.Stderr, "szr: failed to read history: %v\n", err)
+			return 1
+		}
+	}
+	return 0
+}
+
+func parseDoctorArgs(args []string) (bool, int) {
 	showHistory := false
 	for _, arg := range args {
 		switch arg {
@@ -150,44 +212,73 @@ func (a *App) runDoctor(cfg config.Config, args []string) int {
 			showHistory = true
 		default:
 			fmt.Fprintf(os.Stderr, "szr: unknown doctor flag %s\n", arg)
-			return 2
+			return false, 2
 		}
 	}
+	return showHistory, 0
+}
 
+func doctorInstallPlan() (string, selfinstall.Plan, error) {
 	executablePath, execErr := os.Executable()
+	if execErr != nil {
+		return "", selfinstall.Plan{}, execErr
+	}
 	homeDir, homeErr := os.UserHomeDir()
-	var plan selfinstall.Plan
-	var planErr error
-	if execErr == nil && homeErr == nil {
-		plan, planErr = selfinstall.PlanInstall(executablePath, homeDir, os.Getenv("PATH"), os.Getenv("SHELL"), false)
+	if homeErr != nil {
+		return executablePath, selfinstall.Plan{}, homeErr
 	}
+	plan, err := selfinstall.PlanInstall(executablePath, homeDir, os.Getenv("PATH"), os.Getenv("SHELL"), false)
+	return executablePath, plan, err
+}
 
-	fmt.Printf("version: %s\n", a.version)
-	if execErr == nil {
-		fmt.Printf("executable: %s\n", executablePath)
+func printDoctorInstallPlan(plan selfinstall.Plan, err error) {
+	if err != nil {
+		return
 	}
-	if planErr == nil {
-		fmt.Printf("install dir: %s\n", plan.InstallDir)
-		fmt.Printf("install target: %s\n", plan.TargetPath)
-		if plan.PathContains {
-			fmt.Println("path: present")
+	fmt.Printf("install dir: %s\n", plan.InstallDir)
+	fmt.Printf("install target: %s\n", plan.TargetPath)
+	if plan.PathContains {
+		fmt.Println("path: present")
+		return
+	}
+	fmt.Println("path: missing")
+	if plan.ShellRCPath != "" {
+		fmt.Printf("shell rc: %s\n", plan.ShellRCPath)
+		fmt.Printf("path fix: %s\n", plan.ShellSnippet)
+	}
+}
+
+func (a *App) printDoctorUpdateStatus(ctx context.Context, cfg config.Config) {
+	if a.updater == nil {
+		return
+	}
+	report := a.updater.Doctor(ctx, a.version, cfg.UpdateCheck)
+	if !report.Enabled {
+		fmt.Println("update checks: disabled")
+		fmt.Printf("install method: %s\n", report.Method)
+		return
+	}
+	fmt.Println("update checks: enabled")
+	fmt.Printf("update check interval: %s\n", report.Interval)
+	fmt.Printf("install method: %s\n", report.Method)
+	if !report.CheckedAt.IsZero() {
+		fmt.Printf("latest stable: %s\n", report.LatestVersion)
+		fmt.Printf("update checked at: %s\n", report.CheckedAt.Format(time.RFC3339))
+		if report.UpdateAvailable {
+			fmt.Println("update available: yes")
 		} else {
-			fmt.Println("path: missing")
-			if plan.ShellRCPath != "" {
-				fmt.Printf("shell rc: %s\n", plan.ShellRCPath)
-				fmt.Printf("path fix: %s\n", plan.ShellSnippet)
-			}
+			fmt.Println("update available: no")
+		}
+		if report.UpgradeCommand != "" {
+			fmt.Printf("upgrade command: %s\n", report.UpgradeCommand)
 		}
 	}
-	fmt.Printf("config: %s\n", a.paths.ConfigFile)
-	fmt.Printf("config dir: %s\n", a.paths.ConfigDir)
-	fmt.Printf("data dir: %s\n", a.paths.DataDir)
-	fmt.Printf("history: %s\n", a.paths.HistoryFile)
-	fmt.Printf("tee dir: %s\n", a.paths.TeeDir)
-	fmt.Printf("reasoning budget mode: %s\n", cfg.ReasoningBudgetMode)
-	if a.paths.ProjectRuleFile != "" {
-		fmt.Printf("project rules: %s\n", a.paths.ProjectRuleFile)
+	if report.Error != "" {
+		fmt.Printf("update check error: %s\n", report.Error)
 	}
+}
+
+func printDoctorToolStatus() {
 	for _, tool := range []string{"git", "go"} {
 		path, err := exec.LookPath(tool)
 		if err != nil {
@@ -201,13 +292,6 @@ func (a *App) runDoctor(cfg config.Config, args []string) int {
 	} else {
 		fmt.Printf("rg: %s (optional)\n", path)
 	}
-	if showHistory {
-		if err := a.printDoctorHistory(); err != nil {
-			fmt.Fprintf(os.Stderr, "szr: failed to read history: %v\n", err)
-			return 1
-		}
-	}
-	return 0
 }
 
 func (a *App) printDoctorHistory() error {

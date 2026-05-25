@@ -12,11 +12,17 @@ import (
 const appName = "szr"
 
 type Config struct {
-	TeeOnFailure        bool       `json:"tee_on_failure"`
-	MaxPreviewLines     int        `json:"max_preview_lines"`
-	MaxMatchGroups      int        `json:"max_match_groups"`
-	ReasoningBudgetMode string     `json:"reasoning_budget_mode"`
-	ProjectRules        rules.File `json:"-"`
+	TeeOnFailure        bool        `json:"tee_on_failure"`
+	MaxPreviewLines     int         `json:"max_preview_lines"`
+	MaxMatchGroups      int         `json:"max_match_groups"`
+	ReasoningBudgetMode string      `json:"reasoning_budget_mode"`
+	UpdateCheck         UpdateCheck `json:"update_check"`
+	ProjectRules        rules.File  `json:"-"`
+}
+
+type UpdateCheck struct {
+	Enabled       bool `json:"enabled"`
+	IntervalHours int  `json:"interval_hours"`
 }
 
 type Paths struct {
@@ -35,6 +41,10 @@ func Default() Config {
 		MaxPreviewLines:     12,
 		MaxMatchGroups:      8,
 		ReasoningBudgetMode: ReasoningBudgetStandard,
+		UpdateCheck: UpdateCheck{
+			Enabled:       false,
+			IntervalHours: 24,
+		},
 	}
 }
 

@@ -8,7 +8,7 @@ import (
 
 func TestDefault(t *testing.T) {
 	cfg := config.Default()
-	if !cfg.TeeOnFailure || cfg.MaxPreviewLines != 12 || cfg.MaxMatchGroups != 8 || cfg.ReasoningBudgetMode != config.ReasoningBudgetStandard {
+	if !cfg.TeeOnFailure || cfg.MaxPreviewLines != 12 || cfg.MaxMatchGroups != 8 || cfg.ReasoningBudgetMode != config.ReasoningBudgetStandard || cfg.UpdateCheck.Enabled || cfg.UpdateCheck.IntervalHours != 24 {
 		t.Fatalf("unexpected defaults: %#v", cfg)
 	}
 }

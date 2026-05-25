@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -12,6 +13,7 @@ import (
 	"github.com/devr-tools/szr/internal/config"
 	"github.com/devr-tools/szr/internal/engine"
 	"github.com/devr-tools/szr/internal/history"
+	"github.com/devr-tools/szr/internal/updates"
 	"github.com/devr-tools/szr/test/testutil"
 )
 
@@ -319,6 +321,37 @@ func TestSelfInstallUpdateShell(t *testing.T) {
 	content := string(testutil.MustReadFile(t, rcPath))
 	if !strings.Contains(content, `export PATH="$HOME/bin:$PATH"`) {
 		t.Fatalf("expected bashrc to contain PATH export, got %q", content)
+	}
+}
+
+func TestSelfUpdateCommand(t *testing.T) {
+	paths := testutil.Paths(t.TempDir())
+	testutil.EnsurePaths(t, paths)
+	app := cli.NewWithDependenciesAndUpdater("v0.1.0", config.Default(), paths, history.New(paths.HistoryFile), testutil.AppEngine(t, paths), stubUpdater{
+		updateResult: updates.SelfUpdateResult{
+			Method:         updates.InstallMethodBrew,
+			UpgradeCommand: "brew upgrade szr",
+		},
+		updateStdout: "brew updated\n",
+	})
+
+	code, stdout, stderr := testutil.RunApp(t, app, "self", "update")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected self update stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	for _, want := range []string{"brew updated", "updated via: brew", "command: brew upgrade szr"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("expected self update stdout to contain %q, got %q", want, stdout)
+		}
+	}
+
+	app = cli.NewWithDependenciesAndUpdater("v0.1.0", config.Default(), paths, history.New(paths.HistoryFile), testutil.AppEngine(t, paths), stubUpdater{
+		updateResult: updates.SelfUpdateResult{},
+		updateErr:    errors.New("unable to determine how this szr binary was installed"),
+	})
+	code, stdout, stderr = testutil.RunApp(t, app, "self", "update")
+	if code != 1 || stdout != "" || !strings.Contains(stderr, "unable to determine how this szr binary was installed") {
+		t.Fatalf("unexpected self update failure stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
 }
 

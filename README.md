@@ -117,6 +117,32 @@ szr self doctor
 
 The first stable formula release is `v0.1.0`. Future tagged releases are documented in [docs/RELEASING.md](/docs/RELEASING.md).
 
+### Updating szr
+
+`szr self update` upgrades installs that `szr` can recognize today:
+
+- Homebrew installs use `brew upgrade szr`
+- `go install` installs use `go install github.com/devr-tools/szr/cmd/szr@latest`
+
+`szr self install` from a local build copies a binary into your user bin directory, so `szr` cannot safely infer how to refresh that binary later. In that case, rebuild and rerun `szr self install`.
+
+If you want `szr` to periodically check for new stable releases and surface an upgrade notice, opt in through `~/.config/szr/config.json`:
+
+```json
+{
+  "update_check": {
+    "enabled": true,
+    "interval_hours": 24
+  }
+}
+```
+
+When enabled:
+
+- `szr doctor` and `szr self doctor` show the latest stable release and whether an update is available
+- normal `szr` commands print a cached stderr notice when a newer release is available
+- the last successful check is cached under `szr`'s data directory
+
 ### Repo bootstrap
 
 Once the binary is globally available, bootstrap repo-local guidance separately:
