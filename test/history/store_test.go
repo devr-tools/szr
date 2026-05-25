@@ -229,6 +229,38 @@ func TestBudgetSuggestions(t *testing.T) {
 	}
 }
 
+func TestSummaryHydratesLegacyFields(t *testing.T) {
+	records := []history.Record{{
+		Timestamp:      time.Date(2026, 5, 22, 10, 0, 0, 0, time.UTC),
+		Command:        "szr custom command",
+		Profile:        "passthrough",
+		DurationMS:     12,
+		ExitCode:       0,
+		RawTokens:      20,
+		FilteredTokens: 5,
+		SavedTokens:    15,
+		SavingsPct:     75,
+	}}
+
+	summary := history.Summarize(records, 4)
+	if len(summary.Recent) != 1 {
+		t.Fatalf("unexpected recent records: %#v", summary.Recent)
+	}
+	rec := summary.Recent[0]
+	if rec.CommandFingerprint == "" || rec.ProfileConfidence != "low" || !rec.FallbackUsed {
+		t.Fatalf("expected hydrated record fields, got %#v", rec)
+	}
+	if rec.RawBytesRead != 80 || rec.BytesParsed != 80 || rec.BytesEmitted != 20 {
+		t.Fatalf("unexpected hydrated byte fields: %#v", rec)
+	}
+	if len(summary.ProfileStats) != 1 || summary.ProfileStats[0].Confidence != "low" || !closeEnough(summary.ProfileStats[0].FallbackRate, 100, 0.01) {
+		t.Fatalf("unexpected hydrated profile stats: %#v", summary.ProfileStats)
+	}
+	if len(summary.FingerprintHotspots) != 1 || summary.FingerprintHotspots[0].Fingerprint == "" {
+		t.Fatalf("unexpected fingerprint hotspots: %#v", summary.FingerprintHotspots)
+	}
+}
+
 func closeEnough(got, want, tolerance float64) bool {
 	return math.Abs(got-want) <= tolerance
 }

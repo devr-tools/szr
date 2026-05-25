@@ -125,3 +125,28 @@ func TestUtilityHelpers(t *testing.T) {
 		t.Fatalf("expected contract-preserved failure parts, got %q", got)
 	}
 }
+
+func TestFilesystemSummaries(t *testing.T) {
+	t.Parallel()
+
+	tree := strings.Join([]string{
+		"project",
+		"|-- cmd",
+		"|   |-- app",
+		"|   `-- lib",
+		"`-- docs",
+		"2 directories, 2 files",
+	}, "\n")
+	got := filters.SummarizeTreeOutput(tree, 6)
+	for _, want := range []string{"project", "cmd (2) app, lib", "docs", "2 directories, 2 files"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected tree summary %q in %q", want, got)
+		}
+	}
+
+	compact := filters.SummarizeTreeOutput(tree, 2)
+	lines := strings.Split(compact, "\n")
+	if len(lines) != 2 || lines[0] != "project" || lines[1] != "2 directories, 2 files" {
+		t.Fatalf("expected compact tree summary to preserve root and footer, got %q", compact)
+	}
+}

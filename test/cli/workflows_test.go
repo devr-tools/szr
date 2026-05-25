@@ -100,6 +100,21 @@ func TestReplayAndCompareCommands(t *testing.T) {
 		t.Fatalf("unexpected replay tee stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
 
+	code, stdout, stderr = testutil.RunApp(t, app, "replay", "100_git_diff", "--json", "--cwd", root, "--exit-code", "7", "--max-lines", "1")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected replay json stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	var replayPayload map[string]any
+	if err := json.Unmarshal([]byte(stdout), &replayPayload); err != nil {
+		t.Fatalf("decode replay json: %v", err)
+	}
+	if replayPayload["exit_code"] != float64(7) || replayPayload["effective_command"] != "git diff" || replayPayload["profile"] != "git-diff" {
+		t.Fatalf("unexpected replay payload: %#v", replayPayload)
+	}
+	if display, _ := replayPayload["display"].(string); !strings.Contains(display, "files=1") {
+		t.Fatalf("expected summarized replay display, got %#v", replayPayload)
+	}
+
 	binDir := t.TempDir()
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	testutil.WriteExecutable(t, binDir, "git", "#!/bin/sh\nif [ \"$1\" = \"diff\" ]; then\n  echo \"diff --git a/a.go b/a.go\"\n  echo \" a.go | 2 +-\"\n  echo \" 1 file changed, 1 insertion(+), 1 deletion(-)\"\nfi\n")
