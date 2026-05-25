@@ -15,8 +15,10 @@ const (
 type Strategy string
 
 const (
-	StrategyWrite Strategy = "write"
-	StrategyMerge Strategy = "merge"
+	StrategyWrite   Strategy = "write"
+	StrategyMerge   Strategy = "merge"
+	StrategyDelete  Strategy = "delete"
+	StrategyUnmerge Strategy = "unmerge"
 )
 
 type Options struct {

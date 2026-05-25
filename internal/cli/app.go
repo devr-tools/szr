@@ -96,6 +96,7 @@ func (a *App) runBuiltInCommand(ctx context.Context, flags globalFlags, rest []s
 		"doctor":    func() int { return a.runDoctor(a.configForFlags(flags), rest[1:]) },
 		"self":      func() int { return a.runSelf(flags, rest[1:]) },
 		"install":   func() int { return a.runInstall(rest[1:]) },
+		"uninstall": func() int { return a.runUninstall(rest[1:]) },
 		"bench":     func() int { return a.runBench(rest[1:]) },
 		"replay":    func() int { return a.runReplay(flags, rest[1:]) },
 		"compare":   func() int { return a.runCompare(ctx, flags, rest[1:]) },

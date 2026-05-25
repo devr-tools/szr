@@ -124,6 +124,7 @@ Once the binary is globally available, bootstrap repo-local guidance separately:
 ```bash
 szr install codex
 szr install shell
+szr uninstall codex
 ```
 
 That keeps global binary installation separate from repo-specific agent/editor wiring.
