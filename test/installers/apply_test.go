@@ -84,6 +84,7 @@ func TestApplyWithErrors(t *testing.T) {
 		func(string) ([]byte, error) { return nil, nil },
 		func(string, []byte, os.FileMode) error { return nil },
 		func(string, os.FileMode) error { return nil },
+		func(string) error { return nil },
 	); !errors.Is(err, wantErr) {
 		t.Fatalf("expected mkdir error, got %v", err)
 	}
@@ -94,6 +95,7 @@ func TestApplyWithErrors(t *testing.T) {
 		func(string) ([]byte, error) { return nil, wantErr },
 		func(string, []byte, os.FileMode) error { return nil },
 		func(string, os.FileMode) error { return nil },
+		func(string) error { return nil },
 	); !errors.Is(err, wantErr) {
 		t.Fatalf("expected read error, got %v", err)
 	}
@@ -104,6 +106,7 @@ func TestApplyWithErrors(t *testing.T) {
 		func(string) ([]byte, error) { return nil, os.ErrNotExist },
 		func(string, []byte, os.FileMode) error { return wantErr },
 		func(string, os.FileMode) error { return nil },
+		func(string) error { return nil },
 	); !errors.Is(err, wantErr) {
 		t.Fatalf("expected write error, got %v", err)
 	}
@@ -114,6 +117,7 @@ func TestApplyWithErrors(t *testing.T) {
 		func(string) ([]byte, error) { return nil, os.ErrNotExist },
 		func(string, []byte, os.FileMode) error { return nil },
 		func(string, os.FileMode) error { return wantErr },
+		func(string) error { return nil },
 	); !errors.Is(err, wantErr) {
 		t.Fatalf("expected chmod error, got %v", err)
 	}
@@ -141,5 +145,47 @@ func TestApplyEmptyMergePlan(t *testing.T) {
 	}
 	if !strings.Contains(string(data), "<!-- szr-empty:begin -->") {
 		t.Fatalf("expected empty merge markers, got %q", string(data))
+	}
+}
+
+func TestApplyUninstallPlanRemovesManagedContent(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	testutil.MustWriteFile(t, filepath.Join(root, "AGENTS.md"), "# Existing\n")
+
+	installPlan, err := installers.Render(installers.TargetCodex, installers.Options{
+		RepoRoot: root,
+		Binary:   "./bin/szr",
+	})
+	if err != nil {
+		t.Fatalf("render install plan: %v", err)
+	}
+	if err := installers.Apply(installPlan); err != nil {
+		t.Fatalf("apply install plan: %v", err)
+	}
+
+	uninstallPlan, err := installers.RenderUninstall(installers.TargetCodex, installers.Options{
+		RepoRoot: root,
+		Binary:   "./bin/szr",
+	})
+	if err != nil {
+		t.Fatalf("render uninstall plan: %v", err)
+	}
+	if err := installers.Apply(uninstallPlan); err != nil {
+		t.Fatalf("apply uninstall plan: %v", err)
+	}
+
+	agents := string(testutil.MustReadFile(t, filepath.Join(root, "AGENTS.md")))
+	if agents != "# Existing\n" {
+		t.Fatalf("expected original AGENTS content to survive, got %q", agents)
+	}
+	for _, path := range []string{
+		filepath.Join(root, ".szr", "hooks", "pre-command.sh"),
+		filepath.Join(root, ".szr", "install", "codex.md"),
+	} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("expected %s to be removed, got err=%v", path, err)
+		}
 	}
 }

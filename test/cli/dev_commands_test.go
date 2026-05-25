@@ -175,6 +175,75 @@ func TestInstallCommands(t *testing.T) {
 			t.Fatalf("expected install all stdout to contain %q, got %q", want, stdout)
 		}
 	}
+
+	code, stdout, stderr = testutil.RunApp(t, app, "uninstall")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected uninstall list stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	for _, want := range []string{
+		"available uninstall targets:",
+		"codex",
+		"claude-code",
+		"cursor",
+		"gemini",
+		"shell",
+		"szr uninstall --all",
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("expected uninstall list stdout to contain %q, got %q", want, stdout)
+		}
+	}
+
+	code, stdout, stderr = testutil.RunApp(t, app, "uninstall", "--print", "codex")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected uninstall print stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	for _, want := range []string{"plan: uninstall codex", "./AGENTS.md", "./.szr/install/codex.md", "manual steps:"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("expected uninstall print stdout to contain %q, got %q", want, stdout)
+		}
+	}
+
+	code, stdout, stderr = testutil.RunApp(t, app, "uninstall", "codex")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected uninstall apply stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	for _, want := range []string{"uninstalled codex", "./AGENTS.md", "./.szr/hooks/pre-command.sh"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("expected uninstall apply stdout to contain %q, got %q", want, stdout)
+		}
+	}
+	for _, path := range []string{
+		filepath.Join(repo, ".szr", "hooks", "pre-command.sh"),
+		filepath.Join(repo, ".szr", "install", "codex.md"),
+	} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("expected uninstalled file %s to be gone: %v", path, err)
+		}
+	}
+	agentsPath := filepath.Join(repo, "AGENTS.md")
+	if data, err := os.ReadFile(agentsPath); err == nil {
+		if strings.Contains(string(data), "## szr for Codex") {
+			t.Fatalf("expected Codex instructions removed, got %q", string(data))
+		}
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("read %s: %v", agentsPath, err)
+	}
+
+	code, stdout, stderr = testutil.RunApp(t, app, "install", "--all")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected install all apply stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+
+	code, stdout, stderr = testutil.RunApp(t, app, "uninstall", "--all", "--print")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected uninstall all stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	for _, want := range []string{"plan: uninstall codex", "plan: uninstall claude-code", "plan: uninstall cursor", "plan: uninstall gemini", "plan: uninstall shell"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("expected uninstall all stdout to contain %q, got %q", want, stdout)
+		}
+	}
 }
 
 func TestSelfInstallCommands(t *testing.T) {
@@ -270,6 +339,20 @@ func TestInstallGetwdError(t *testing.T) {
 	restore()
 	if code != 1 || stdout != "" || !strings.Contains(stderr, "no such file or directory") {
 		t.Fatalf("unexpected deleted-cwd install all failure stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+
+	restore = testutil.Chdir(t, t.TempDir())
+	cwd, err = os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd before uninstall: %v", err)
+	}
+	if err := os.RemoveAll(cwd); err != nil {
+		t.Fatalf("remove third cwd: %v", err)
+	}
+	code, stdout, stderr = testutil.RunApp(t, app, "uninstall", "codex")
+	restore()
+	if code != 2 || stdout != "" || !strings.Contains(stderr, "no such file or directory") {
+		t.Fatalf("unexpected deleted-cwd uninstall failure stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
 }
 

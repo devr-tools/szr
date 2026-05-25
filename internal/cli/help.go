@@ -35,6 +35,7 @@ func (a *App) printHelp() {
 			{"szr install", "List available repo bootstrap targets."},
 			{"szr install codex|claude-code|cursor|gemini|shell", "Generate repo-local bootstrap files for a specific target."},
 			{"szr install --all --print", "Preview all installer outputs without writing files."},
+			{"szr uninstall codex|claude-code|cursor|gemini|shell", "Remove repo-local bootstrap files for a specific target."},
 		},
 	})
 	a.printHelpSection(ui, helpSection{
@@ -140,6 +141,8 @@ func (a *App) printCommands() {
 			{"szr install claude-code", "Generate repo-local Claude Code guidance."},
 			{"szr install gemini", "Generate repo-local Gemini guidance."},
 			{"szr install --all --print", "Preview all repo bootstrap outputs."},
+			{"szr uninstall codex", "Remove Codex bootstrap files from this repo."},
+			{"szr uninstall --all --print", "Preview repo bootstrap removals without writing files."},
 		},
 	})
 }

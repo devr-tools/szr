@@ -12,7 +12,7 @@ import (
 )
 
 func (a *App) runInstall(args []string) int {
-	allTargets, printOnly, targets, code := parseInstallArgs(args)
+	allTargets, printOnly, targets, code := parseTargetArgs("install", args)
 	if code != 0 {
 		return code
 	}
@@ -37,7 +37,33 @@ func (a *App) runInstall(args []string) int {
 	return applyInstallPlans(plans, printOnly)
 }
 
-func parseInstallArgs(args []string) (bool, bool, []installers.Target, int) {
+func (a *App) runUninstall(args []string) int {
+	allTargets, printOnly, targets, code := parseTargetArgs("uninstall", args)
+	if code != 0 {
+		return code
+	}
+	if allTargets && len(targets) > 0 {
+		fmt.Fprintln(os.Stderr, "szr: uninstall accepts either --all or explicit targets")
+		return 2
+	}
+	if !allTargets && len(targets) == 0 {
+		printUninstallTargets()
+		return 0
+	}
+
+	cwd, code := installRepoRoot(allTargets)
+	if code != 0 {
+		return code
+	}
+	plans, code := renderUninstallPlans(cwd, allTargets, targets)
+	if code != 0 {
+		return code
+	}
+
+	return applyUninstallPlans(plans, printOnly)
+}
+
+func parseTargetArgs(verb string, args []string) (bool, bool, []installers.Target, int) {
 	allTargets := false
 	printOnly := false
 	targets := make([]installers.Target, 0, len(args))
@@ -49,7 +75,7 @@ func parseInstallArgs(args []string) (bool, bool, []installers.Target, int) {
 			printOnly = true
 		default:
 			if strings.HasPrefix(arg, "-") {
-				fmt.Fprintf(os.Stderr, "szr: unknown install flag %s\n", arg)
+				fmt.Fprintf(os.Stderr, "szr: unknown %s flag %s\n", verb, arg)
 				return false, false, nil, 2
 			}
 			targets = append(targets, installers.Target(arg))
@@ -100,6 +126,28 @@ func renderInstallPlans(cwd string, allTargets bool, targets []installers.Target
 	return plans, 0
 }
 
+func renderUninstallPlans(cwd string, allTargets bool, targets []installers.Target) ([]installers.Plan, int) {
+	if allTargets {
+		plans, err := installers.RenderAllUninstall(installers.Options{RepoRoot: cwd})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "szr: %v\n", err)
+			return nil, 1
+		}
+		return plans, 0
+	}
+
+	plans := make([]installers.Plan, 0, len(targets))
+	for _, target := range targets {
+		plan, err := installers.RenderUninstall(target, installers.Options{RepoRoot: cwd})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "szr: %v\n", err)
+			return nil, 2
+		}
+		plans = append(plans, plan)
+	}
+	return plans, 0
+}
+
 func applyInstallPlans(plans []installers.Plan, printOnly bool) int {
 	for _, plan := range plans {
 		if printOnly {
@@ -111,6 +159,21 @@ func applyInstallPlans(plans []installers.Plan, printOnly bool) int {
 			return 1
 		}
 		printInstalledPlan(plan)
+	}
+	return 0
+}
+
+func applyUninstallPlans(plans []installers.Plan, printOnly bool) int {
+	for _, plan := range plans {
+		if printOnly {
+			printUninstallPlan(plan)
+			continue
+		}
+		if err := installers.Apply(plan); err != nil {
+			fmt.Fprintf(os.Stderr, "szr: failed to uninstall %s: %v\n", plan.Target, err)
+			return 1
+		}
+		printUninstalledPlan(plan)
 	}
 	return 0
 }
@@ -271,8 +334,31 @@ func printInstallPlan(plan installers.Plan) {
 	}
 }
 
+func printUninstallPlan(plan installers.Plan) {
+	fmt.Printf("plan: uninstall %s\n", plan.Target)
+	for _, file := range plan.Files {
+		fmt.Printf("  %s  %s\n", relativeToRepo(plan.Paths.RepoRoot, file.Path), file.Description)
+	}
+	if len(plan.ManualSteps) > 0 {
+		fmt.Println("  manual steps:")
+		for _, step := range plan.ManualSteps {
+			fmt.Printf("    - %s\n", step)
+		}
+	}
+}
+
 func printInstalledPlan(plan installers.Plan) {
 	fmt.Printf("installed %s\n", plan.Target)
+	for _, file := range plan.Files {
+		fmt.Printf("  %s\n", relativeToRepo(plan.Paths.RepoRoot, file.Path))
+	}
+	for _, step := range plan.ManualSteps {
+		fmt.Printf("  next: %s\n", step)
+	}
+}
+
+func printUninstalledPlan(plan installers.Plan) {
+	fmt.Printf("uninstalled %s\n", plan.Target)
 	for _, file := range plan.Files {
 		fmt.Printf("  %s\n", relativeToRepo(plan.Paths.RepoRoot, file.Path))
 	}
@@ -294,6 +380,21 @@ func printInstallTargets() {
 	fmt.Println()
 	fmt.Printf("use: szr install <%s>\n", strings.Join(names, "|"))
 	fmt.Println("or:  szr install --all")
+}
+
+func printUninstallTargets() {
+	targets := installers.Targets()
+	names := make([]string, 0, len(targets))
+	for _, target := range targets {
+		names = append(names, string(target))
+	}
+	fmt.Println("available uninstall targets:")
+	for _, name := range names {
+		fmt.Printf("  - %s\n", name)
+	}
+	fmt.Println()
+	fmt.Printf("use: szr uninstall <%s>\n", strings.Join(names, "|"))
+	fmt.Println("or:  szr uninstall --all")
 }
 
 func relativeToRepo(root, path string) string {

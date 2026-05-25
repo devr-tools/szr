@@ -124,6 +124,7 @@ Once the binary is globally available, bootstrap repo-local guidance separately:
 ```bash
 szr install codex
 szr install shell
+szr uninstall codex
 ```
 
 That keeps global binary installation separate from repo-specific agent/editor wiring.
@@ -177,4 +178,3 @@ For most code changes, the minimum bar is:
 - add or update tests with the behavior change
 - run `make fmt` and `make test`
 - explain the user-facing impact and verification steps in the PR
-

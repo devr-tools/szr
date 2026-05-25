@@ -40,3 +40,38 @@ func materialize(existing string, file File) string {
 	}
 	return trimmed + "\n\n" + block
 }
+
+func dematerialize(existing string, file File) (string, bool) {
+	if file.Strategy != StrategyUnmerge || file.Marker == "" {
+		return existing, false
+	}
+
+	begin := "<!-- " + file.Marker + ":begin -->"
+	end := "<!-- " + file.Marker + ":end -->"
+
+	start := strings.Index(existing, begin)
+	if start < 0 {
+		return existing, false
+	}
+	finish := strings.Index(existing[start:], end)
+	if finish < 0 {
+		return existing, false
+	}
+	finish += start + len(end)
+	if finish < len(existing) && existing[finish] == '\n' {
+		finish++
+	}
+
+	before := strings.TrimRight(existing[:start], "\n")
+	after := strings.TrimLeft(existing[finish:], "\n")
+	switch {
+	case before == "" && after == "":
+		return "", true
+	case before == "":
+		return after, true
+	case after == "":
+		return before + "\n", true
+	default:
+		return before + "\n\n" + after, true
+	}
+}
