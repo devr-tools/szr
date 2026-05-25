@@ -121,6 +121,7 @@ changed_files="$(git diff --name-only "${merge_base}"...HEAD)"
 log "Local CI against ${base_remote_ref}"
 printf 'merge-base: %s\nhead: %s\n' "${merge_base}" "${head_sha}"
 printf 'note: this runs the same checks locally on the current OS; GitHub still validates the ubuntu, macos, and windows matrix.\n'
+printf 'note: prerelease version bumps follow commit messages since the last stable tag: BREAKING CHANGE or type!: => major, feat: => minor, everything else => patch.\n'
 
 log "test presence"
 # Ignore package-doc files so documentation-only Go changes do not require

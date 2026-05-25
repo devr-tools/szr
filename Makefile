@@ -10,7 +10,7 @@ GOVULNCHECK_VERSION ?= v1.1.1
 GOCYCLO_VERSION ?= v0.6.0
 BASE_REF ?= $(shell git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')
 
-.PHONY: help fmt test cover cover-func cover-html build smoke ci prepush clean
+.PHONY: help fmt test cover cover-func cover-html build smoke ci commit prepush clean
 
 help:
 	@printf '%s\n' \
@@ -21,7 +21,8 @@ help:
 		'make cover-html - render HTML coverage report' \
 		'make build      - build ./bin/szr and ./bin/szr-dev' \
 		'make smoke      - run quick local CLI smoke checks for szr and szr-dev, including bench/install flows' \
-		'make ci         - run the local reproduction of the GitHub CI pipeline (override BASE_REF=...)' \
+		'make ci         - run the local reproduction of the GitHub CI pipeline (override BASE_REF=...); also prints prerelease semver bump rules' \
+		'make commit     - interactively git add ., choose commit type, commit, and push the current branch' \
 		'make prepush    - run the quick local gate: fmt + test + cover + smoke' \
 		'make clean      - remove local build and coverage artifacts'
 
@@ -70,6 +71,9 @@ ci:
 		GOCYCLO_VERSION=$(GOCYCLO_VERSION) \
 		SMOKE_HOME=$(SMOKE_HOME) \
 		./scripts/ci.sh
+
+commit:
+	@./scripts/commit.sh
 
 prepush: fmt test cover smoke
 

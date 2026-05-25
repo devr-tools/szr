@@ -29,6 +29,7 @@ make cover
 Use `make prepush` for the quick local gate.
 Use `make ci` when you want the closest local reproduction of the GitHub CI pipeline.
 If your PR targets a non-default branch, run `make ci BASE_REF=develop` or the matching branch name.
+Use `make commit` if you want an interactive helper that runs `git add .`, asks for `major`/`minor`/`patch`, converts that to `feat!:` / `feat:` / `fix:`, then commits and pushes the current branch.
 
 ## Project layout
 
