@@ -7,169 +7,195 @@ import (
 )
 
 func ParseYAML(data []byte) (File, error) {
-	var (
-		file              File
-		currentProfile    *Profile
-		currentPreference *Preference
-		topSection        string
-		section           string
-		listField         string
-		lineNo            int
-	)
-
+	parser := yamlRuleParser{}
 	for _, rawLine := range strings.Split(string(data), "\n") {
-		lineNo++
-		line := strings.TrimRight(rawLine, "\r")
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
-			continue
-		}
-		if strings.ContainsRune(line, '\t') {
-			return File{}, fmt.Errorf("line %d: tabs are not supported in yaml rules", lineNo)
-		}
-
-		indent := len(line) - len(strings.TrimLeft(line, " "))
-		switch indent {
-		case 0:
-			topSection = ""
-			section = ""
-			listField = ""
-			key, value, hasValue, err := parseYAMLKeyValue(trimmed)
-			if err != nil {
-				return File{}, fmt.Errorf("line %d: %w", lineNo, err)
-			}
-			switch key {
-			case "version":
-				if !hasValue {
-					return File{}, fmt.Errorf("line %d: version requires a value", lineNo)
-				}
-				version, err := strconv.Atoi(parseYAMLScalar(value))
-				if err != nil {
-					return File{}, fmt.Errorf("line %d: invalid version %q", lineNo, value)
-				}
-				file.Version = version
-			case "profiles":
-				topSection = "profiles"
-				if hasValue && parseYAMLScalar(value) != "" {
-					return File{}, fmt.Errorf("line %d: profiles must be declared as a block list", lineNo)
-				}
-			case "preferences":
-				topSection = "preferences"
-				if hasValue && parseYAMLScalar(value) != "" {
-					return File{}, fmt.Errorf("line %d: preferences must be declared as a block list", lineNo)
-				}
-			default:
-				return File{}, fmt.Errorf("line %d: unsupported top-level key %q", lineNo, key)
-			}
-		case 2:
-			if !strings.HasPrefix(trimmed, "- ") {
-				return File{}, fmt.Errorf("line %d: expected %s list item", lineNo, topSectionName(topSection))
-			}
-			currentProfile = nil
-			currentPreference = nil
-			switch topSection {
-			case "profiles":
-				file.Profiles = append(file.Profiles, Profile{})
-				currentProfile = &file.Profiles[len(file.Profiles)-1]
-			case "preferences":
-				file.Preferences = append(file.Preferences, Preference{})
-				currentPreference = &file.Preferences[len(file.Preferences)-1]
-			default:
-				return File{}, fmt.Errorf("line %d: list item without profiles or preferences section", lineNo)
-			}
-			section = ""
-			listField = ""
-
-			remainder := strings.TrimSpace(strings.TrimPrefix(trimmed, "- "))
-			if remainder == "" {
-				continue
-			}
-			key, value, hasValue, err := parseYAMLKeyValue(remainder)
-			if err != nil {
-				return File{}, fmt.Errorf("line %d: %w", lineNo, err)
-			}
-			if currentProfile != nil {
-				if err := setProfileField(currentProfile, key, value, hasValue, &section, &listField, lineNo); err != nil {
-					return File{}, err
-				}
-			} else {
-				if err := setPreferenceField(currentPreference, key, value, hasValue, &section, &listField, lineNo); err != nil {
-					return File{}, err
-				}
-			}
-		case 4:
-			if currentProfile == nil && currentPreference == nil {
-				return File{}, fmt.Errorf("line %d: field without profile or preference item", lineNo)
-			}
-			key, value, hasValue, err := parseYAMLKeyValue(trimmed)
-			if err != nil {
-				return File{}, fmt.Errorf("line %d: %w", lineNo, err)
-			}
-			if currentProfile != nil {
-				if err := setProfileField(currentProfile, key, value, hasValue, &section, &listField, lineNo); err != nil {
-					return File{}, err
-				}
-			} else {
-				if err := setPreferenceField(currentPreference, key, value, hasValue, &section, &listField, lineNo); err != nil {
-					return File{}, err
-				}
-			}
-		case 6:
-			if currentProfile == nil && currentPreference == nil {
-				return File{}, fmt.Errorf("line %d: nested field without profile or preference item", lineNo)
-			}
-			if section == "explain" {
-				if !strings.HasPrefix(trimmed, "- ") {
-					return File{}, fmt.Errorf("line %d: explain entries must be list items", lineNo)
-				}
-				if currentProfile != nil {
-					currentProfile.Explain = append(currentProfile.Explain, parseYAMLScalar(strings.TrimSpace(strings.TrimPrefix(trimmed, "- "))))
-				} else {
-					currentPreference.Explain = append(currentPreference.Explain, parseYAMLScalar(strings.TrimSpace(strings.TrimPrefix(trimmed, "- "))))
-				}
-				continue
-			}
-			if section == "match" || section == "rewrite" || section == "render" {
-				key, value, hasValue, err := parseYAMLKeyValue(trimmed)
-				if err != nil {
-					return File{}, fmt.Errorf("line %d: %w", lineNo, err)
-				}
-				if currentProfile != nil {
-					if err := setSectionField(currentProfile, section, key, value, hasValue, &listField, lineNo); err != nil {
-						return File{}, err
-					}
-				} else {
-					if err := setPreferenceSectionField(currentPreference, section, key, value, hasValue, &listField, lineNo); err != nil {
-						return File{}, err
-					}
-				}
-				continue
-			}
-			return File{}, fmt.Errorf("line %d: unexpected nested block", lineNo)
-		case 8:
-			if (currentProfile == nil && currentPreference == nil) || section == "" || listField == "" {
-				return File{}, fmt.Errorf("line %d: list item without active list field", lineNo)
-			}
-			if !strings.HasPrefix(trimmed, "- ") {
-				return File{}, fmt.Errorf("line %d: expected list item", lineNo)
-			}
-			value := parseYAMLScalar(strings.TrimSpace(strings.TrimPrefix(trimmed, "- ")))
-			if currentProfile != nil {
-				if err := appendSectionListValue(currentProfile, section, listField, value, lineNo); err != nil {
-					return File{}, err
-				}
-			} else {
-				if err := appendPreferenceSectionListValue(currentPreference, section, listField, value, lineNo); err != nil {
-					return File{}, err
-				}
-			}
-		default:
-			return File{}, fmt.Errorf("line %d: unsupported indentation level %d", lineNo, indent)
+		if err := parser.consumeLine(rawLine); err != nil {
+			return File{}, err
 		}
 	}
 
-	if err := Validate(file); err != nil {
+	if err := Validate(parser.file); err != nil {
 		return File{}, err
 	}
-	return file, nil
+	return parser.file, nil
+}
+
+type yamlRuleParser struct {
+	file              File
+	currentProfile    *Profile
+	currentPreference *Preference
+	topSection        string
+	section           string
+	listField         string
+	lineNo            int
+}
+
+func (p *yamlRuleParser) consumeLine(rawLine string) error {
+	p.lineNo++
+	line := strings.TrimRight(rawLine, "\r")
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+		return nil
+	}
+	if strings.ContainsRune(line, '\t') {
+		return fmt.Errorf("line %d: tabs are not supported in yaml rules", p.lineNo)
+	}
+
+	indent := len(line) - len(strings.TrimLeft(line, " "))
+	switch indent {
+	case 0:
+		return p.consumeTopLevel(trimmed)
+	case 2:
+		return p.consumeListItem(trimmed)
+	case 4:
+		return p.consumeField(trimmed)
+	case 6:
+		return p.consumeNestedField(trimmed)
+	case 8:
+		return p.consumeListValue(trimmed)
+	default:
+		return fmt.Errorf("line %d: unsupported indentation level %d", p.lineNo, indent)
+	}
+}
+
+func (p *yamlRuleParser) consumeTopLevel(trimmed string) error {
+	p.topSection = ""
+	p.section = ""
+	p.listField = ""
+	key, value, hasValue, err := parseYAMLKeyValue(trimmed)
+	if err != nil {
+		return fmt.Errorf("line %d: %w", p.lineNo, err)
+	}
+	switch key {
+	case "version":
+		return p.setVersion(value, hasValue)
+	case "profiles", "preferences":
+		return p.setTopSection(key, value, hasValue)
+	default:
+		return fmt.Errorf("line %d: unsupported top-level key %q", p.lineNo, key)
+	}
+}
+
+func (p *yamlRuleParser) setVersion(value string, hasValue bool) error {
+	if !hasValue {
+		return fmt.Errorf("line %d: version requires a value", p.lineNo)
+	}
+	version, err := strconv.Atoi(parseYAMLScalar(value))
+	if err != nil {
+		return fmt.Errorf("line %d: invalid version %q", p.lineNo, value)
+	}
+	p.file.Version = version
+	return nil
+}
+
+func (p *yamlRuleParser) setTopSection(key, value string, hasValue bool) error {
+	p.topSection = key
+	if hasValue && parseYAMLScalar(value) != "" {
+		return fmt.Errorf("line %d: %s must be declared as a block list", p.lineNo, key)
+	}
+	return nil
+}
+
+func (p *yamlRuleParser) consumeListItem(trimmed string) error {
+	if !strings.HasPrefix(trimmed, "- ") {
+		return fmt.Errorf("line %d: expected %s list item", p.lineNo, topSectionName(p.topSection))
+	}
+	if err := p.beginListItem(); err != nil {
+		return err
+	}
+	remainder := strings.TrimSpace(strings.TrimPrefix(trimmed, "- "))
+	if remainder == "" {
+		return nil
+	}
+	return p.applyItemField(remainder)
+}
+
+func (p *yamlRuleParser) beginListItem() error {
+	p.currentProfile = nil
+	p.currentPreference = nil
+	switch p.topSection {
+	case "profiles":
+		p.file.Profiles = append(p.file.Profiles, Profile{})
+		p.currentProfile = &p.file.Profiles[len(p.file.Profiles)-1]
+	case "preferences":
+		p.file.Preferences = append(p.file.Preferences, Preference{})
+		p.currentPreference = &p.file.Preferences[len(p.file.Preferences)-1]
+	default:
+		return fmt.Errorf("line %d: list item without profiles or preferences section", p.lineNo)
+	}
+	p.section = ""
+	p.listField = ""
+	return nil
+}
+
+func (p *yamlRuleParser) consumeField(trimmed string) error {
+	if err := p.requireActiveItem("field without profile or preference item"); err != nil {
+		return err
+	}
+	return p.applyItemField(trimmed)
+}
+
+func (p *yamlRuleParser) applyItemField(input string) error {
+	key, value, hasValue, err := parseYAMLKeyValue(input)
+	if err != nil {
+		return fmt.Errorf("line %d: %w", p.lineNo, err)
+	}
+	if p.currentProfile != nil {
+		return setProfileField(p.currentProfile, key, value, hasValue, &p.section, &p.listField, p.lineNo)
+	}
+	return setPreferenceField(p.currentPreference, key, value, hasValue, &p.section, &p.listField, p.lineNo)
+}
+
+func (p *yamlRuleParser) consumeNestedField(trimmed string) error {
+	if err := p.requireActiveItem("nested field without profile or preference item"); err != nil {
+		return err
+	}
+	if p.section == "explain" {
+		return p.appendExplainValue(trimmed)
+	}
+	if p.section != "match" && p.section != "rewrite" && p.section != "render" {
+		return fmt.Errorf("line %d: unexpected nested block", p.lineNo)
+	}
+	key, value, hasValue, err := parseYAMLKeyValue(trimmed)
+	if err != nil {
+		return fmt.Errorf("line %d: %w", p.lineNo, err)
+	}
+	if p.currentProfile != nil {
+		return setSectionField(p.currentProfile, p.section, key, value, hasValue, &p.listField, p.lineNo)
+	}
+	return setPreferenceSectionField(p.currentPreference, p.section, key, value, hasValue, &p.listField, p.lineNo)
+}
+
+func (p *yamlRuleParser) appendExplainValue(trimmed string) error {
+	if !strings.HasPrefix(trimmed, "- ") {
+		return fmt.Errorf("line %d: explain entries must be list items", p.lineNo)
+	}
+	value := parseYAMLScalar(strings.TrimSpace(strings.TrimPrefix(trimmed, "- ")))
+	if p.currentProfile != nil {
+		p.currentProfile.Explain = append(p.currentProfile.Explain, value)
+	} else {
+		p.currentPreference.Explain = append(p.currentPreference.Explain, value)
+	}
+	return nil
+}
+
+func (p *yamlRuleParser) consumeListValue(trimmed string) error {
+	if (p.currentProfile == nil && p.currentPreference == nil) || p.section == "" || p.listField == "" {
+		return fmt.Errorf("line %d: list item without active list field", p.lineNo)
+	}
+	if !strings.HasPrefix(trimmed, "- ") {
+		return fmt.Errorf("line %d: expected list item", p.lineNo)
+	}
+	value := parseYAMLScalar(strings.TrimSpace(strings.TrimPrefix(trimmed, "- ")))
+	if p.currentProfile != nil {
+		return appendSectionListValue(p.currentProfile, p.section, p.listField, value, p.lineNo)
+	}
+	return appendPreferenceSectionListValue(p.currentPreference, p.section, p.listField, value, p.lineNo)
+}
+
+func (p *yamlRuleParser) requireActiveItem(message string) error {
+	if p.currentProfile == nil && p.currentPreference == nil {
+		return fmt.Errorf("line %d: %s", p.lineNo, message)
+	}
+	return nil
 }

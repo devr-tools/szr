@@ -85,16 +85,26 @@ func SuggestBudgets(records []Record, opts BudgetSuggestionOptions) []BudgetSugg
 		return nil
 	}
 
+	recent := budgetSuggestionRecentRecords(records, opts.Lookback)
+	stats := accumulateBudgetSuggestions(recent)
+	candidates := buildBudgetSuggestionCandidates(stats, opts.MinSamples)
+	return limitBudgetSuggestions(candidates, opts.Limit)
+}
+
+func budgetSuggestionRecentRecords(records []Record, lookback int) []Record {
 	recent := append([]Record(nil), records...)
 	sort.Slice(recent, func(i, j int) bool {
 		return recent[i].Timestamp.After(recent[j].Timestamp)
 	})
-	if opts.Lookback > 0 && len(recent) > opts.Lookback {
-		recent = recent[:opts.Lookback]
+	if lookback > 0 && len(recent) > lookback {
+		recent = recent[:lookback]
 	}
+	return recent
+}
 
+func accumulateBudgetSuggestions(records []Record) map[string]*budgetSuggestionAccumulator {
 	stats := map[string]*budgetSuggestionAccumulator{}
-	for _, raw := range recent {
+	for _, raw := range records {
 		rec := hydrateRecord(raw)
 		if rec.CommandFingerprint == "" {
 			continue
@@ -110,30 +120,40 @@ func SuggestBudgets(records []Record, opts BudgetSuggestionOptions) []BudgetSugg
 			}
 			stats[rec.CommandFingerprint] = acc
 		}
-		if rec.Timestamp.After(acc.lastSeen) {
-			acc.lastSeen = rec.Timestamp
-			acc.command = rec.Command
-		}
-		if rec.Timestamp.Before(acc.firstSeen) {
-			acc.firstSeen = rec.Timestamp
-		}
-		acc.profileCounts[rec.Profile]++
-		acc.rawTokens = append(acc.rawTokens, rec.RawTokens)
-		acc.filteredTokens = append(acc.filteredTokens, rec.FilteredTokens)
-		acc.emittedBytes = append(acc.emittedBytes, rec.BytesEmitted)
-		acc.savedPct += rec.SavingsPct
-		acc.samples++
-		if rec.ExitCode != 0 {
-			acc.failures++
-		}
-		if rec.FallbackUsed {
-			acc.fallbacks++
-		}
+		updateBudgetSuggestionAccumulator(acc, rec)
 	}
+	return stats
+}
 
+func updateBudgetSuggestionAccumulator(acc *budgetSuggestionAccumulator, rec Record) {
+	if rec.Timestamp.After(acc.lastSeen) {
+		acc.lastSeen = rec.Timestamp
+		acc.command = rec.Command
+	}
+	if rec.Timestamp.Before(acc.firstSeen) {
+		acc.firstSeen = rec.Timestamp
+	}
+	acc.profileCounts[rec.Profile]++
+	acc.rawTokens = append(acc.rawTokens, rec.RawTokens)
+	acc.filteredTokens = append(acc.filteredTokens, rec.FilteredTokens)
+	acc.emittedBytes = append(acc.emittedBytes, rec.BytesEmitted)
+	acc.savedPct += rec.SavingsPct
+	acc.samples++
+	if rec.ExitCode != 0 {
+		acc.failures++
+	}
+	if rec.FallbackUsed {
+		acc.fallbacks++
+	}
+}
+
+func buildBudgetSuggestionCandidates(
+	stats map[string]*budgetSuggestionAccumulator,
+	minSamples int,
+) []budgetSuggestionCandidate {
 	candidates := make([]budgetSuggestionCandidate, 0, len(stats))
 	for _, acc := range stats {
-		if acc.samples < opts.MinSamples {
+		if acc.samples < minSamples {
 			continue
 		}
 		suggestion, severity, ok := buildBudgetSuggestion(acc)
@@ -145,7 +165,6 @@ func SuggestBudgets(records []Record, opts BudgetSuggestionOptions) []BudgetSugg
 			severity:   severity,
 		})
 	}
-
 	sort.Slice(candidates, func(i, j int) bool {
 		if candidates[i].severity == candidates[j].severity {
 			if candidates[i].suggestion.Samples == candidates[j].suggestion.Samples {
@@ -155,11 +174,13 @@ func SuggestBudgets(records []Record, opts BudgetSuggestionOptions) []BudgetSugg
 		}
 		return candidates[i].severity > candidates[j].severity
 	})
+	return candidates
+}
 
-	if opts.Limit > 0 && len(candidates) > opts.Limit {
-		candidates = candidates[:opts.Limit]
+func limitBudgetSuggestions(candidates []budgetSuggestionCandidate, limit int) []BudgetSuggestion {
+	if limit > 0 && len(candidates) > limit {
+		candidates = candidates[:limit]
 	}
-
 	suggestions := make([]BudgetSuggestion, 0, len(candidates))
 	for _, candidate := range candidates {
 		suggestions = append(suggestions, candidate.suggestion)

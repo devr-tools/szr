@@ -77,70 +77,84 @@ func setSectionField(profile *Profile, section, key, value string, hasValue bool
 	*listField = ""
 	switch section {
 	case "match":
-		switch key {
-		case "command_prefix", "display_prefix", "all_args", "any_args", "exclude_args", "cwd_contains":
-			if !hasValue {
-				*listField = key
-				return nil
-			}
-			values, err := parseYAMLStringList(value)
-			if err != nil {
-				return fmt.Errorf("line %d: %w", lineNo, err)
-			}
-			assignMatchList(&profile.Match, key, values)
-		default:
-			return fmt.Errorf("line %d: unsupported match key %q", lineNo, key)
-		}
+		return setMatchSectionField(profile, key, value, hasValue, listField, lineNo)
 	case "rewrite":
-		switch key {
-		case "mode":
-			if !hasValue {
-				return fmt.Errorf("line %d: rewrite.mode requires a value", lineNo)
-			}
-			profile.Rewrite.Mode = parseYAMLScalar(value)
-		case "placement":
-			if !hasValue {
-				return fmt.Errorf("line %d: rewrite.placement requires a value", lineNo)
-			}
-			profile.Rewrite.Placement = parseYAMLScalar(value)
-		case "args", "skip_if_has_any":
-			if !hasValue {
-				*listField = key
-				return nil
-			}
-			values, err := parseYAMLStringList(value)
-			if err != nil {
-				return fmt.Errorf("line %d: %w", lineNo, err)
-			}
-			if key == "args" {
-				profile.Rewrite.Args = values
-			} else {
-				profile.Rewrite.SkipIfHasAny = values
-			}
-		default:
-			return fmt.Errorf("line %d: unsupported rewrite key %q", lineNo, key)
-		}
+		return setRewriteSectionField(profile, key, value, hasValue, listField, lineNo)
 	case "render":
-		switch key {
-		case "mode":
-			if !hasValue {
-				return fmt.Errorf("line %d: render.mode requires a value", lineNo)
-			}
-			profile.Render.Mode = parseYAMLScalar(value)
-		case "max_lines":
-			if !hasValue {
-				return fmt.Errorf("line %d: render.max_lines requires a value", lineNo)
-			}
-			valueInt, err := strconv.Atoi(parseYAMLScalar(value))
-			if err != nil {
-				return fmt.Errorf("line %d: invalid render.max_lines %q", lineNo, value)
-			}
-			profile.Render.MaxLines = valueInt
-		default:
-			return fmt.Errorf("line %d: unsupported render key %q", lineNo, key)
-		}
+		return setRenderSectionField(profile, key, value, hasValue, lineNo)
 	default:
 		return fmt.Errorf("line %d: unsupported nested section %q", lineNo, section)
+	}
+}
+
+func setMatchSectionField(profile *Profile, key, value string, hasValue bool, listField *string, lineNo int) error {
+	switch key {
+	case "command_prefix", "display_prefix", "all_args", "any_args", "exclude_args", "cwd_contains":
+		if !hasValue {
+			*listField = key
+			return nil
+		}
+		values, err := parseYAMLStringList(value)
+		if err != nil {
+			return fmt.Errorf("line %d: %w", lineNo, err)
+		}
+		assignMatchList(&profile.Match, key, values)
+		return nil
+	default:
+		return fmt.Errorf("line %d: unsupported match key %q", lineNo, key)
+	}
+}
+
+func setRewriteSectionField(profile *Profile, key, value string, hasValue bool, listField *string, lineNo int) error {
+	switch key {
+	case "mode":
+		if !hasValue {
+			return fmt.Errorf("line %d: rewrite.mode requires a value", lineNo)
+		}
+		profile.Rewrite.Mode = parseYAMLScalar(value)
+	case "placement":
+		if !hasValue {
+			return fmt.Errorf("line %d: rewrite.placement requires a value", lineNo)
+		}
+		profile.Rewrite.Placement = parseYAMLScalar(value)
+	case "args", "skip_if_has_any":
+		if !hasValue {
+			*listField = key
+			return nil
+		}
+		values, err := parseYAMLStringList(value)
+		if err != nil {
+			return fmt.Errorf("line %d: %w", lineNo, err)
+		}
+		if key == "args" {
+			profile.Rewrite.Args = values
+		} else {
+			profile.Rewrite.SkipIfHasAny = values
+		}
+	default:
+		return fmt.Errorf("line %d: unsupported rewrite key %q", lineNo, key)
+	}
+	return nil
+}
+
+func setRenderSectionField(profile *Profile, key, value string, hasValue bool, lineNo int) error {
+	switch key {
+	case "mode":
+		if !hasValue {
+			return fmt.Errorf("line %d: render.mode requires a value", lineNo)
+		}
+		profile.Render.Mode = parseYAMLScalar(value)
+	case "max_lines":
+		if !hasValue {
+			return fmt.Errorf("line %d: render.max_lines requires a value", lineNo)
+		}
+		valueInt, err := strconv.Atoi(parseYAMLScalar(value))
+		if err != nil {
+			return fmt.Errorf("line %d: invalid render.max_lines %q", lineNo, value)
+		}
+		profile.Render.MaxLines = valueInt
+	default:
+		return fmt.Errorf("line %d: unsupported render key %q", lineNo, key)
 	}
 	return nil
 }

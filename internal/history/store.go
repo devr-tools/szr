@@ -99,6 +99,21 @@ type FingerprintStat struct {
 	DurationP95MS int64   `json:"duration_p95_ms"`
 }
 
+type summaryProfileAccumulator struct {
+	stat       ProfileStat
+	durations  []int64
+	confidence map[string]int
+}
+
+type summaryCommandAccumulator struct {
+	stat CommandStat
+}
+
+type summaryFingerprintAccumulator struct {
+	stat      FingerprintStat
+	durations []int64
+}
+
 func New(path string) *Store {
 	return &Store{path: path}
 }
@@ -159,100 +174,18 @@ func Summarize(records []Record, limit int) Summary {
 		return summary
 	}
 
-	type profileAccumulator struct {
-		stat       ProfileStat
-		durations  []int64
-		confidence map[string]int
-	}
-	type commandAccumulator struct {
-		stat CommandStat
-	}
-	type fingerprintAccumulator struct {
-		stat      FingerprintStat
-		durations []int64
-	}
-
-	commands := map[string]*commandAccumulator{}
-	profileStats := map[string]*profileAccumulator{}
-	fingerprintStats := map[string]*fingerprintAccumulator{}
+	commands := map[string]*summaryCommandAccumulator{}
+	profileStats := map[string]*summaryProfileAccumulator{}
+	fingerprintStats := map[string]*summaryFingerprintAccumulator{}
 	durations := make([]int64, 0, len(records))
 
 	for _, raw := range records {
 		rec := hydrateRecord(raw)
-		summary.Commands++
-		summary.SavedTokens += rec.SavedTokens
-		summary.RawTokens += rec.RawTokens
-		summary.FilteredTokens += rec.FilteredTokens
-		summary.AveragePct += rec.SavingsPct
-		summary.RawBytesRead += rec.RawBytesRead
-		summary.BytesParsed += rec.BytesParsed
-		summary.BytesEmitted += rec.BytesEmitted
+		updateSummaryTotals(&summary, rec)
 		durations = append(durations, rec.DurationMS)
-		if rec.ExitCode != 0 {
-			summary.Failures++
-		}
-		if rec.FallbackUsed {
-			summary.Fallbacks++
-		}
-		if rec.TeePath != "" {
-			summary.TeeCount++
-		}
-		summary.Profiles[rec.Profile]++
-		normalizedCommand := normalizeCommand(rec.Command)
-		command := commands[normalizedCommand]
-		if command == nil {
-			command = &commandAccumulator{
-				stat: CommandStat{Command: normalizedCommand},
-			}
-			commands[normalizedCommand] = command
-		}
-		command.stat.Count++
-		command.stat.AveragePct += rec.SavingsPct
-		command.stat.SavedTokens += rec.SavedTokens
-		command.stat.RawTokens += rec.RawTokens
-		command.stat.FilteredTokens += rec.FilteredTokens
-
-		profile := profileStats[rec.Profile]
-		if profile == nil {
-			profile = &profileAccumulator{
-				stat:       ProfileStat{Name: rec.Profile},
-				confidence: map[string]int{},
-			}
-			profileStats[rec.Profile] = profile
-		}
-		profile.stat.Commands++
-		profile.stat.AveragePct += rec.SavingsPct
-		profile.stat.SavedTokens += rec.SavedTokens
-		profile.stat.RawTokens += rec.RawTokens
-		profile.stat.FilteredTokens += rec.FilteredTokens
-		if rec.ExitCode != 0 {
-			profile.stat.Failures++
-		}
-		if rec.FallbackUsed {
-			profile.stat.Fallbacks++
-		}
-		if rec.TeePath != "" {
-			profile.stat.TeeCount++
-		}
-		if rec.ProfileConfidence != "" {
-			profile.confidence[rec.ProfileConfidence]++
-		}
-		profile.durations = append(profile.durations, rec.DurationMS)
-
-		fingerprint := fingerprintStats[rec.CommandFingerprint]
-		if fingerprint == nil {
-			fingerprint = &fingerprintAccumulator{
-				stat: FingerprintStat{
-					Fingerprint: rec.CommandFingerprint,
-					Command:     rec.Command,
-					Profile:     rec.Profile,
-				},
-			}
-			fingerprintStats[rec.CommandFingerprint] = fingerprint
-		}
-		fingerprint.stat.Commands++
-		fingerprint.stat.AveragePct += rec.SavingsPct
-		fingerprint.durations = append(fingerprint.durations, rec.DurationMS)
+		updateSummaryCommand(commands, rec)
+		updateSummaryProfile(profileStats, rec)
+		updateSummaryFingerprint(fingerprintStats, rec)
 	}
 
 	summary.AveragePct /= float64(summary.Commands)
@@ -261,33 +194,130 @@ func Summarize(records []Record, limit int) Summary {
 	summary.TeeRate = percent(summary.TeeCount, summary.Commands)
 	summary.DurationP50MS = percentile(durations, 50)
 	summary.DurationP95MS = percentile(durations, 95)
+	summary.TopCommands = summarizeTopCommands(commands, limit)
+	summary.Recent = summarizeRecent(records, limit)
+	summary.ProfileStats = summarizeProfiles(profileStats)
+	summary.FingerprintHotspots = summarizeFingerprints(fingerprintStats, limit)
+	summary.BudgetSuggestions = SuggestBudgets(records, BudgetSuggestionOptions{Limit: limit})
 
+	return summary
+}
+
+func updateSummaryTotals(summary *Summary, rec Record) {
+	summary.Commands++
+	summary.SavedTokens += rec.SavedTokens
+	summary.RawTokens += rec.RawTokens
+	summary.FilteredTokens += rec.FilteredTokens
+	summary.AveragePct += rec.SavingsPct
+	summary.RawBytesRead += rec.RawBytesRead
+	summary.BytesParsed += rec.BytesParsed
+	summary.BytesEmitted += rec.BytesEmitted
+	if rec.ExitCode != 0 {
+		summary.Failures++
+	}
+	if rec.FallbackUsed {
+		summary.Fallbacks++
+	}
+	if rec.TeePath != "" {
+		summary.TeeCount++
+	}
+	summary.Profiles[rec.Profile]++
+}
+
+func updateSummaryCommand(commands map[string]*summaryCommandAccumulator, rec Record) {
+	normalizedCommand := normalizeCommand(rec.Command)
+	command := commands[normalizedCommand]
+	if command == nil {
+		command = &summaryCommandAccumulator{stat: CommandStat{Command: normalizedCommand}}
+		commands[normalizedCommand] = command
+	}
+	command.stat.Count++
+	command.stat.AveragePct += rec.SavingsPct
+	command.stat.SavedTokens += rec.SavedTokens
+	command.stat.RawTokens += rec.RawTokens
+	command.stat.FilteredTokens += rec.FilteredTokens
+}
+
+func updateSummaryProfile(profileStats map[string]*summaryProfileAccumulator, rec Record) {
+	profile := profileStats[rec.Profile]
+	if profile == nil {
+		profile = &summaryProfileAccumulator{
+			stat:       ProfileStat{Name: rec.Profile},
+			confidence: map[string]int{},
+		}
+		profileStats[rec.Profile] = profile
+	}
+	profile.stat.Commands++
+	profile.stat.AveragePct += rec.SavingsPct
+	profile.stat.SavedTokens += rec.SavedTokens
+	profile.stat.RawTokens += rec.RawTokens
+	profile.stat.FilteredTokens += rec.FilteredTokens
+	if rec.ExitCode != 0 {
+		profile.stat.Failures++
+	}
+	if rec.FallbackUsed {
+		profile.stat.Fallbacks++
+	}
+	if rec.TeePath != "" {
+		profile.stat.TeeCount++
+	}
+	if rec.ProfileConfidence != "" {
+		profile.confidence[rec.ProfileConfidence]++
+	}
+	profile.durations = append(profile.durations, rec.DurationMS)
+}
+
+func updateSummaryFingerprint(fingerprints map[string]*summaryFingerprintAccumulator, rec Record) {
+	fingerprint := fingerprints[rec.CommandFingerprint]
+	if fingerprint == nil {
+		fingerprint = &summaryFingerprintAccumulator{
+			stat: FingerprintStat{
+				Fingerprint: rec.CommandFingerprint,
+				Command:     rec.Command,
+				Profile:     rec.Profile,
+			},
+		}
+		fingerprints[rec.CommandFingerprint] = fingerprint
+	}
+	fingerprint.stat.Commands++
+	fingerprint.stat.AveragePct += rec.SavingsPct
+	fingerprint.durations = append(fingerprint.durations, rec.DurationMS)
+}
+
+func summarizeTopCommands(commands map[string]*summaryCommandAccumulator, limit int) []CommandStat {
+	list := make([]CommandStat, 0, len(commands))
 	for _, command := range commands {
 		command.stat.AveragePct /= float64(command.stat.Count)
-		summary.TopCommands = append(summary.TopCommands, command.stat)
+		list = append(list, command.stat)
 	}
-	sort.Slice(summary.TopCommands, func(i, j int) bool {
-		if summary.TopCommands[i].Count == summary.TopCommands[j].Count {
-			return summary.TopCommands[i].Command < summary.TopCommands[j].Command
+	sort.Slice(list, func(i, j int) bool {
+		if list[i].Count == list[j].Count {
+			return list[i].Command < list[j].Command
 		}
-		return summary.TopCommands[i].Count > summary.TopCommands[j].Count
+		return list[i].Count > list[j].Count
 	})
-	if len(summary.TopCommands) > limit {
-		summary.TopCommands = summary.TopCommands[:limit]
+	if limit > 0 && len(list) > limit {
+		list = list[:limit]
 	}
+	return list
+}
 
+func summarizeRecent(records []Record, limit int) []Record {
 	recent := append([]Record(nil), records...)
 	sort.Slice(recent, func(i, j int) bool {
 		return recent[i].Timestamp.After(recent[j].Timestamp)
 	})
-	if len(recent) > limit {
+	if limit > 0 && len(recent) > limit {
 		recent = recent[:limit]
 	}
 	for i := range recent {
 		recent[i] = hydrateRecord(recent[i])
 	}
-	summary.Recent = recent
+	return recent
+}
 
+func summarizeProfiles(profileStats map[string]*summaryProfileAccumulator) []ProfileStat {
+	list := make([]ProfileStat, 0, len(profileStats))
 	for _, profile := range profileStats {
 		profile.stat.AveragePct /= float64(profile.stat.Commands)
 		profile.stat.Confidence = dominantConfidence(profile.confidence)
@@ -296,36 +326,38 @@ func Summarize(records []Record, limit int) Summary {
 		profile.stat.TeeRate = percent(profile.stat.TeeCount, profile.stat.Commands)
 		profile.stat.DurationP50MS = percentile(profile.durations, 50)
 		profile.stat.DurationP95MS = percentile(profile.durations, 95)
-		summary.ProfileStats = append(summary.ProfileStats, profile.stat)
+		list = append(list, profile.stat)
 	}
-	sort.Slice(summary.ProfileStats, func(i, j int) bool {
-		if summary.ProfileStats[i].Commands == summary.ProfileStats[j].Commands {
-			return summary.ProfileStats[i].Name < summary.ProfileStats[j].Name
+	sort.Slice(list, func(i, j int) bool {
+		if list[i].Commands == list[j].Commands {
+			return list[i].Name < list[j].Name
 		}
-		return summary.ProfileStats[i].Commands > summary.ProfileStats[j].Commands
+		return list[i].Commands > list[j].Commands
 	})
+	return list
+}
 
+func summarizeFingerprints(fingerprintStats map[string]*summaryFingerprintAccumulator, limit int) []FingerprintStat {
+	list := make([]FingerprintStat, 0, len(fingerprintStats))
 	for _, fingerprint := range fingerprintStats {
 		fingerprint.stat.AveragePct /= float64(fingerprint.stat.Commands)
 		fingerprint.stat.DurationP50MS = percentile(fingerprint.durations, 50)
 		fingerprint.stat.DurationP95MS = percentile(fingerprint.durations, 95)
-		summary.FingerprintHotspots = append(summary.FingerprintHotspots, fingerprint.stat)
+		list = append(list, fingerprint.stat)
 	}
-	sort.Slice(summary.FingerprintHotspots, func(i, j int) bool {
-		if summary.FingerprintHotspots[i].AveragePct == summary.FingerprintHotspots[j].AveragePct {
-			if summary.FingerprintHotspots[i].Commands == summary.FingerprintHotspots[j].Commands {
-				return summary.FingerprintHotspots[i].Command < summary.FingerprintHotspots[j].Command
+	sort.Slice(list, func(i, j int) bool {
+		if list[i].AveragePct == list[j].AveragePct {
+			if list[i].Commands == list[j].Commands {
+				return list[i].Command < list[j].Command
 			}
-			return summary.FingerprintHotspots[i].Commands > summary.FingerprintHotspots[j].Commands
+			return list[i].Commands > list[j].Commands
 		}
-		return summary.FingerprintHotspots[i].AveragePct < summary.FingerprintHotspots[j].AveragePct
+		return list[i].AveragePct < list[j].AveragePct
 	})
-	if len(summary.FingerprintHotspots) > limit {
-		summary.FingerprintHotspots = summary.FingerprintHotspots[:limit]
+	if limit > 0 && len(list) > limit {
+		list = list[:limit]
 	}
-	summary.BudgetSuggestions = SuggestBudgets(records, BudgetSuggestionOptions{Limit: limit})
-
-	return summary
+	return list
 }
 
 func EstimateTokens(text string) int {

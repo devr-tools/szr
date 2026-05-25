@@ -25,97 +25,177 @@ func (e *Engine) ExecuteStreaming(
 		return Result{}, fmt.Errorf("missing command")
 	}
 
+	preparedInv, profile, command, budget, streamReducer, options, profileConfidence := e.prepareStreamingExecution(inv, passthrough, onPartial)
+	runResult, execResult, fastPath, rawCombined, rawBytesRead, rawTokens, duration, err := e.runStreamingCommand(ctx, inv, command, profile, streamReducer, options)
+	rendered, fallbackUsed := renderStreamingOutput(profile, preparedInv, execResult, streamReducer, budget, rawCombined, passthrough, fastPath)
+	teePath := e.ensureStreamingTeePath(runResult.teePath, execResult.ExitCode, rawCombined, command)
+	rendered = appendTeeReference(rendered, teePath, passthrough)
+	bytesParsed := streamingBytesParsed(streamReducer, profile, execResult, rawBytesRead)
+	bytesEmitted := len(rendered)
+	record := buildStreamingHistoryRecord(inv, profile, profileConfidence, duration, execResult.ExitCode, rawBytesRead, bytesParsed, bytesEmitted, rawTokens, fallbackUsed, teePath, rendered)
+	e.appendStreamingHistory(record)
+	result := buildStreamingResult(profile, profileConfidence, rendered, rawCombined, execResult.ExitCode, teePath, duration, fallbackUsed, fastPath, rawBytesRead, bytesParsed, bytesEmitted)
+	publishFinalPartial(onPartial, result)
+	if err != nil {
+		return result, err
+	}
+	return result, nil
+}
+
+func (e *Engine) prepareStreamingExecution(
+	inv Invocation,
+	passthrough bool,
+	onPartial func(PartialResult),
+) (Invocation, Profile, []string, OutputBudget, StreamReducer, runOptions, string) {
 	preparedInv, _ := e.prepareInvocation(inv)
 	profile := e.match(preparedInv)
 	command := preparedInv.Command
 	if profile.Prepare != nil {
 		command = profile.Prepare(preparedInv)
 	}
-
 	budget := ResolveBudget(profile, preparedInv, e.config.MaxPreviewLines)
-	var streamReducer StreamReducer
-	if !passthrough && profile.StreamRender != nil {
-		streamReducer = profile.StreamRender(preparedInv, budget)
-	}
+	streamReducer := streamingReducer(profile, preparedInv, budget, passthrough)
+	profileConfidence := normalizedProfileConfidence(profile)
 	options := buildRunOptions(preparedInv, profile, passthrough, streamReducer != nil)
-	if onPartial != nil {
-		profileConfidence := profile.Confidence
-		if profileConfidence == "" {
-			profileConfidence = ConfidenceMedium
-		}
-		options.onPreview = func(text string, bytesParsed int, done bool) {
-			onPartial(PartialResult{
-				ProfileName:       profile.Name,
-				ProfileConfidence: profileConfidence,
-				Display:           strings.TrimRight(text, "\n"),
-				BytesParsed:       bytesParsed,
-				Final:             done,
-			})
-		}
-	}
-
-	start := time.Now()
 	options.command = command
 	options.teeOnFailure = e.config.TeeOnFailure
 	options.teeDir = e.paths.TeeDir
 	options.reducer = streamReducer
+	options.onPreview = previewPublisher(onPartial, profile.Name, profileConfidence)
+	return preparedInv, profile, command, budget, streamReducer, options, profileConfidence
+}
+
+func streamingReducer(profile Profile, inv Invocation, budget OutputBudget, passthrough bool) StreamReducer {
+	if passthrough || profile.StreamRender == nil {
+		return nil
+	}
+	return profile.StreamRender(inv, budget)
+}
+
+func normalizedProfileConfidence(profile Profile) string {
+	if profile.Confidence == "" {
+		return ConfidenceMedium
+	}
+	return profile.Confidence
+}
+
+func previewPublisher(onPartial func(PartialResult), profileName string, profileConfidence string) func(string, int, bool) {
+	if onPartial == nil {
+		return nil
+	}
+	return func(text string, bytesParsed int, done bool) {
+		onPartial(PartialResult{
+			ProfileName:       profileName,
+			ProfileConfidence: profileConfidence,
+			Display:           strings.TrimRight(text, "\n"),
+			BytesParsed:       bytesParsed,
+			Final:             done,
+		})
+	}
+}
+
+func (e *Engine) runStreamingCommand(
+	ctx context.Context,
+	inv Invocation,
+	command []string,
+	profile Profile,
+	streamReducer StreamReducer,
+	options runOptions,
+) (runResult, Execution, FastPathDecision, string, int, int, time.Duration, error) {
+	start := time.Now()
 	runResult, err := runCommand(ctx, command, inv.Cwd, options)
 	duration := time.Since(start)
-	stdout := runResult.stdout
-	stderr := runResult.stderr
-	exitCode := runResult.exitCode
-	rawCombined := combineStreams(stdout, stderr)
-	rawBytesRead := runResult.stdoutBytes + runResult.stderrBytes
-	rawTokens := runResult.rawTokens
-	fastPath := DecideFastPath(profile, bytesForFastPath(profile, runResult), rawTokens, duration, exitCode)
-
 	execResult := Execution{
 		Command:  command,
-		Stdout:   stdout,
-		Stderr:   stderr,
-		ExitCode: exitCode,
+		Stdout:   runResult.stdout,
+		Stderr:   runResult.stderr,
+		ExitCode: runResult.exitCode,
 		Duration: duration,
 	}
+	rawCombined := combineStreams(runResult.stdout, runResult.stderr)
+	rawBytesRead := runResult.stdoutBytes + runResult.stderrBytes
+	rawTokens := runResult.rawTokens
+	fastPath := DecideFastPath(profile, bytesForFastPath(profile, runResult), rawTokens, duration, execResult.ExitCode)
+	return runResult, execResult, fastPath, rawCombined, rawBytesRead, rawTokens, duration, err
+}
+
+func renderStreamingOutput(
+	profile Profile,
+	preparedInv Invocation,
+	execResult Execution,
+	streamReducer StreamReducer,
+	budget OutputBudget,
+	rawCombined string,
+	passthrough bool,
+	fastPath FastPathDecision,
+) (string, bool) {
 	rendered := rawCombined
 	if !passthrough {
-		switch {
-		case shouldApplyBypass(profile, fastPath):
-			rendered = rawCombined
-		case streamReducer != nil:
-			rendered = streamReducer.Result()
-		case profile.Render != nil:
-			rendered = profile.Render(preparedInv, execResult)
-		}
+		rendered = renderedStreamingContent(profile, preparedInv, execResult, streamReducer, rawCombined, fastPath)
 	}
-	fallbackUsed := false
-	if streamReducer != nil && streamReducer.FallbackUsed() {
-		fallbackUsed = true
-	}
+	fallbackUsed := streamingFallbackUsed(profile, streamReducer, passthrough, rendered, rawCombined)
 	if strings.TrimSpace(rendered) == "" {
 		rendered = rawCombined
-		fallbackUsed = !passthrough || fallbackUsed
 	}
-	if !passthrough && profile.Name == "passthrough" {
-		fallbackUsed = true
-	}
-	if shouldUseFailureEscape(profile, exitCode, passthrough, fallbackUsed) && rawCombined != "" {
+	if shouldUseFailureEscape(profile, execResult.ExitCode, passthrough, fallbackUsed) && rawCombined != "" {
 		escapeBudget := ExpandBudgetForFailureEscape(budget, preparedInv)
 		if escaped := filters.CompactLines(rawCombined, escapeBudget.MaxLines); strings.TrimSpace(escaped) != "" {
 			rendered = escaped
 		}
 	}
+	return rendered, fallbackUsed
+}
 
-	teePath := runResult.teePath
-	if teePath == "" && exitCode != 0 && e.config.TeeOnFailure && rawCombined != "" {
-		path, teeErr := e.writeTee(rawCombined, command)
-		if teeErr == nil {
-			teePath = path
-		}
+func renderedStreamingContent(
+	profile Profile,
+	preparedInv Invocation,
+	execResult Execution,
+	streamReducer StreamReducer,
+	rawCombined string,
+	fastPath FastPathDecision,
+) string {
+	switch {
+	case shouldApplyBypass(profile, fastPath):
+		return rawCombined
+	case streamReducer != nil:
+		return streamReducer.Result()
+	case profile.Render != nil:
+		return profile.Render(preparedInv, execResult)
+	default:
+		return rawCombined
 	}
-	if teePath != "" && !passthrough {
-		rendered = strings.TrimRight(rendered, "\n") + "\n[full output: " + teePath + "]"
-	}
+}
 
+func streamingFallbackUsed(profile Profile, streamReducer StreamReducer, passthrough bool, rendered string, rawCombined string) bool {
+	fallbackUsed := streamReducer != nil && streamReducer.FallbackUsed()
+	if strings.TrimSpace(rendered) == "" {
+		fallbackUsed = !passthrough || fallbackUsed
+	}
+	if !passthrough && profile.Name == "passthrough" {
+		fallbackUsed = true
+	}
+	return fallbackUsed
+}
+
+func (e *Engine) ensureStreamingTeePath(teePath string, exitCode int, rawCombined string, command []string) string {
+	if teePath != "" || exitCode == 0 || !e.config.TeeOnFailure || rawCombined == "" {
+		return teePath
+	}
+	path, teeErr := e.writeTee(rawCombined, command)
+	if teeErr != nil {
+		return ""
+	}
+	return path
+}
+
+func appendTeeReference(rendered string, teePath string, passthrough bool) string {
+	if teePath == "" || passthrough {
+		return rendered
+	}
+	return strings.TrimRight(rendered, "\n") + "\n[full output: " + teePath + "]"
+}
+
+func streamingBytesParsed(streamReducer StreamReducer, profile Profile, execResult Execution, rawBytesRead int) int {
 	bytesParsed := rawBytesRead
 	if streamReducer != nil {
 		bytesParsed = streamReducer.BytesParsed()
@@ -124,18 +204,30 @@ func (e *Engine) ExecuteStreaming(
 		bytesParsed = profile.ParseBytes(execResult)
 	}
 	if bytesParsed < 0 {
-		bytesParsed = 0
+		return 0
 	}
-	bytesEmitted := len(rendered)
-	profileConfidence := profile.Confidence
-	if profileConfidence == "" {
-		profileConfidence = ConfidenceMedium
-	}
+	return bytesParsed
+}
 
+func buildStreamingHistoryRecord(
+	inv Invocation,
+	profile Profile,
+	profileConfidence string,
+	duration time.Duration,
+	exitCode int,
+	rawBytesRead int,
+	bytesParsed int,
+	bytesEmitted int,
+	rawTokens int,
+	fallbackUsed bool,
+	teePath string,
+	rendered string,
+) history.Record {
+	commandText := strings.Join(inv.Display, " ")
 	record := history.Record{
 		Timestamp:          time.Now(),
-		Command:            strings.Join(inv.Display, " "),
-		CommandFingerprint: history.Fingerprint(strings.Join(inv.Display, " ")),
+		Command:            commandText,
+		CommandFingerprint: history.Fingerprint(commandText),
 		Profile:            profile.Name,
 		ProfileConfidence:  profileConfidence,
 		Cwd:                inv.Cwd,
@@ -155,24 +247,44 @@ func (e *Engine) ExecuteStreaming(
 	if record.RawTokens > 0 {
 		record.SavingsPct = float64(record.SavedTokens) * 100 / float64(record.RawTokens)
 	}
-	_ = e.history.Append(record)
-	if teePath != "" {
-		_ = teeindex.New(e.paths.TeeDir).Append(teeindex.Entry{
-			Timestamp:          record.Timestamp,
-			Path:               teePath,
-			Command:            record.Command,
-			CommandFingerprint: record.CommandFingerprint,
-			Profile:            record.Profile,
-			ProfileConfidence:  record.ProfileConfidence,
-			Cwd:                record.Cwd,
-			ExitCode:           record.ExitCode,
-			DurationMS:         record.DurationMS,
-			RawBytes:           record.RawBytesRead,
-			RawTokens:          record.RawTokens,
-		})
-	}
+	return record
+}
 
-	result := Result{
+func (e *Engine) appendStreamingHistory(record history.Record) {
+	_ = e.history.Append(record)
+	if record.TeePath == "" {
+		return
+	}
+	_ = teeindex.New(e.paths.TeeDir).Append(teeindex.Entry{
+		Timestamp:          record.Timestamp,
+		Path:               record.TeePath,
+		Command:            record.Command,
+		CommandFingerprint: record.CommandFingerprint,
+		Profile:            record.Profile,
+		ProfileConfidence:  record.ProfileConfidence,
+		Cwd:                record.Cwd,
+		ExitCode:           record.ExitCode,
+		DurationMS:         record.DurationMS,
+		RawBytes:           record.RawBytesRead,
+		RawTokens:          record.RawTokens,
+	})
+}
+
+func buildStreamingResult(
+	profile Profile,
+	profileConfidence string,
+	rendered string,
+	rawCombined string,
+	exitCode int,
+	teePath string,
+	duration time.Duration,
+	fallbackUsed bool,
+	fastPath FastPathDecision,
+	rawBytesRead int,
+	bytesParsed int,
+	bytesEmitted int,
+) Result {
+	return Result{
 		ProfileName:       profile.Name,
 		ProfileConfidence: profileConfidence,
 		Display:           strings.TrimRight(rendered, "\n"),
@@ -187,19 +299,19 @@ func (e *Engine) ExecuteStreaming(
 		BytesParsed:       bytesParsed,
 		BytesEmitted:      bytesEmitted,
 	}
-	if onPartial != nil {
-		onPartial(PartialResult{
-			ProfileName:       result.ProfileName,
-			ProfileConfidence: result.ProfileConfidence,
-			Display:           result.Display,
-			BytesParsed:       result.BytesParsed,
-			Final:             true,
-		})
+}
+
+func publishFinalPartial(onPartial func(PartialResult), result Result) {
+	if onPartial == nil {
+		return
 	}
-	if err != nil {
-		return result, err
-	}
-	return result, nil
+	onPartial(PartialResult{
+		ProfileName:       result.ProfileName,
+		ProfileConfidence: result.ProfileConfidence,
+		Display:           result.Display,
+		BytesParsed:       result.BytesParsed,
+		Final:             true,
+	})
 }
 
 const rawPreviewBytes = defaultTinyOutputBypassBytes * 2

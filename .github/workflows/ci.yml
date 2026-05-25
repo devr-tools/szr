@@ -14,6 +14,7 @@ permissions:
 env:
   GOCACHE: ${{ github.workspace }}/.gocache
   GOVULNCHECK_VERSION: v1.1.1
+  GOCYCLO_VERSION: v0.6.0
   MIN_INTERNAL_COVERAGE: "80.0"
 
 concurrency:
@@ -96,11 +97,60 @@ jobs:
       - name: Run go vet
         run: go vet ./...
 
+  gocyclo:
+    name: gocyclo
+    needs: vet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install gocyclo
+        run: go install github.com/fzipp/gocyclo/cmd/gocyclo@${{ env.GOCYCLO_VERSION }}
+
+      - name: Enforce cyclomatic complexity budget
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mapfile -t files < <(find cmd internal pkg -type f -name '*.go' ! -name '*_test.go' | sort)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No non-test Go files found."
+            exit 0
+          fi
+
+          gocyclo_bin="$(go env GOPATH)/bin/gocyclo"
+          "$gocyclo_bin" -over 15 "${files[@]}" | tee gocyclo.out
+
+          {
+            echo "## Cyclomatic Complexity"
+            echo
+            if [ -s gocyclo.out ]; then
+              echo "Functions above the limit:"
+              echo '```'
+              sed -n '1,80p' gocyclo.out
+              echo '```'
+            else
+              echo "No functions exceeded the `gocyclo` limit of 15."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ -s gocyclo.out ]; then
+            echo "::error title=High cyclomatic complexity::gocyclo found functions above the limit"
+            exit 1
+          fi
+
   # ─── Parallel gates (all need the code-quality gate first) ───
 
   test:
     name: test (${{ matrix.label }})
-    needs: vet
+    needs:
+      - vet
+      - gocyclo
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -128,7 +178,9 @@ jobs:
 
   coverage:
     name: coverage
-    needs: vet
+    needs:
+      - vet
+      - gocyclo
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -157,7 +209,9 @@ jobs:
 
   smoke:
     name: smoke
-    needs: vet
+    needs:
+      - vet
+      - gocyclo
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -172,7 +226,9 @@ jobs:
 
   security:
     name: security scan
-    needs: vet
+    needs:
+      - vet
+      - gocyclo
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -301,7 +357,9 @@ jobs:
 
   semgrep:
     name: semgrep security scan
-    needs: vet
+    needs:
+      - vet
+      - gocyclo
     runs-on: ubuntu-latest
     container:
       image: semgrep/semgrep
@@ -315,7 +373,9 @@ jobs:
 
   benchmark:
     name: benchmark
-    needs: vet
+    needs:
+      - vet
+      - gocyclo
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -360,7 +420,9 @@ jobs:
   doc-review:
     name: doc review
     if: github.base_ref == 'develop'
-    needs: vet
+    needs:
+      - vet
+      - gocyclo
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
