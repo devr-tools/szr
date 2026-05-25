@@ -1,3 +1,3 @@
 module github.com/devr-tools/szr
 
-go 1.20
+go 1.26

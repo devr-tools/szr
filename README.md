@@ -116,7 +116,7 @@ szr self doctor
 ```
 
 The first stable formula release is `v0.1.0`. Future tagged releases are documented in [docs/RELEASING.md](/docs/RELEASING.md).
-g 
+
 ### Updating szr
 
 `szr self update` upgrades installs that `szr` can recognize today:
@@ -181,6 +181,45 @@ szr explain go test ./...
 szr commands
 ```
 
+## Local CI
+
+There are now two local CI entrypoints:
+
+- `make ci`: host-mode reproduction of the pipeline using your local Go toolchain, network, Docker, and installed binaries
+- `make ci-docker`: pinned Linux container reproduction with Go, Semgrep, and `govulncheck` preinstalled
+
+Use the containerized path when you want a more consistent result across machines:
+
+```bash
+make ci-docker
+make ci-docker BASE_REF=develop
+```
+
+Before running `make ci-docker`, make sure the local Docker daemon is available because the target builds `Dockerfile.ci` and then runs `./scripts/ci.sh` inside that image.
+
+`make ci-docker` is intentionally closer to the Ubuntu GitHub runner, but it still does not replace the hosted matrix entirely. GitHub CI remains the source of truth for:
+
+- `macos-latest` behavior
+- `windows-latest` behavior
+- pull-request-only metadata and GitHub job summaries
+
+## Deployment And Releases
+
+Deployment for `szr` is release-driven:
+
+- pushes to `main` or `master` let `release-please` manage the next stable release PR
+- merges of that release PR create the stable tag and publish artifacts through `goreleaser`
+- pushes to `develop` create prerelease tags like `v0.2.0-rc.5`
+
+Before shipping, run one of the local CI paths and confirm the release-sensitive docs still match the repo:
+
+- `README.md`
+- `CONTRIBUTING.md`
+- `docs/RELEASING.md`
+- `Formula/szr.rb` for stable Homebrew releases
+
+The full release and deployment checklist lives in [docs/RELEASING.md](/docs/RELEASING.md).
+
 ## Go Package
 
 The public Go package for embedding `szr` is:
@@ -209,7 +248,7 @@ make prepush
 
 ## Contributing
 
-Public contributions are welcome. Start with [CONTRIBUTING.md](/szr/CONTRIBUTING.md) for local setup, test expectations, commit hygiene, and PR etiquette.
+Public contributions are welcome. Start with [CONTRIBUTING.md](/CONTRIBUTING.md) for local setup, test expectations, commit hygiene, and PR etiquette.
 
 For most code changes, the minimum bar is:
 
