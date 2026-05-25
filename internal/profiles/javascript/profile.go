@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"szr/internal/engine"
-	shared "szr/internal/filters"
-	jsfilter "szr/internal/filters/javascript"
-	"szr/internal/profilekit"
+	"github.com/devr-tools/szr/internal/engine"
+	shared "github.com/devr-tools/szr/internal/filters"
+	jsfilter "github.com/devr-tools/szr/internal/filters/javascript"
+	"github.com/devr-tools/szr/internal/profilekit"
 )
 
 func Profiles(maxLines int) []engine.Profile {

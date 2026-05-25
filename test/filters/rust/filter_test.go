@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	rustfilter "szr/internal/filters/rust"
+	rustfilter "github.com/devr-tools/szr/internal/filters/rust"
 )
 
 func TestSummarizeCargoTest(t *testing.T) {

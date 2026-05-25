@@ -3,8 +3,8 @@ package engine
 import (
 	"strings"
 
-	"szr/internal/filters"
-	"szr/internal/history"
+	"github.com/devr-tools/szr/internal/filters"
+	"github.com/devr-tools/szr/internal/history"
 )
 
 type renderResult struct {

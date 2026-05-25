@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"os"
 
-	"szr/internal/config"
-	"szr/internal/engine"
-	"szr/internal/history"
-	"szr/internal/profiles"
+	"github.com/devr-tools/szr/internal/config"
+	"github.com/devr-tools/szr/internal/engine"
+	"github.com/devr-tools/szr/internal/history"
+	"github.com/devr-tools/szr/internal/profiles"
 )
 
 type App struct {
@@ -73,69 +73,54 @@ func (a *App) Run(ctx context.Context, args []string) int {
 		return 0
 	}
 
-	switch rest[0] {
-	case "--help", "-h", "help":
-		a.printHelp()
-		return 0
-	case "commands":
-		a.printCommands()
-		return 0
-	case "--version", "version":
-		fmt.Println("szr", a.version)
-		return 0
-	case "spread", "gain":
-		return a.runSpread(rest[1:])
-	case "recommend":
-		return a.runRecommend(rest[1:])
-	case "hotspots":
-		return a.runHotspots(rest[1:])
-	case "profiles":
-		return a.runProfiles()
-	case "doctor":
-		return a.runDoctor(a.configForFlags(flags), rest[1:])
-	case "self":
-		return a.runSelf(flags, rest[1:])
-	case "install":
-		return a.runInstall(rest[1:])
-	case "bench":
-		return a.runBench(rest[1:])
-	case "replay":
-		return a.runReplay(flags, rest[1:])
-	case "compare":
-		return a.runCompare(ctx, flags, rest[1:])
-	case "rules":
-		return a.runRules(flags, rest[1:])
-	case "scaffold":
-		return a.runScaffold(rest[1:])
-	case "proxy":
-		return a.runExternal(ctx, flags, "proxy", rest[1:], true)
-	case "run":
-		return a.runExternal(ctx, flags, "run", rest[1:], false)
-	case "test":
-		return a.runExternal(ctx, flags, "test", rest[1:], false)
-	case "summary":
-		return a.runExternal(ctx, flags, "summary", rest[1:], false)
-	case "explain":
-		return a.runExplain(flags, rest[1:])
-	case "git", "go":
-		return a.runExternal(ctx, flags, rest[0], rest[1:], false)
-	case "ls":
-		return a.runLS(rest[1:])
-	case "read":
-		return a.runRead(a.configForFlags(flags), rest[1:])
-	case "grep":
-		return a.runGrep(a.configForFlags(flags), rest[1:])
-	case "rg":
-		return a.runRGExternal(ctx, flags, rest[1:])
-	case "json":
-		return a.runJSON(rest[1:])
-	case "log":
-		return a.runLog(rest[1:])
-	case "tee":
-		return a.runTee(rest[1:])
-	default:
-		return a.runExternal(ctx, flags, "run", rest, false)
+	if code, ok := a.runBuiltInCommand(ctx, flags, rest); ok {
+		return code
 	}
+	return a.runExternal(ctx, flags, "run", rest, false)
+}
+
+func (a *App) runBuiltInCommand(ctx context.Context, flags globalFlags, rest []string) (int, bool) {
+	command := rest[0]
+	handlers := map[string]func() int{
+		"--help":    func() int { a.printHelp(); return 0 },
+		"-h":        func() int { a.printHelp(); return 0 },
+		"help":      func() int { a.printHelp(); return 0 },
+		"commands":  func() int { a.printCommands(); return 0 },
+		"--version": func() int { fmt.Println("szr", a.version); return 0 },
+		"version":   func() int { fmt.Println("szr", a.version); return 0 },
+		"spread":    func() int { return a.runSpread(rest[1:]) },
+		"gain":      func() int { return a.runSpread(rest[1:]) },
+		"recommend": func() int { return a.runRecommend(rest[1:]) },
+		"hotspots":  func() int { return a.runHotspots(rest[1:]) },
+		"profiles":  func() int { return a.runProfiles() },
+		"doctor":    func() int { return a.runDoctor(a.configForFlags(flags), rest[1:]) },
+		"self":      func() int { return a.runSelf(flags, rest[1:]) },
+		"install":   func() int { return a.runInstall(rest[1:]) },
+		"bench":     func() int { return a.runBench(rest[1:]) },
+		"replay":    func() int { return a.runReplay(flags, rest[1:]) },
+		"compare":   func() int { return a.runCompare(ctx, flags, rest[1:]) },
+		"rules":     func() int { return a.runRules(flags, rest[1:]) },
+		"scaffold":  func() int { return a.runScaffold(rest[1:]) },
+		"proxy":     func() int { return a.runExternal(ctx, flags, "proxy", rest[1:], true) },
+		"run":       func() int { return a.runExternal(ctx, flags, "run", rest[1:], false) },
+		"test":      func() int { return a.runExternal(ctx, flags, "test", rest[1:], false) },
+		"summary":   func() int { return a.runExternal(ctx, flags, "summary", rest[1:], false) },
+		"explain":   func() int { return a.runExplain(flags, rest[1:]) },
+		"git":       func() int { return a.runExternal(ctx, flags, command, rest[1:], false) },
+		"go":        func() int { return a.runExternal(ctx, flags, command, rest[1:], false) },
+		"ls":        func() int { return a.runLS(rest[1:]) },
+		"read":      func() int { return a.runRead(a.configForFlags(flags), rest[1:]) },
+		"grep":      func() int { return a.runGrep(a.configForFlags(flags), rest[1:]) },
+		"rg":        func() int { return a.runRGExternal(ctx, flags, rest[1:]) },
+		"json":      func() int { return a.runJSON(rest[1:]) },
+		"log":       func() int { return a.runLog(rest[1:]) },
+		"tee":       func() int { return a.runTee(rest[1:]) },
+	}
+	handler, ok := handlers[command]
+	if !ok {
+		return 0, false
+	}
+	return handler(), true
 }
 
 func (a *App) configForFlags(flags globalFlags) config.Config {

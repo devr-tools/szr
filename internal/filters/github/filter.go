@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	shared "szr/internal/filters"
+	shared "github.com/devr-tools/szr/internal/filters"
 )
 
 type PRView struct {

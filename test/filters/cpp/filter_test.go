@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	cppfilter "szr/internal/filters/cpp"
+	cppfilter "github.com/devr-tools/szr/internal/filters/cpp"
 )
 
 func TestSummarizeCTest(t *testing.T) {

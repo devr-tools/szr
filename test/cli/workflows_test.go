@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"szr/internal/cli"
-	"szr/internal/config"
-	"szr/internal/history"
-	"szr/internal/teeindex"
-	"szr/test/testutil"
+	"github.com/devr-tools/szr/internal/cli"
+	"github.com/devr-tools/szr/internal/config"
+	"github.com/devr-tools/szr/internal/history"
+	"github.com/devr-tools/szr/internal/teeindex"
+	"github.com/devr-tools/szr/test/testutil"
 )
 
 func TestRecommendAndHotspotsCommands(t *testing.T) {
@@ -98,6 +98,21 @@ func TestReplayAndCompareCommands(t *testing.T) {
 	code, stdout, stderr = testutil.RunApp(t, app, "replay", "100_git_diff")
 	if code != 0 || stderr != "" || !strings.Contains(stdout, "profile: git-diff") {
 		t.Fatalf("unexpected replay tee stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+
+	code, stdout, stderr = testutil.RunApp(t, app, "replay", "100_git_diff", "--json", "--cwd", root, "--exit-code", "7", "--max-lines", "1")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected replay json stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	var replayPayload map[string]any
+	if err := json.Unmarshal([]byte(stdout), &replayPayload); err != nil {
+		t.Fatalf("decode replay json: %v", err)
+	}
+	if replayPayload["exit_code"] != float64(7) || replayPayload["effective_command"] != "git diff" || replayPayload["profile"] != "git-diff" {
+		t.Fatalf("unexpected replay payload: %#v", replayPayload)
+	}
+	if display, _ := replayPayload["display"].(string); !strings.Contains(display, "files=1") {
+		t.Fatalf("expected summarized replay display, got %#v", replayPayload)
 	}
 
 	binDir := t.TempDir()

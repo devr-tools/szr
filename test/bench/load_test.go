@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"szr/internal/bench"
+	"github.com/devr-tools/szr/internal/bench"
 )
 
 func TestLoadFixturesErrors(t *testing.T) {

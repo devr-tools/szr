@@ -3,9 +3,9 @@ package profiles_test
 import (
 	"testing"
 
-	"szr/internal/engine"
-	"szr/internal/profiles"
-	"szr/test/testutil"
+	"github.com/devr-tools/szr/internal/engine"
+	"github.com/devr-tools/szr/internal/profiles"
+	"github.com/devr-tools/szr/test/testutil"
 )
 
 func TestBuiltInProfiles(t *testing.T) {

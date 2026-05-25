@@ -3,7 +3,7 @@ package szrdev
 import (
 	"context"
 
-	szrpkg "szr/pkg/szr"
+	szrpkg "github.com/devr-tools/szr/pkg/szr"
 )
 
 const version = "dev"

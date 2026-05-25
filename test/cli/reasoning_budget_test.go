@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"szr/test/testutil"
+	"github.com/devr-tools/szr/test/testutil"
 )
 
 func TestExplainReasoningBudgetMode(t *testing.T) {

@@ -1,6 +1,6 @@
 package bench
 
-import "szr/internal/engine"
+import "github.com/devr-tools/szr/internal/engine"
 
 type Fixture struct {
 	Name             string

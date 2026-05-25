@@ -164,11 +164,7 @@ func runCommand(ctx context.Context, args []string, cwd string, options runOptio
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 	cmd.Dir = cwd
 
-	stdoutPipe, err := cmd.StdoutPipe()
-	if err != nil {
-		return runResult{}, err
-	}
-	stderrPipe, err := cmd.StderrPipe()
+	stdoutPipe, stderrPipe, err := commandPipes(cmd)
 	if err != nil {
 		return runResult{}, err
 	}
@@ -193,23 +189,8 @@ func runCommand(ctx context.Context, args []string, cwd string, options runOptio
 	stderr.capture = options.captureStderr
 	stderr.limit = options.stderrPreviewBytes
 
-	var wg sync.WaitGroup
-	errCh := make(chan error, 2)
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		errCh <- copyStream(stdoutPipe, &stdout, tee, reducer, options.reduceStdoutLive, options.onPreview, true)
-	}()
-	go func() {
-		defer wg.Done()
-		errCh <- copyStream(stderrPipe, &stderr, tee, reducer, options.reduceStderrLive, options.onPreview, false)
-	}()
-
-	wg.Wait()
-	close(errCh)
+	streamErr := collectCommandStreams(stdoutPipe, stderrPipe, &stdout, &stderr, tee, reducer, options)
 	waitErr := cmd.Wait()
-
-	streamErr := firstStreamError(errCh)
 
 	if reducer != nil {
 		if options.reduceStdoutLater {
@@ -222,20 +203,8 @@ func runCommand(ctx context.Context, args []string, cwd string, options runOptio
 		}
 	}
 
-	exitCode := 1
-	if waitErr == nil {
-		exitCode = 0
-	} else if exitErr, ok := waitErr.(*exec.ExitError); ok {
-		exitCode = exitErr.ExitCode()
-	}
-
-	teePath := ""
-	if tee != nil {
-		path, finalizeErr := tee.Finalize(exitCode)
-		if finalizeErr == nil {
-			teePath = path
-		}
-	}
+	exitCode := exitCodeForWaitError(waitErr)
+	teePath := finalizeTeeCapture(tee, exitCode)
 
 	result := runResult{
 		stdout:      stdout.String(),
@@ -246,18 +215,73 @@ func runCommand(ctx context.Context, args []string, cwd string, options runOptio
 		exitCode:    exitCode,
 		teePath:     teePath,
 	}
+	return finalizeRunCommandResult(result, streamErr, waitErr)
+}
 
+func commandPipes(cmd *exec.Cmd) (io.ReadCloser, io.ReadCloser, error) {
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, nil, err
+	}
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, nil, err
+	}
+	return stdoutPipe, stderrPipe, nil
+}
+
+func collectCommandStreams(
+	stdoutPipe io.Reader,
+	stderrPipe io.Reader,
+	stdout *outputCollector,
+	stderr *outputCollector,
+	tee *teeCapture,
+	reducer *synchronizedReducer,
+	options runOptions,
+) error {
+	var wg sync.WaitGroup
+	errCh := make(chan error, 2)
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		errCh <- copyStream(stdoutPipe, stdout, tee, reducer, options.reduceStdoutLive, options.onPreview, true)
+	}()
+	go func() {
+		defer wg.Done()
+		errCh <- copyStream(stderrPipe, stderr, tee, reducer, options.reduceStderrLive, options.onPreview, false)
+	}()
+	wg.Wait()
+	close(errCh)
+	return firstStreamError(errCh)
+}
+
+func exitCodeForWaitError(waitErr error) int {
 	if waitErr == nil {
-		if streamErr != nil {
-			return result, streamErr
-		}
-		return result, nil
+		return 0
+	}
+	if exitErr, ok := waitErr.(*exec.ExitError); ok {
+		return exitErr.ExitCode()
+	}
+	return 1
+}
+
+func finalizeTeeCapture(tee *teeCapture, exitCode int) string {
+	if tee == nil {
+		return ""
+	}
+	path, finalizeErr := tee.Finalize(exitCode)
+	if finalizeErr != nil {
+		return ""
+	}
+	return path
+}
+
+func finalizeRunCommandResult(result runResult, streamErr error, waitErr error) (runResult, error) {
+	if waitErr == nil {
+		return result, streamErr
 	}
 	if _, ok := waitErr.(*exec.ExitError); ok {
-		if streamErr != nil {
-			return result, streamErr
-		}
-		return result, nil
+		return result, streamErr
 	}
 	return result, waitErr
 }

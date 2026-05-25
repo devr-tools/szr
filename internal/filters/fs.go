@@ -65,39 +65,10 @@ func SummarizeTreeOutput(input string, maxLines int) string {
 	footer := ""
 	var current *treeSummaryEntry
 	for _, line := range NonEmptyLines(StripANSI(input)) {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			continue
-		}
-		if strings.Contains(trimmed, " director") || strings.Contains(trimmed, " file") {
-			footer = Clip(trimmed, 160)
-			continue
-		}
-		if root == "" && !strings.Contains(line, "-- ") {
-			root = Clip(trimmed, 160)
-			continue
-		}
-
-		depth, name := parseTreeLine(line)
-		if name == "" {
-			continue
-		}
-		switch depth {
-		case 1:
-			entry := &treeSummaryEntry{Name: name}
+		var entry *treeSummaryEntry
+		root, footer, current, entry = consumeTreeSummaryLine(line, root, footer, current)
+		if entry != nil {
 			top = append(top, entry)
-			current = entry
-		case 2:
-			if current != nil {
-				current.Children++
-				if len(current.SampleChildren) < 2 {
-					current.SampleChildren = append(current.SampleChildren, name)
-				}
-			}
-		default:
-			if current != nil {
-				current.Descendants++
-			}
 		}
 	}
 
@@ -124,6 +95,55 @@ func SummarizeTreeOutput(input string, maxLines int) string {
 		out = append(out, footer)
 	}
 	return JoinLimitedLines(out, maxLines)
+}
+
+func consumeTreeSummaryLine(
+	line string,
+	root string,
+	footer string,
+	current *treeSummaryEntry,
+) (string, string, *treeSummaryEntry, *treeSummaryEntry) {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return root, footer, current, nil
+	}
+	if strings.Contains(trimmed, " director") || strings.Contains(trimmed, " file") {
+		return root, Clip(trimmed, 160), current, nil
+	}
+	if root == "" && !strings.Contains(line, "-- ") {
+		return Clip(trimmed, 160), footer, current, nil
+	}
+
+	depth, name := parseTreeLine(line)
+	if name == "" {
+		return root, footer, current, nil
+	}
+	nextCurrent, entry := updateTreeSummaryEntry(current, depth, name)
+	return root, footer, nextCurrent, entry
+}
+
+func updateTreeSummaryEntry(
+	current *treeSummaryEntry,
+	depth int,
+	name string,
+) (*treeSummaryEntry, *treeSummaryEntry) {
+	switch depth {
+	case 1:
+		entry := &treeSummaryEntry{Name: name}
+		return entry, entry
+	case 2:
+		if current != nil {
+			current.Children++
+			if len(current.SampleChildren) < 2 {
+				current.SampleChildren = append(current.SampleChildren, name)
+			}
+		}
+	default:
+		if current != nil {
+			current.Descendants++
+		}
+	}
+	return current, nil
 }
 
 func SummarizeReadFile(path string, data []byte, maxLines int) string {

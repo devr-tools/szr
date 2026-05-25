@@ -1,8 +1,8 @@
 package engine
 
 import (
-	"szr/internal/config"
-	"szr/internal/rules"
+	"github.com/devr-tools/szr/internal/config"
+	"github.com/devr-tools/szr/internal/rules"
 )
 
 func compileRuleProfiles(cfg config.Config) []Profile {

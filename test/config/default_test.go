@@ -3,7 +3,7 @@ package config_test
 import (
 	"testing"
 
-	"szr/internal/config"
+	"github.com/devr-tools/szr/internal/config"
 )
 
 func TestDefault(t *testing.T) {

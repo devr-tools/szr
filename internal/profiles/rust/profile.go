@@ -1,10 +1,10 @@
 package rust
 
 import (
-	"szr/internal/engine"
-	shared "szr/internal/filters"
-	rustfilter "szr/internal/filters/rust"
-	"szr/internal/profilekit"
+	"github.com/devr-tools/szr/internal/engine"
+	shared "github.com/devr-tools/szr/internal/filters"
+	rustfilter "github.com/devr-tools/szr/internal/filters/rust"
+	"github.com/devr-tools/szr/internal/profilekit"
 )
 
 func Profiles(maxLines int) []engine.Profile {

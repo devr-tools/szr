@@ -7,22 +7,13 @@ import (
 	"strings"
 	"time"
 
-	"szr/internal/history"
+	"github.com/devr-tools/szr/internal/history"
 )
 
 func (a *App) runSpread(args []string) int {
-	showHistory := false
-	asJSON := false
-	for _, arg := range args {
-		switch arg {
-		case "--history":
-			showHistory = true
-		case "--json":
-			asJSON = true
-		default:
-			fmt.Fprintf(os.Stderr, "szr: unknown spread flag %s\n", arg)
-			return 2
-		}
+	showHistory, asJSON, code := parseSpreadArgs(args)
+	if code != 0 {
+		return code
 	}
 
 	records, err := a.history.LoadAll()
@@ -57,108 +48,150 @@ func (a *App) runSpread(args []string) int {
 	ui.metric("failure rate", failureRate, withBar(summary.FailureRate, failureRate, ui.color, false))
 	ui.metric("fallback rate", fallbackRate, withBar(summary.FallbackRate, fallbackRate, ui.color, false))
 	ui.metric("tee rate", teeRate, withBar(summary.TeeRate, teeRate, ui.color, false))
-	if len(summary.TopCommands) > 0 {
-		ui.section("top commands:")
-		rows := make([][]string, 0, len(summary.TopCommands))
-		for _, cmd := range summary.TopCommands {
-			rows = append(rows, []string{
-				cmd.Command,
-				fmt.Sprintf("%d", cmd.Count),
-				fmt.Sprintf("%.1f%% %s", cmd.AveragePct, progressBar(cmd.AveragePct, 12, false, true)),
-				fmt.Sprintf("%d", cmd.SavedTokens),
-				fmt.Sprintf("%d", cmd.RawTokens),
-				fmt.Sprintf("%d", cmd.FilteredTokens),
-			})
-		}
-		ui.table(
-			[]string{"command", "count", "avg savings", "saved", "raw", "out"},
-			rows,
-			tableSpec{
-				alignRight: map[int]bool{1: true, 3: true, 4: true, 5: true},
-				maxWidth:   map[int]int{0: 30, 2: 24},
-			},
-		)
-	}
-	if len(summary.ProfileStats) > 0 {
-		ui.section("profiles:")
-		rows := make([][]string, 0, len(summary.ProfileStats))
-		for _, stat := range summary.ProfileStats {
-			rows = append(rows, []string{
-				stat.Name,
-				stat.Confidence,
-				fmt.Sprintf("%d", stat.Commands),
-				fmt.Sprintf("%d", stat.SavedTokens),
-				fmt.Sprintf("%.1f%% %s", stat.AveragePct, progressBar(stat.AveragePct, 10, false, true)),
-				fmt.Sprintf("%d/%dms", stat.DurationP50MS, stat.DurationP95MS),
-				fmt.Sprintf("%.1f%%", stat.FailureRate),
-				fmt.Sprintf("%.1f%%", stat.FallbackRate),
-				fmt.Sprintf("%.1f%%", stat.TeeRate),
-			})
-		}
-		ui.table(
-			[]string{"profile", "conf", "count", "saved", "avg", "p50/p95", "fail", "fallback", "tee"},
-			rows,
-			tableSpec{
-				alignRight: map[int]bool{2: true, 3: true, 5: true, 6: true, 7: true, 8: true},
-				maxWidth:   map[int]int{0: 18, 4: 22},
-			},
-		)
-	}
-	if len(summary.FingerprintHotspots) > 0 {
-		ui.section("poor savings fingerprints:")
-		rows := make([][]string, 0, len(summary.FingerprintHotspots))
-		for _, stat := range summary.FingerprintHotspots {
-			rows = append(rows, []string{
-				stat.Command,
-				stat.Profile,
-				fmt.Sprintf("%d", stat.Commands),
-				fmt.Sprintf("%.1f%% %s", stat.AveragePct, progressBar(stat.AveragePct, 10, false, true)),
-				fmt.Sprintf("%d/%dms", stat.DurationP50MS, stat.DurationP95MS),
-				stat.Fingerprint,
-			})
-		}
-		ui.table(
-			[]string{"command", "profile", "count", "avg", "p50/p95", "fp"},
-			rows,
-			tableSpec{
-				alignRight: map[int]bool{2: true, 4: true},
-				maxWidth:   map[int]int{0: 30, 1: 18, 3: 22, 5: 16},
-			},
-		)
-	}
-	if len(summary.BudgetSuggestions) > 0 {
-		ui.section("budget suggestions:")
-		for _, suggestion := range summary.BudgetSuggestions {
-			target := fmt.Sprintf("%d lines %d bytes %d tokens", suggestion.Suggested.MaxLines, suggestion.Suggested.MaxBytes, suggestion.Suggested.MaxTokens)
-			fmt.Printf(
-				"  - %s  profile=%s samples=%d %s/%s target=%s confidence=%s\n",
-				suggestion.Command,
-				suggestion.Profile,
-				suggestion.Samples,
-				suggestion.Direction,
-				suggestion.Reason,
-				target,
-				suggestion.Confidence,
-			)
-		}
-	}
-	if showHistory {
-		ui.section("recent:")
-		for _, rec := range summary.Recent {
-			fmt.Printf(
-				"  - %s  %s  confidence=%s  %dms  exit=%d  fallback=%t  %.1f%%  %s\n",
-				rec.Timestamp.Format(time.RFC3339),
-				rec.Profile,
-				rec.ProfileConfidence,
-				rec.DurationMS,
-				rec.ExitCode,
-				rec.FallbackUsed,
-				rec.SavingsPct,
-				rec.Command,
-			)
-		}
-	}
+	renderSpreadTopCommands(ui, summary.TopCommands)
+	renderSpreadProfiles(ui, summary.ProfileStats)
+	renderSpreadFingerprints(ui, summary.FingerprintHotspots)
+	renderSpreadBudgetSuggestions(ui, summary.BudgetSuggestions)
+	renderSpreadHistory(ui, summary.Recent, showHistory)
 	return 0
+}
+
+func parseSpreadArgs(args []string) (bool, bool, int) {
+	showHistory := false
+	asJSON := false
+	for _, arg := range args {
+		switch arg {
+		case "--history":
+			showHistory = true
+		case "--json":
+			asJSON = true
+		default:
+			fmt.Fprintf(os.Stderr, "szr: unknown spread flag %s\n", arg)
+			return false, false, 2
+		}
+	}
+	return showHistory, asJSON, 0
+}
+
+func renderSpreadTopCommands(ui spreadUI, commands []history.CommandStat) {
+	if len(commands) == 0 {
+		return
+	}
+	ui.section("top commands:")
+	rows := make([][]string, 0, len(commands))
+	for _, cmd := range commands {
+		rows = append(rows, []string{
+			cmd.Command,
+			fmt.Sprintf("%d", cmd.Count),
+			fmt.Sprintf("%.1f%% %s", cmd.AveragePct, progressBar(cmd.AveragePct, 12, false, true)),
+			fmt.Sprintf("%d", cmd.SavedTokens),
+			fmt.Sprintf("%d", cmd.RawTokens),
+			fmt.Sprintf("%d", cmd.FilteredTokens),
+		})
+	}
+	ui.table(
+		[]string{"command", "count", "avg savings", "saved", "raw", "out"},
+		rows,
+		tableSpec{
+			alignRight: map[int]bool{1: true, 3: true, 4: true, 5: true},
+			maxWidth:   map[int]int{0: 30, 2: 24},
+		},
+	)
+}
+
+func renderSpreadProfiles(ui spreadUI, stats []history.ProfileStat) {
+	if len(stats) == 0 {
+		return
+	}
+	ui.section("profiles:")
+	rows := make([][]string, 0, len(stats))
+	for _, stat := range stats {
+		rows = append(rows, []string{
+			stat.Name,
+			stat.Confidence,
+			fmt.Sprintf("%d", stat.Commands),
+			fmt.Sprintf("%d", stat.SavedTokens),
+			fmt.Sprintf("%.1f%% %s", stat.AveragePct, progressBar(stat.AveragePct, 10, false, true)),
+			fmt.Sprintf("%d/%dms", stat.DurationP50MS, stat.DurationP95MS),
+			fmt.Sprintf("%.1f%%", stat.FailureRate),
+			fmt.Sprintf("%.1f%%", stat.FallbackRate),
+			fmt.Sprintf("%.1f%%", stat.TeeRate),
+		})
+	}
+	ui.table(
+		[]string{"profile", "conf", "count", "saved", "avg", "p50/p95", "fail", "fallback", "tee"},
+		rows,
+		tableSpec{
+			alignRight: map[int]bool{2: true, 3: true, 5: true, 6: true, 7: true, 8: true},
+			maxWidth:   map[int]int{0: 18, 4: 22},
+		},
+	)
+}
+
+func renderSpreadFingerprints(ui spreadUI, stats []history.FingerprintStat) {
+	if len(stats) == 0 {
+		return
+	}
+	ui.section("poor savings fingerprints:")
+	rows := make([][]string, 0, len(stats))
+	for _, stat := range stats {
+		rows = append(rows, []string{
+			stat.Command,
+			stat.Profile,
+			fmt.Sprintf("%d", stat.Commands),
+			fmt.Sprintf("%.1f%% %s", stat.AveragePct, progressBar(stat.AveragePct, 10, false, true)),
+			fmt.Sprintf("%d/%dms", stat.DurationP50MS, stat.DurationP95MS),
+			stat.Fingerprint,
+		})
+	}
+	ui.table(
+		[]string{"command", "profile", "count", "avg", "p50/p95", "fp"},
+		rows,
+		tableSpec{
+			alignRight: map[int]bool{2: true, 4: true},
+			maxWidth:   map[int]int{0: 30, 1: 18, 3: 22, 5: 16},
+		},
+	)
+}
+
+func renderSpreadBudgetSuggestions(ui spreadUI, suggestions []history.BudgetSuggestion) {
+	if len(suggestions) == 0 {
+		return
+	}
+	ui.section("budget suggestions:")
+	for _, suggestion := range suggestions {
+		target := fmt.Sprintf("%d lines %d bytes %d tokens", suggestion.Suggested.MaxLines, suggestion.Suggested.MaxBytes, suggestion.Suggested.MaxTokens)
+		fmt.Printf(
+			"  - %s  profile=%s samples=%d %s/%s target=%s confidence=%s\n",
+			suggestion.Command,
+			suggestion.Profile,
+			suggestion.Samples,
+			suggestion.Direction,
+			suggestion.Reason,
+			target,
+			suggestion.Confidence,
+		)
+	}
+}
+
+func renderSpreadHistory(ui spreadUI, recent []history.Record, showHistory bool) {
+	if !showHistory {
+		return
+	}
+	ui.section("recent:")
+	for _, rec := range recent {
+		fmt.Printf(
+			"  - %s  %s  confidence=%s  %dms  exit=%d  fallback=%t  %.1f%%  %s\n",
+			rec.Timestamp.Format(time.RFC3339),
+			rec.Profile,
+			rec.ProfileConfidence,
+			rec.DurationMS,
+			rec.ExitCode,
+			rec.FallbackUsed,
+			rec.SavingsPct,
+			rec.Command,
+		)
+	}
 }
 
 type spreadUI struct {

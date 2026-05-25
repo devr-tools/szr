@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"szr/internal/cli"
-	"szr/internal/config"
-	"szr/internal/history"
-	"szr/internal/teeindex"
-	"szr/test/testutil"
+	"github.com/devr-tools/szr/internal/cli"
+	"github.com/devr-tools/szr/internal/config"
+	"github.com/devr-tools/szr/internal/history"
+	"github.com/devr-tools/szr/internal/teeindex"
+	"github.com/devr-tools/szr/test/testutil"
 )
 
 func TestTeeListAndRead(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"szr/internal/filters"
+	"github.com/devr-tools/szr/internal/filters"
 )
 
 var failureTokenPattern = regexp.MustCompile(`([[:alnum:]_./-]+\.[[:alnum:]_./-]+:\d+(?::\d+)?)|([[:alnum:]_./-]+:\d+(?::\d+)?)`)
@@ -30,20 +30,40 @@ func evaluateExpectation(fixture Fixture, measurement Measurement) Expectation {
 }
 
 func evaluateQuality(fixture Fixture, measurement Measurement) Quality {
-	lines := nonEmptyLines(measurement.Rendered)
+	actionable := countActionableLines(measurement.Rendered)
+	rawFailureTokens, renderedFailureTokens := qualityFailureIdentifiers(fixture, measurement)
+	preservedFailures := countPreservedFailures(rawFailureTokens, renderedFailureTokens)
+	score, issues := scoreQuality(actionable, rawFailureTokens, preservedFailures, measurement)
+
+	return Quality{
+		Score:              score,
+		ActionableLines:    actionable,
+		FailureIdentifiers: len(rawFailureTokens),
+		PreservedFailures:  preservedFailures,
+		FallbackRate:       measurement.FallbackRate,
+		ProfileConfidence:  profileConfidence(fixture.ProfileName),
+		Issues:             issues,
+	}
+}
+
+func countActionableLines(rendered string) int {
 	actionable := 0
-	for _, line := range lines {
+	for _, line := range nonEmptyLines(rendered) {
 		if isActionableLine(line) {
 			actionable++
 		}
 	}
+	return actionable
+}
 
-	rawFailureTokens := []string{}
-	renderedFailureTokens := []string{}
-	if fixture.Execution.ExitCode != 0 {
-		rawFailureTokens = extractFailureIdentifiers(fixture.RawCombined())
-		renderedFailureTokens = extractFailureIdentifiers(measurement.Rendered)
+func qualityFailureIdentifiers(fixture Fixture, measurement Measurement) ([]string, []string) {
+	if fixture.Execution.ExitCode == 0 {
+		return nil, nil
 	}
+	return extractFailureIdentifiers(fixture.RawCombined()), extractFailureIdentifiers(measurement.Rendered)
+}
+
+func countPreservedFailures(rawFailureTokens, renderedFailureTokens []string) int {
 	preservedFailures := 0
 	for _, rawToken := range rawFailureTokens {
 		for _, renderedToken := range renderedFailureTokens {
@@ -53,9 +73,12 @@ func evaluateQuality(fixture Fixture, measurement Measurement) Quality {
 			}
 		}
 	}
+	return preservedFailures
+}
 
-	issues := []string{}
+func scoreQuality(actionable int, rawFailureTokens []string, preservedFailures int, measurement Measurement) (int, []string) {
 	score := 100
+	issues := []string{}
 	if actionable == 0 {
 		issues = append(issues, "zero_actionable_lines")
 		score -= 60
@@ -79,16 +102,7 @@ func evaluateQuality(fixture Fixture, measurement Measurement) Quality {
 	if score < 0 {
 		score = 0
 	}
-
-	return Quality{
-		Score:              score,
-		ActionableLines:    actionable,
-		FailureIdentifiers: len(rawFailureTokens),
-		PreservedFailures:  preservedFailures,
-		FallbackRate:       measurement.FallbackRate,
-		ProfileConfidence:  profileConfidence(fixture.ProfileName),
-		Issues:             issues,
-	}
+	return score, issues
 }
 
 func parsedProfileInput(fixture Fixture) string {

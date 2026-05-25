@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	ghfilter "szr/internal/filters/github"
+	ghfilter "github.com/devr-tools/szr/internal/filters/github"
 )
 
 func TestSummarizeGHPRView(t *testing.T) {

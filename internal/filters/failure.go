@@ -291,57 +291,70 @@ func maxFailureInt(left, right int) int {
 	return right
 }
 
+type goTestEvent struct {
+	Time    string `json:"Time"`
+	Action  string `json:"Action"`
+	Package string `json:"Package"`
+	Test    string `json:"Test"`
+	Output  string `json:"Output"`
+}
+
+type goTestPackageState struct {
+	Passed bool
+	Failed bool
+}
+
 func SummarizeGoTestJSON(input string) string {
-	type event struct {
-		Time    string `json:"Time"`
-		Action  string `json:"Action"`
-		Package string `json:"Package"`
-		Test    string `json:"Test"`
-		Output  string `json:"Output"`
-	}
-
-	type packageState struct {
-		Passed bool
-		Failed bool
-	}
-
 	failures := map[string][]string{}
-	packages := map[string]*packageState{}
+	packages := map[string]*goTestPackageState{}
 	scanner := bufio.NewScanner(strings.NewReader(input))
 	for scanner.Scan() {
-		var ev event
+		var ev goTestEvent
 		if err := json.Unmarshal(scanner.Bytes(), &ev); err != nil {
 			continue
 		}
-		if ev.Package != "" {
-			if _, ok := packages[ev.Package]; !ok {
-				packages[ev.Package] = &packageState{}
-			}
-		}
-		switch ev.Action {
-		case "fail":
-			if ev.Test != "" {
-				failures[ev.Package] = append(failures[ev.Package], ev.Test)
-			} else if pkg := packages[ev.Package]; pkg != nil {
-				pkg.Failed = true
-			}
-		case "pass":
-			if ev.Test == "" {
-				if pkg := packages[ev.Package]; pkg != nil {
-					pkg.Passed = true
-				}
-			}
-		case "output":
-			if ev.Test != "" && strings.Contains(strings.ToLower(ev.Output), "panic") {
-				failures[ev.Package] = append(failures[ev.Package], clip(strings.TrimSpace(ev.Output), 160))
-			}
-		}
+		applyGoTestEvent(packages, failures, ev)
 	}
 
 	if len(packages) == 0 {
 		return CompactLines(input, 12)
 	}
 
+	passed, failed := countGoTestPackages(packages)
+	return renderGoTestSummary(passed, failed, failures)
+}
+
+func applyGoTestEvent(packages map[string]*goTestPackageState, failures map[string][]string, ev goTestEvent) {
+	pkg := ensureGoTestPackageState(packages, ev.Package)
+	switch ev.Action {
+	case "fail":
+		if ev.Test != "" {
+			failures[ev.Package] = append(failures[ev.Package], ev.Test)
+		} else if pkg != nil {
+			pkg.Failed = true
+		}
+	case "pass":
+		if ev.Test == "" && pkg != nil {
+			pkg.Passed = true
+		}
+	case "output":
+		if ev.Test != "" && strings.Contains(strings.ToLower(ev.Output), "panic") {
+			failures[ev.Package] = append(failures[ev.Package], clip(strings.TrimSpace(ev.Output), 160))
+		}
+	}
+}
+
+func ensureGoTestPackageState(packages map[string]*goTestPackageState, pkg string) *goTestPackageState {
+	if pkg == "" {
+		return nil
+	}
+	if packages[pkg] == nil {
+		packages[pkg] = &goTestPackageState{}
+	}
+	return packages[pkg]
+}
+
+func countGoTestPackages(packages map[string]*goTestPackageState) (int, int) {
 	passed := 0
 	failed := 0
 	for _, pkg := range packages {
@@ -351,7 +364,10 @@ func SummarizeGoTestJSON(input string) string {
 			passed++
 		}
 	}
+	return passed, failed
+}
 
+func renderGoTestSummary(passed, failed int, failures map[string][]string) string {
 	var out []string
 	out = append(out, fmt.Sprintf("packages: pass=%d fail=%d", passed, failed))
 	if len(failures) == 0 {

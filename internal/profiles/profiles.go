@@ -3,18 +3,18 @@ package profiles
 import (
 	"time"
 
-	"szr/internal/engine"
-	buildprofiles "szr/internal/profiles/build"
-	containerprofiles "szr/internal/profiles/container"
-	cppprofiles "szr/internal/profiles/cpp"
-	gitprofiles "szr/internal/profiles/git"
-	githubprofiles "szr/internal/profiles/github"
-	javascriptprofiles "szr/internal/profiles/javascript"
-	kubernetesprofiles "szr/internal/profiles/kubernetes"
-	patchprofiles "szr/internal/profiles/patch"
-	pythonprofiles "szr/internal/profiles/python"
-	rustprofiles "szr/internal/profiles/rust"
-	searchprofiles "szr/internal/profiles/search"
+	"github.com/devr-tools/szr/internal/engine"
+	buildprofiles "github.com/devr-tools/szr/internal/profiles/build"
+	containerprofiles "github.com/devr-tools/szr/internal/profiles/container"
+	cppprofiles "github.com/devr-tools/szr/internal/profiles/cpp"
+	gitprofiles "github.com/devr-tools/szr/internal/profiles/git"
+	githubprofiles "github.com/devr-tools/szr/internal/profiles/github"
+	javascriptprofiles "github.com/devr-tools/szr/internal/profiles/javascript"
+	kubernetesprofiles "github.com/devr-tools/szr/internal/profiles/kubernetes"
+	patchprofiles "github.com/devr-tools/szr/internal/profiles/patch"
+	pythonprofiles "github.com/devr-tools/szr/internal/profiles/python"
+	rustprofiles "github.com/devr-tools/szr/internal/profiles/rust"
+	searchprofiles "github.com/devr-tools/szr/internal/profiles/search"
 )
 
 func Builtins(maxLines int) []engine.Profile {

@@ -11,11 +11,11 @@ import (
 	"sync"
 	"testing"
 
-	"szr/internal/cli"
-	"szr/internal/config"
-	"szr/internal/engine"
-	"szr/internal/history"
-	"szr/internal/profiles"
+	"github.com/devr-tools/szr/internal/cli"
+	"github.com/devr-tools/szr/internal/config"
+	"github.com/devr-tools/szr/internal/engine"
+	"github.com/devr-tools/szr/internal/history"
+	"github.com/devr-tools/szr/internal/profiles"
 )
 
 func CaptureOutput(t *testing.T, fn func()) (string, string) {

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"szr/internal/engine"
+	"github.com/devr-tools/szr/internal/engine"
 )
 
 func TestHelpers(t *testing.T) {

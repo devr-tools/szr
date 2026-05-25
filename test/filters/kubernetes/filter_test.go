@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	kubefilter "szr/internal/filters/kubernetes"
+	kubefilter "github.com/devr-tools/szr/internal/filters/kubernetes"
 )
 
 func TestSummarizeKubectlGet(t *testing.T) {

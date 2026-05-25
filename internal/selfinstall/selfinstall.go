@@ -82,25 +82,63 @@ func InstallWith(
 	writeFile func(string, []byte, os.FileMode) error,
 	mkdirAll func(string, os.FileMode) error,
 ) (Result, error) {
-	if strings.TrimSpace(plan.ExecutablePath) == "" || strings.TrimSpace(plan.TargetPath) == "" {
-		return Result{}, errors.New("install plan is incomplete")
+	if err := validateInstallPlan(plan); err != nil {
+		return Result{}, err
 	}
 
 	result := Result{Plan: plan}
+	installed, err := installExecutable(plan, readFile, writeFile, mkdirAll)
+	if err != nil {
+		return Result{}, err
+	}
+	result.Installed = installed
+
+	shellResult, err := configureShellInstall(plan, updateShell, readFile, writeFile, mkdirAll)
+	if err != nil {
+		return Result{}, err
+	}
+	result.ShellConfigured = shellResult.ShellConfigured
+	result.ShellUpdated = shellResult.ShellUpdated
+	return result, nil
+}
+
+func validateInstallPlan(plan Plan) error {
+	if strings.TrimSpace(plan.ExecutablePath) == "" || strings.TrimSpace(plan.TargetPath) == "" {
+		return errors.New("install plan is incomplete")
+	}
+	return nil
+}
+
+func installExecutable(
+	plan Plan,
+	readFile func(string) ([]byte, error),
+	writeFile func(string, []byte, os.FileMode) error,
+	mkdirAll func(string, os.FileMode) error,
+) (bool, error) {
 	if filepath.Clean(plan.ExecutablePath) != filepath.Clean(plan.TargetPath) {
 		data, err := readFile(plan.ExecutablePath)
 		if err != nil {
-			return Result{}, err
+			return false, err
 		}
 		if err := mkdirAll(filepath.Dir(plan.TargetPath), 0o755); err != nil {
-			return Result{}, err
+			return false, err
 		}
 		if err := writeFile(plan.TargetPath, data, 0o755); err != nil {
-			return Result{}, err
+			return false, err
 		}
-		result.Installed = true
+		return true, nil
 	}
+	return false, nil
+}
 
+func configureShellInstall(
+	plan Plan,
+	updateShell bool,
+	readFile func(string) ([]byte, error),
+	writeFile func(string, []byte, os.FileMode) error,
+	mkdirAll func(string, os.FileMode) error,
+) (Result, error) {
+	result := Result{}
 	if plan.ShellSnippet == "" || plan.ShellRCPath == "" {
 		return result, nil
 	}

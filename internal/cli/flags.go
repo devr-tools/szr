@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"szr/internal/config"
+	"github.com/devr-tools/szr/internal/config"
 )
 
 type globalFlags struct {

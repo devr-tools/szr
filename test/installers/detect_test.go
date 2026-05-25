@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"szr/internal/installers"
-	"szr/test/testutil"
+	"github.com/devr-tools/szr/internal/installers"
+	"github.com/devr-tools/szr/test/testutil"
 )
 
 func TestDetectPathsVariants(t *testing.T) {
@@ -14,7 +14,7 @@ func TestDetectPathsVariants(t *testing.T) {
 		t.Parallel()
 
 		root := t.TempDir()
-		testutil.MustWriteFile(t, filepath.Join(root, "go.mod"), "module szr\n")
+		testutil.MustWriteFile(t, filepath.Join(root, "go.mod"), "module github.com/devr-tools/szr\n")
 		testutil.MustWriteFile(t, filepath.Join(root, "cmd", "szr", "main.go"), "package main\n")
 
 		paths, err := installers.DetectPaths(root)

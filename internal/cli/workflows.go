@@ -14,13 +14,13 @@ import (
 	"strings"
 	"time"
 
-	"szr/internal/config"
-	"szr/internal/engine"
-	"szr/internal/filters"
-	"szr/internal/history"
-	"szr/internal/profiles"
-	"szr/internal/rules"
-	"szr/internal/teeindex"
+	"github.com/devr-tools/szr/internal/config"
+	"github.com/devr-tools/szr/internal/engine"
+	"github.com/devr-tools/szr/internal/filters"
+	"github.com/devr-tools/szr/internal/history"
+	"github.com/devr-tools/szr/internal/profiles"
+	"github.com/devr-tools/szr/internal/rules"
+	"github.com/devr-tools/szr/internal/teeindex"
 )
 
 type hotspotStat struct {
@@ -213,115 +213,25 @@ func (a *App) runHotspots(args []string) int {
 }
 
 func (a *App) runReplay(flags globalFlags, args []string) int {
-	asJSON := false
-	commandText := ""
-	profileName := ""
-	overrideExitCode := 0
-	overrideExitSet := false
-	overrideCwd := ""
-	maxLines := 0
-	target := ""
-
-	for i := 0; i < len(args); i++ {
-		switch args[i] {
-		case "--json":
-			asJSON = true
-		case "--command":
-			if i+1 >= len(args) {
-				fmt.Fprintln(os.Stderr, "szr: replay requires a value after --command")
-				return 2
-			}
-			i++
-			commandText = args[i]
-		case "--profile":
-			if i+1 >= len(args) {
-				fmt.Fprintln(os.Stderr, "szr: replay requires a value after --profile")
-				return 2
-			}
-			i++
-			profileName = args[i]
-		case "--cwd":
-			if i+1 >= len(args) {
-				fmt.Fprintln(os.Stderr, "szr: replay requires a value after --cwd")
-				return 2
-			}
-			i++
-			overrideCwd = args[i]
-		case "--exit-code":
-			if i+1 >= len(args) {
-				fmt.Fprintln(os.Stderr, "szr: replay requires a value after --exit-code")
-				return 2
-			}
-			i++
-			value, err := strconv.Atoi(args[i])
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "szr: invalid replay exit code %q\n", args[i])
-				return 2
-			}
-			overrideExitCode = value
-			overrideExitSet = true
-		case "--max-lines":
-			if i+1 >= len(args) {
-				fmt.Fprintln(os.Stderr, "szr: replay requires a value after --max-lines")
-				return 2
-			}
-			i++
-			value, err := strconv.Atoi(args[i])
-			if err != nil || value <= 0 {
-				fmt.Fprintf(os.Stderr, "szr: invalid replay max lines %q\n", args[i])
-				return 2
-			}
-			maxLines = value
-		default:
-			if strings.HasPrefix(args[i], "-") {
-				fmt.Fprintf(os.Stderr, "szr: unknown replay flag %s\n", args[i])
-				return 2
-			}
-			if target != "" {
-				fmt.Fprintln(os.Stderr, "szr: replay accepts exactly one tee id or file path")
-				return 2
-			}
-			target = args[i]
-		}
+	opts, code := parseReplayArgs(args)
+	if code != 0 {
+		return code
 	}
-
-	if target == "" {
-		fmt.Fprintln(os.Stderr, "szr: replay requires a tee id or file path")
-		return 2
-	}
-
-	raw, entry, foundEntry, err := a.readReplayTarget(target)
+	raw, entry, foundEntry, err := a.readReplayTarget(opts.target)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "szr: %v\n", err)
 		return 1
 	}
 
-	if commandText == "" && foundEntry {
-		commandText = entry.Command
-	}
-	cwd, _ := os.Getwd()
-	if overrideCwd != "" {
-		cwd = overrideCwd
-	} else if foundEntry && strings.TrimSpace(entry.Cwd) != "" {
-		cwd = entry.Cwd
-	}
-
-	exitCode := 1
-	if foundEntry {
-		exitCode = entry.ExitCode
-	}
-	if overrideExitSet {
-		exitCode = overrideExitCode
-	}
-
-	if commandText == "" && profileName == "" {
+	commandText, cwd, exitCode := resolveReplayContext(opts, entry, foundEntry)
+	if commandText == "" && opts.profileName == "" {
 		fmt.Fprintln(os.Stderr, "szr: replay requires --command or --profile when replaying a plain file")
 		return 2
 	}
 
 	cfg := a.configForFlags(flags)
-	if maxLines > 0 {
-		cfg.MaxPreviewLines = maxLines
+	if opts.maxLines > 0 {
+		cfg.MaxPreviewLines = opts.maxLines
 	}
 	eng := engine.New(cfg, a.paths, a.history, engineProfilesForConfig(cfg))
 
@@ -334,7 +244,7 @@ func (a *App) runReplay(flags globalFlags, args []string) int {
 		ReasoningBudgetMode: cfg.ReasoningBudgetMode,
 	}
 	effectiveInv, _ := eng.ExplainPreferences(inv)
-	profile, err := selectedProfile(eng, inv, profileName)
+	profile, err := selectedProfile(eng, inv, opts.profileName)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "szr: %v\n", err)
 		return 2
@@ -343,7 +253,7 @@ func (a *App) runReplay(flags globalFlags, args []string) int {
 	execResult := executionForReplay(profile, raw, exitCode)
 	rendered := engine.RenderExecution(profile, effectiveInv, execResult, cfg.MaxPreviewLines, false)
 	output := buildReplayOutput(commandText, effectiveInv.Command, profile, cfg.MaxPreviewLines, execResult.ExitCode, rendered)
-	if asJSON {
+	if opts.asJSON {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		_ = enc.Encode(output)
@@ -373,6 +283,137 @@ func (a *App) runReplay(flags globalFlags, args []string) int {
 	fmt.Println("rendered:")
 	fmt.Println(output.Display)
 	return 0
+}
+
+type replayOptions struct {
+	asJSON           bool
+	commandText      string
+	profileName      string
+	overrideExitCode int
+	overrideExitSet  bool
+	overrideCwd      string
+	maxLines         int
+	target           string
+}
+
+func parseReplayArgs(args []string) (replayOptions, int) {
+	opts := replayOptions{}
+	for i := 0; i < len(args); i++ {
+		if strings.HasPrefix(args[i], "-") {
+			nextIndex, code := applyReplayFlag(args, i, &opts)
+			if code != 0 {
+				return replayOptions{}, code
+			}
+			i = nextIndex
+			continue
+		}
+		if code := setReplayTarget(&opts, args[i]); code != 0 {
+			return replayOptions{}, code
+		}
+	}
+	if opts.target == "" {
+		fmt.Fprintln(os.Stderr, "szr: replay requires a tee id or file path")
+		return replayOptions{}, 2
+	}
+	return opts, 0
+}
+
+func applyReplayFlag(args []string, index int, opts *replayOptions) (int, int) {
+	switch args[index] {
+	case "--json":
+		opts.asJSON = true
+		return index, 0
+	case "--command":
+		return setReplayStringOption(args, index, "--command", &opts.commandText)
+	case "--profile":
+		return setReplayStringOption(args, index, "--profile", &opts.profileName)
+	case "--cwd":
+		return setReplayStringOption(args, index, "--cwd", &opts.overrideCwd)
+	case "--exit-code":
+		return setReplayExitCode(args, index, opts)
+	case "--max-lines":
+		return setReplayMaxLines(args, index, opts)
+	default:
+		fmt.Fprintf(os.Stderr, "szr: unknown replay flag %s\n", args[index])
+		return index, 2
+	}
+}
+
+func setReplayStringOption(args []string, index int, flag string, target *string) (int, int) {
+	value, ok := requireReplayValue(args, &index, flag)
+	if !ok {
+		return index, 2
+	}
+	*target = value
+	return index, 0
+}
+
+func setReplayExitCode(args []string, index int, opts *replayOptions) (int, int) {
+	value, ok := requireReplayValue(args, &index, "--exit-code")
+	if !ok {
+		return index, 2
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "szr: invalid replay exit code %q\n", value)
+		return index, 2
+	}
+	opts.overrideExitCode = parsed
+	opts.overrideExitSet = true
+	return index, 0
+}
+
+func setReplayMaxLines(args []string, index int, opts *replayOptions) (int, int) {
+	value, ok := requireReplayValue(args, &index, "--max-lines")
+	if !ok {
+		return index, 2
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed <= 0 {
+		fmt.Fprintf(os.Stderr, "szr: invalid replay max lines %q\n", value)
+		return index, 2
+	}
+	opts.maxLines = parsed
+	return index, 0
+}
+
+func setReplayTarget(opts *replayOptions, target string) int {
+	if opts.target != "" {
+		fmt.Fprintln(os.Stderr, "szr: replay accepts exactly one tee id or file path")
+		return 2
+	}
+	opts.target = target
+	return 0
+}
+
+func requireReplayValue(args []string, index *int, flag string) (string, bool) {
+	if *index+1 >= len(args) {
+		fmt.Fprintf(os.Stderr, "szr: replay requires a value after %s\n", flag)
+		return "", false
+	}
+	*index = *index + 1
+	return args[*index], true
+}
+
+func resolveReplayContext(opts replayOptions, entry teeindex.Entry, foundEntry bool) (string, string, int) {
+	commandText := opts.commandText
+	if commandText == "" && foundEntry {
+		commandText = entry.Command
+	}
+	cwd, _ := os.Getwd()
+	if opts.overrideCwd != "" {
+		cwd = opts.overrideCwd
+	} else if foundEntry && strings.TrimSpace(entry.Cwd) != "" {
+		cwd = entry.Cwd
+	}
+	exitCode := 1
+	if foundEntry {
+		exitCode = entry.ExitCode
+	}
+	if opts.overrideExitSet {
+		exitCode = opts.overrideExitCode
+	}
+	return commandText, cwd, exitCode
 }
 
 func (a *App) runCompare(ctx context.Context, flags globalFlags, args []string) int {
@@ -725,81 +766,13 @@ func buildRecommendations(records []history.Record, limit int) []recommendation 
 	seen := map[string]struct{}{}
 
 	for _, suggestion := range suggestions {
-		item := recommendation{
-			Kind:        "budget",
-			Priority:    recommendationPriorityForBudget(suggestion),
-			Command:     suggestion.Command,
-			Profile:     suggestion.Profile,
-			Samples:     suggestion.Samples,
-			Confidence:  suggestion.Confidence,
-			Reason:      strings.ReplaceAll(string(suggestion.Reason), "_", " "),
-			Action:      fmt.Sprintf("adjust the active budget to lines=%d bytes=%d tokens=%d", suggestion.Suggested.MaxLines, suggestion.Suggested.MaxBytes, suggestion.Suggested.MaxTokens),
-			Fingerprint: suggestion.Fingerprint,
-			Direction:   string(suggestion.Direction),
-			Suggested:   suggestion.Suggested,
-		}
+		item := recommendationForBudget(suggestion)
 		items = append(items, item)
-		seen[item.Kind+":"+item.Fingerprint] = struct{}{}
+		seen[recommendationKey(item)] = struct{}{}
 	}
 
 	for _, hotspot := range hotspots {
-		if hotspot.Samples < 2 {
-			continue
-		}
-		if (hotspot.Profile == "passthrough" || strings.HasPrefix(hotspot.Profile, "generic-")) && hotspot.FallbackRate >= 0 {
-			item := recommendation{
-				Kind:        "custom-profile",
-				Priority:    70,
-				Command:     hotspot.Command,
-				Profile:     hotspot.Profile,
-				Samples:     hotspot.Samples,
-				Confidence:  "medium",
-				Reason:      fmt.Sprintf("%s still routes through %s after %d runs", hotspot.Command, hotspot.Profile, hotspot.Samples),
-				Action:      "add a project-local profile or builtin reducer so this command stops relying on the generic path",
-				Fingerprint: hotspot.Fingerprint,
-			}
-			key := item.Kind + ":" + item.Fingerprint
-			if _, ok := seen[key]; !ok {
-				items = append(items, item)
-				seen[key] = struct{}{}
-			}
-		}
-		if hint := structuredHint(hotspot.Command); hint != "" && (hotspot.Profile == "passthrough" || strings.HasPrefix(hotspot.Profile, "generic-")) {
-			item := recommendation{
-				Kind:        "structured-rewrite",
-				Priority:    65,
-				Command:     hotspot.Command,
-				Profile:     hotspot.Profile,
-				Samples:     hotspot.Samples,
-				Confidence:  "medium",
-				Reason:      "this command family usually benefits from a deterministic machine-readable mode",
-				Action:      hint,
-				Fingerprint: hotspot.Fingerprint,
-			}
-			key := item.Kind + ":" + item.Fingerprint
-			if _, ok := seen[key]; !ok {
-				items = append(items, item)
-				seen[key] = struct{}{}
-			}
-		}
-		if hotspot.Failures > 0 && hotspot.TeeRate >= 50 {
-			item := recommendation{
-				Kind:        "tee-review",
-				Priority:    50,
-				Command:     hotspot.Command,
-				Profile:     hotspot.Profile,
-				Samples:     hotspot.Samples,
-				Confidence:  "low",
-				Reason:      "failing runs are frequently preserving full artifacts",
-				Action:      fmt.Sprintf("inspect preserved failures with `szr tee find %q` before adding another reducer", firstWordOrCommand(hotspot.Command)),
-				Fingerprint: hotspot.Fingerprint,
-			}
-			key := item.Kind + ":" + item.Fingerprint
-			if _, ok := seen[key]; !ok {
-				items = append(items, item)
-				seen[key] = struct{}{}
-			}
-		}
+		appendHotspotRecommendations(&items, seen, hotspot)
 	}
 
 	sort.Slice(items, func(i, j int) bool {
@@ -815,6 +788,113 @@ func buildRecommendations(records []history.Record, limit int) []recommendation 
 		items = items[:limit]
 	}
 	return items
+}
+
+func recommendationForBudget(suggestion history.BudgetSuggestion) recommendation {
+	return recommendation{
+		Kind:        "budget",
+		Priority:    recommendationPriorityForBudget(suggestion),
+		Command:     suggestion.Command,
+		Profile:     suggestion.Profile,
+		Samples:     suggestion.Samples,
+		Confidence:  suggestion.Confidence,
+		Reason:      strings.ReplaceAll(string(suggestion.Reason), "_", " "),
+		Action:      fmt.Sprintf("adjust the active budget to lines=%d bytes=%d tokens=%d", suggestion.Suggested.MaxLines, suggestion.Suggested.MaxBytes, suggestion.Suggested.MaxTokens),
+		Fingerprint: suggestion.Fingerprint,
+		Direction:   string(suggestion.Direction),
+		Suggested:   suggestion.Suggested,
+	}
+}
+
+func appendHotspotRecommendations(items *[]recommendation, seen map[string]struct{}, hotspot hotspotStat) {
+	if hotspot.Samples < 2 {
+		return
+	}
+	for _, item := range hotspotRecommendations(hotspot) {
+		key := recommendationKey(item)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		*items = append(*items, item)
+		seen[key] = struct{}{}
+	}
+}
+
+func hotspotRecommendations(hotspot hotspotStat) []recommendation {
+	items := []recommendation{}
+	if customProfileRecommendation(hotspot).Kind != "" {
+		items = append(items, customProfileRecommendation(hotspot))
+	}
+	if item, ok := structuredRewriteRecommendation(hotspot); ok {
+		items = append(items, item)
+	}
+	if item, ok := teeReviewRecommendation(hotspot); ok {
+		items = append(items, item)
+	}
+	return items
+}
+
+func customProfileRecommendation(hotspot hotspotStat) recommendation {
+	if !isGenericHotspot(hotspot) || hotspot.FallbackRate < 0 {
+		return recommendation{}
+	}
+	return recommendation{
+		Kind:        "custom-profile",
+		Priority:    70,
+		Command:     hotspot.Command,
+		Profile:     hotspot.Profile,
+		Samples:     hotspot.Samples,
+		Confidence:  "medium",
+		Reason:      fmt.Sprintf("%s still routes through %s after %d runs", hotspot.Command, hotspot.Profile, hotspot.Samples),
+		Action:      "add a project-local profile or builtin reducer so this command stops relying on the generic path",
+		Fingerprint: hotspot.Fingerprint,
+	}
+}
+
+func structuredRewriteRecommendation(hotspot hotspotStat) (recommendation, bool) {
+	if !isGenericHotspot(hotspot) {
+		return recommendation{}, false
+	}
+	hint := structuredHint(hotspot.Command)
+	if hint == "" {
+		return recommendation{}, false
+	}
+	return recommendation{
+		Kind:        "structured-rewrite",
+		Priority:    65,
+		Command:     hotspot.Command,
+		Profile:     hotspot.Profile,
+		Samples:     hotspot.Samples,
+		Confidence:  "medium",
+		Reason:      "this command family usually benefits from a deterministic machine-readable mode",
+		Action:      hint,
+		Fingerprint: hotspot.Fingerprint,
+	}, true
+}
+
+func teeReviewRecommendation(hotspot hotspotStat) (recommendation, bool) {
+	if hotspot.Failures <= 0 || hotspot.TeeRate < 50 {
+		return recommendation{}, false
+	}
+	return recommendation{
+		Kind:        "tee-review",
+		Priority:    50,
+		Command:     hotspot.Command,
+		Profile:     hotspot.Profile,
+		Samples:     hotspot.Samples,
+		Confidence:  "low",
+		Reason:      "failing runs are frequently preserving full artifacts",
+		Action:      fmt.Sprintf("inspect preserved failures with `szr tee find %q` before adding another reducer", firstWordOrCommand(hotspot.Command)),
+		Fingerprint: hotspot.Fingerprint,
+	}, true
+}
+
+func isGenericHotspot(hotspot hotspotStat) bool {
+	return hotspot.Profile == "passthrough" || strings.HasPrefix(hotspot.Profile, "generic-")
+}
+
+func recommendationKey(item recommendation) string {
+	return item.Kind + ":" + item.Fingerprint
 }
 
 func buildHotspots(records []history.Record, limit int) []hotspotStat {
@@ -1094,7 +1174,7 @@ profiles:
 func builtinProfileStub(name string) string {
 	return fmt.Sprintf(`package %s
 
-import "szr/internal/engine"
+import "github.com/devr-tools/szr/internal/engine"
 
 func Profiles(maxLines int) []engine.Profile {
 	return []engine.Profile{{
@@ -1125,7 +1205,7 @@ func builtinProfileTestStub(name string) string {
 import (
 	"testing"
 
-	"szr/test/testutil"
+	"github.com/devr-tools/szr/test/testutil"
 )
 
 func Test%sStub(t *testing.T) {

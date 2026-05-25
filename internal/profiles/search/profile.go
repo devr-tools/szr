@@ -1,9 +1,9 @@
 package search
 
 import (
-	"szr/internal/engine"
-	"szr/internal/filters"
-	"szr/internal/profilekit"
+	"github.com/devr-tools/szr/internal/engine"
+	"github.com/devr-tools/szr/internal/filters"
+	"github.com/devr-tools/szr/internal/profilekit"
 )
 
 func Profiles(maxLines int, maxGroups int) []engine.Profile {

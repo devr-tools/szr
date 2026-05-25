@@ -3,7 +3,7 @@ package engine
 import (
 	"strings"
 
-	"szr/internal/rules"
+	"github.com/devr-tools/szr/internal/rules"
 )
 
 func explainRule(rule rules.Profile) []string {

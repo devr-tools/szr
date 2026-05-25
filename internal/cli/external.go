@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"szr/internal/engine"
-	"szr/internal/history"
+	"github.com/devr-tools/szr/internal/engine"
+	"github.com/devr-tools/szr/internal/history"
 )
 
 func (a *App) runExternal(ctx context.Context, flags globalFlags, name string, args []string, passthrough bool) int {
@@ -84,20 +84,40 @@ func (a *App) runExplain(flags globalFlags, args []string) int {
 	effectiveInv, preferences := a.engineForFlags(flags).ExplainPreferences(inv)
 	profile := a.engineForFlags(flags).Explain(inv)
 	decisions := a.engineForFlags(flags).ExplainDecisions(inv)
-	fmt.Printf("profile: %s\n", profile.Name)
-	fmt.Printf("source: %s\n", describeProfileSource(profile.Source, a.paths.ProjectRuleFile))
-	fmt.Printf("about: %s\n", profile.Description)
-	fmt.Printf("reasoning budget mode: %s\n", cfg.ReasoningBudgetMode)
-	if len(preferences) > 0 {
-		fmt.Printf("effective command: %s\n", strings.Join(effectiveInv.Command, " "))
+	printExplainProfile(profile, a.paths.ProjectRuleFile, cfg.ReasoningBudgetMode)
+	printExplainEffectiveCommand(effectiveInv.Command, preferences)
+	printExplainBudget(profile, inv, cfg.MaxPreviewLines)
+	printExplainLatency(profile)
+	printExplainSuggestion(a.findBudgetSuggestion(args))
+	printExplainPreferences(preferences, a.paths.ProjectRuleFile)
+	printExplainDecisions(decisions, a.paths.ProjectRuleFile)
+	for _, line := range profile.Explain {
+		fmt.Printf("- %s\n", line)
 	}
+	return 0
+}
+
+func printExplainProfile(profile engine.Profile, projectRuleFile string, reasoningBudgetMode string) {
+	fmt.Printf("profile: %s\n", profile.Name)
+	fmt.Printf("source: %s\n", describeProfileSource(profile.Source, projectRuleFile))
+	fmt.Printf("about: %s\n", profile.Description)
+	fmt.Printf("reasoning budget mode: %s\n", reasoningBudgetMode)
 	if profile.Confidence != "" {
 		fmt.Printf("confidence: %s\n", profile.Confidence)
 	}
 	if profile.StreamPreference != "" {
 		fmt.Printf("stream: %s\n", profile.StreamPreference)
 	}
-	resolvedBudget := engine.ResolveBudget(profile, inv, cfg.MaxPreviewLines)
+}
+
+func printExplainEffectiveCommand(command []string, preferences []engine.PreferenceDecision) {
+	if len(preferences) > 0 {
+		fmt.Printf("effective command: %s\n", strings.Join(command, " "))
+	}
+}
+
+func printExplainBudget(profile engine.Profile, inv engine.Invocation, maxPreviewLines int) {
+	resolvedBudget := engine.ResolveBudget(profile, inv, maxPreviewLines)
 	if resolvedBudget.MaxLines > 0 || resolvedBudget.MaxBytes > 0 || resolvedBudget.MaxTokens > 0 {
 		fmt.Printf(
 			"budget: lines=%d bytes=%d tokens=%d\n",
@@ -109,10 +129,16 @@ func (a *App) runExplain(flags globalFlags, args []string) int {
 	if resolvedBudget.MinFailures > 0 || resolvedBudget.MinAnchors > 0 || resolvedBudget.MinHints > 0 {
 		fmt.Printf("contract: failures=%d anchors=%d hints=%d\n", resolvedBudget.MinFailures, resolvedBudget.MinAnchors, resolvedBudget.MinHints)
 	}
+}
+
+func printExplainLatency(profile engine.Profile) {
 	if profile.LatencyBudget > 0 {
 		fmt.Printf("latency budget: %s\n", profile.LatencyBudget.Round(time.Millisecond))
 	}
-	if suggestion := a.findBudgetSuggestion(args); suggestion != nil {
+}
+
+func printExplainSuggestion(suggestion *history.BudgetSuggestion) {
+	if suggestion != nil {
 		fmt.Printf(
 			"history suggestion: %s %s lines=%d bytes=%d tokens=%d confidence=%s samples=%d\n",
 			suggestion.Direction,
@@ -124,6 +150,9 @@ func (a *App) runExplain(flags globalFlags, args []string) int {
 			suggestion.Samples,
 		)
 	}
+}
+
+func printExplainPreferences(preferences []engine.PreferenceDecision, projectRuleFile string) {
 	if len(preferences) > 0 {
 		fmt.Println("applied preferences:")
 		for _, preference := range preferences {
@@ -131,9 +160,12 @@ func (a *App) runExplain(flags globalFlags, args []string) int {
 			if preference.Applied {
 				label = "applied"
 			}
-			fmt.Printf("  %s  %s  %s\n", label, describeProfileSource(preference.Source, a.paths.ProjectRuleFile), preference.Name)
+			fmt.Printf("  %s  %s  %s\n", label, describeProfileSource(preference.Source, projectRuleFile), preference.Name)
 		}
 	}
+}
+
+func printExplainDecisions(decisions []engine.ExplainDecision, projectRuleFile string) {
 	if len(decisions) > 0 {
 		fmt.Println("matched decisions:")
 		for _, decision := range decisions {
@@ -141,13 +173,9 @@ func (a *App) runExplain(flags globalFlags, args []string) int {
 			if decision.Selected {
 				label = "selected"
 			}
-			fmt.Printf("  %s  %s  %s\n", label, describeProfileSource(decision.Source, a.paths.ProjectRuleFile), decision.Name)
+			fmt.Printf("  %s  %s  %s\n", label, describeProfileSource(decision.Source, projectRuleFile), decision.Name)
 		}
 	}
-	for _, line := range profile.Explain {
-		fmt.Printf("- %s\n", line)
-	}
-	return 0
 }
 
 func (a *App) findBudgetSuggestion(command []string) *history.BudgetSuggestion {

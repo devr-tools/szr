@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	szrapp "szr/pkg/szr"
-	"szr/test/testutil"
+	szrapp "github.com/devr-tools/szr/pkg/szr"
+	"github.com/devr-tools/szr/test/testutil"
 )
 
 func TestRun(t *testing.T) {

@@ -5,9 +5,9 @@ import (
 	"os"
 	"os/exec"
 
-	"szr/internal/config"
-	"szr/internal/history"
-	"szr/internal/selfinstall"
+	"github.com/devr-tools/szr/internal/config"
+	"github.com/devr-tools/szr/internal/history"
+	"github.com/devr-tools/szr/internal/selfinstall"
 )
 
 func (a *App) runSelf(flags globalFlags, args []string) int {
@@ -28,47 +28,15 @@ func (a *App) runSelf(flags globalFlags, args []string) int {
 }
 
 func (a *App) runSelfInstall(args []string) int {
-	updateShell := false
-	printOnly := false
-	overrideDir := ""
-
-	for i := 0; i < len(args); i++ {
-		switch args[i] {
-		case "--update-shell":
-			updateShell = true
-		case "--print":
-			printOnly = true
-		case "--path":
-			if i+1 >= len(args) {
-				fmt.Fprintln(os.Stderr, "szr: self install requires a directory after --path")
-				return 2
-			}
-			i++
-			overrideDir = args[i]
-		default:
-			fmt.Fprintf(os.Stderr, "szr: unknown self install flag %s\n", args[i])
-			return 2
-		}
+	updateShell, printOnly, overrideDir, code := parseSelfInstallArgs(args)
+	if code != 0 {
+		return code
 	}
 
-	executablePath, err := os.Executable()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "szr: failed to resolve current executable: %v\n", err)
-		return 1
-	}
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "szr: failed to resolve home directory: %v\n", err)
-		return 1
-	}
-
-	plan, err := selfinstall.PlanInstall(executablePath, homeDir, os.Getenv("PATH"), os.Getenv("SHELL"), overrideDir == "")
+	plan, err := resolveSelfInstallPlan(overrideDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "szr: %v\n", err)
 		return 1
-	}
-	if overrideDir != "" {
-		plan = selfinstall.WithInstallDir(plan, homeDir, os.Getenv("PATH"), os.Getenv("SHELL"), overrideDir)
 	}
 
 	if printOnly {
@@ -105,6 +73,52 @@ func (a *App) runSelfInstall(args []string) int {
 		}
 	}
 	return 0
+}
+
+func parseSelfInstallArgs(args []string) (bool, bool, string, int) {
+	updateShell := false
+	printOnly := false
+	overrideDir := ""
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--update-shell":
+			updateShell = true
+		case "--print":
+			printOnly = true
+		case "--path":
+			if i+1 >= len(args) {
+				fmt.Fprintln(os.Stderr, "szr: self install requires a directory after --path")
+				return false, false, "", 2
+			}
+			i++
+			overrideDir = args[i]
+		default:
+			fmt.Fprintf(os.Stderr, "szr: unknown self install flag %s\n", args[i])
+			return false, false, "", 2
+		}
+	}
+	return updateShell, printOnly, overrideDir, 0
+}
+
+func resolveSelfInstallPlan(overrideDir string) (selfinstall.Plan, error) {
+	executablePath, err := os.Executable()
+	if err != nil {
+		return selfinstall.Plan{}, fmt.Errorf("failed to resolve current executable: %w", err)
+	}
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return selfinstall.Plan{}, fmt.Errorf("failed to resolve home directory: %w", err)
+	}
+
+	plan, err := selfinstall.PlanInstall(executablePath, homeDir, os.Getenv("PATH"), os.Getenv("SHELL"), overrideDir == "")
+	if err != nil {
+		return selfinstall.Plan{}, err
+	}
+	if overrideDir == "" {
+		return plan, nil
+	}
+	return selfinstall.WithInstallDir(plan, homeDir, os.Getenv("PATH"), os.Getenv("SHELL"), overrideDir), nil
 }
 
 func printSelfInstallPlan(plan selfinstall.Plan, updateShell bool) {

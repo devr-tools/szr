@@ -7,32 +7,15 @@ import (
 	"path/filepath"
 	"strings"
 
-	"szr/internal/bench"
-	"szr/internal/installers"
+	"github.com/devr-tools/szr/internal/bench"
+	"github.com/devr-tools/szr/internal/installers"
 )
 
 func (a *App) runInstall(args []string) int {
-	var (
-		allTargets bool
-		printOnly  bool
-		targets    []installers.Target
-	)
-
-	for _, arg := range args {
-		switch arg {
-		case "--all":
-			allTargets = true
-		case "--print":
-			printOnly = true
-		default:
-			if strings.HasPrefix(arg, "-") {
-				fmt.Fprintf(os.Stderr, "szr: unknown install flag %s\n", arg)
-				return 2
-			}
-			targets = append(targets, installers.Target(arg))
-		}
+	allTargets, printOnly, targets, code := parseInstallArgs(args)
+	if code != 0 {
+		return code
 	}
-
 	if allTargets && len(targets) > 0 {
 		fmt.Fprintln(os.Stderr, "szr: install accepts either --all or explicit targets")
 		return 2
@@ -42,41 +25,82 @@ func (a *App) runInstall(args []string) int {
 		return 0
 	}
 
-	cwd, cwdErr := os.Getwd()
-	if cwdErr != nil {
-		fmt.Fprintf(os.Stderr, "szr: %v\n", cwdErr)
-		if allTargets {
-			return 1
-		}
-		return 2
+	cwd, code := installRepoRoot(allTargets)
+	if code != 0 {
+		return code
 	}
-	if _, statErr := os.Stat(cwd); statErr != nil {
-		fmt.Fprintf(os.Stderr, "szr: %v\n", statErr)
-		if allTargets {
-			return 1
+	plans, code := renderInstallPlans(cwd, allTargets, targets)
+	if code != 0 {
+		return code
+	}
+
+	return applyInstallPlans(plans, printOnly)
+}
+
+func parseInstallArgs(args []string) (bool, bool, []installers.Target, int) {
+	allTargets := false
+	printOnly := false
+	targets := make([]installers.Target, 0, len(args))
+	for _, arg := range args {
+		switch arg {
+		case "--all":
+			allTargets = true
+		case "--print":
+			printOnly = true
+		default:
+			if strings.HasPrefix(arg, "-") {
+				fmt.Fprintf(os.Stderr, "szr: unknown install flag %s\n", arg)
+				return false, false, nil, 2
+			}
+			targets = append(targets, installers.Target(arg))
 		}
-		return 2
+	}
+	return allTargets, printOnly, targets, 0
+}
+
+func installRepoRoot(allTargets bool) (string, int) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "szr: %v\n", err)
+		return "", installPathErrorCode(allTargets)
+	}
+	if _, err := os.Stat(cwd); err != nil {
+		fmt.Fprintf(os.Stderr, "szr: %v\n", err)
+		return "", installPathErrorCode(allTargets)
+	}
+	return cwd, 0
+}
+
+func installPathErrorCode(allTargets bool) int {
+	if allTargets {
+		return 1
+	}
+	return 2
+}
+
+func renderInstallPlans(cwd string, allTargets bool, targets []installers.Target) ([]installers.Plan, int) {
+	if allTargets {
+		plans, err := installers.RenderAll(installers.Options{RepoRoot: cwd})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "szr: %v\n", err)
+			return nil, 1
+		}
+		return plans, 0
 	}
 
 	plans := make([]installers.Plan, 0, len(targets))
-	var err error
-	if allTargets {
-		plans, err = installers.RenderAll(installers.Options{RepoRoot: cwd})
-	} else {
-		for _, target := range targets {
-			plan, renderErr := installers.Render(target, installers.Options{RepoRoot: cwd})
-			if renderErr != nil {
-				fmt.Fprintf(os.Stderr, "szr: %v\n", renderErr)
-				return 2
-			}
-			plans = append(plans, plan)
+	for _, target := range targets {
+		plan, err := installers.Render(target, installers.Options{RepoRoot: cwd})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "szr: %v\n", err)
+			return nil, 2
 		}
+		plans = append(plans, plan)
 	}
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "szr: %v\n", err)
-		return 1
-	}
+	return plans, 0
+}
 
+func applyInstallPlans(plans []installers.Plan, printOnly bool) int {
 	for _, plan := range plans {
 		if printOnly {
 			printInstallPlan(plan)

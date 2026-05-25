@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	containerfilter "szr/internal/filters/container"
+	containerfilter "github.com/devr-tools/szr/internal/filters/container"
 )
 
 func TestSummarizeDockerPS(t *testing.T) {

@@ -3,7 +3,7 @@ package rust
 import (
 	"strings"
 
-	shared "szr/internal/filters"
+	shared "github.com/devr-tools/szr/internal/filters"
 )
 
 func SummarizeCargoTest(input string, maxLines int) string {
@@ -23,55 +23,104 @@ func SummarizeCargoTest(input string, maxLines int) string {
 	details := []string{}
 	inFailureList := false
 	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		switch {
-		case strings.HasPrefix(trimmed, "running "):
-			summaries = append(summaries, clip(trimmed, 160))
-		case strings.HasPrefix(trimmed, "test result:"):
-			resultLine = clip(trimmed, 160)
-			summaries = append(summaries, resultLine)
-		case strings.HasPrefix(trimmed, "error: test failed"):
-			rerunLine = clip(trimmed, 160)
-			summaries = append(summaries, rerunLine)
-		case strings.HasPrefix(trimmed, "Finished `test`"):
-			summaries = append(summaries, clip(trimmed, 160))
-		case strings.HasPrefix(trimmed, "failures:"):
-			inFailureList = true
-		case strings.HasPrefix(trimmed, "test ") && strings.Contains(trimmed, "FAILED"):
-			failures = append(failures, clip(trimmed, 160))
-		case isCargoDiagnosticHeader(trimmed):
-			failures = append(failures, clip(trimmed, 160))
-			inFailureList = false
-		case inFailureList && isCargoFailureName(trimmed):
-			failures = append(failures, clip(trimmed, 160))
-		case isCargoInterestingDetail(trimmed):
-			details = append(details, clip(trimmed, 160))
-			inFailureList = false
-		default:
-			if trimmed == "" || isDividerLine(trimmed) {
-				continue
-			}
-			inFailureList = false
-		}
+		inFailureList = collectCargoTestLine(
+			strings.TrimSpace(line),
+			&summaries,
+			&resultLine,
+			&rerunLine,
+			&failures,
+			&details,
+			inFailureList,
+		)
 	}
 
 	summaries = uniqueStrings(shared.FoldConsecutiveLines(summaries))
 	failures = uniqueStrings(shared.FoldConsecutiveLines(failures))
 	details = uniqueStrings(shared.FoldConsecutiveLines(details))
 
+	return renderCargoTestSummary(input, summaries, failures, details, resultLine, rerunLine, maxLines)
+}
+
+func collectCargoTestLine(
+	trimmed string,
+	summaries *[]string,
+	resultLine *string,
+	rerunLine *string,
+	failures *[]string,
+	details *[]string,
+	inFailureList bool,
+) bool {
+	switch {
+	case strings.HasPrefix(trimmed, "running "):
+		*summaries = append(*summaries, clip(trimmed, 160))
+	case strings.HasPrefix(trimmed, "test result:"):
+		*resultLine = clip(trimmed, 160)
+		*summaries = append(*summaries, *resultLine)
+	case strings.HasPrefix(trimmed, "error: test failed"):
+		*rerunLine = clip(trimmed, 160)
+		*summaries = append(*summaries, *rerunLine)
+	case strings.HasPrefix(trimmed, "Finished `test`"):
+		*summaries = append(*summaries, clip(trimmed, 160))
+	case strings.HasPrefix(trimmed, "failures:"):
+		return true
+	case strings.HasPrefix(trimmed, "test ") && strings.Contains(trimmed, "FAILED"):
+		*failures = append(*failures, clip(trimmed, 160))
+	case isCargoDiagnosticHeader(trimmed):
+		*failures = append(*failures, clip(trimmed, 160))
+	case inFailureList && isCargoFailureName(trimmed):
+		*failures = append(*failures, clip(trimmed, 160))
+	case isCargoInterestingDetail(trimmed):
+		*details = append(*details, clip(trimmed, 160))
+	default:
+		if trimmed == "" || isDividerLine(trimmed) {
+			return inFailureList
+		}
+	}
+	return false
+}
+
+func renderCargoTestSummary(
+	input string,
+	summaries []string,
+	failures []string,
+	details []string,
+	resultLine string,
+	rerunLine string,
+	maxLines int,
+) string {
 	if len(failures) == 0 && len(details) == 0 {
-		if resultLine != "" {
-			return resultLine
-		}
-		if rerunLine != "" {
-			return rerunLine
-		}
-		if len(summaries) > 0 {
-			return joinLimitedLines(summaries, maxLines)
-		}
-		return shared.CompactLines(input, maxLines)
+		return fallbackCargoTestSummary(input, summaries, resultLine, rerunLine, maxLines)
 	}
 
+	stackDetails, hints, rootDetails := splitCargoDetails(details)
+	failures = pruneCargoFailureNames(failures)
+	out := append([]string{}, failures...)
+	out = append(out, rootDetails...)
+	out = append(out, shared.SelectUniqueAnchoredLines(stackDetails, maxLines/3+1)...)
+	if resultLine != "" {
+		out = append(out, resultLine)
+	}
+	if rerunLine != "" {
+		out = append(out, rerunLine)
+	}
+	out = append(out, hints...)
+	return joinLimitedLines(out, maxLines)
+}
+
+func fallbackCargoTestSummary(input string, summaries []string, resultLine string, rerunLine string, maxLines int) string {
+	if resultLine != "" {
+		return resultLine
+	}
+	if rerunLine != "" {
+		return rerunLine
+	}
+	if len(summaries) > 0 {
+		return joinLimitedLines(summaries, maxLines)
+	}
+	return shared.CompactLines(input, maxLines)
+}
+
+func splitCargoDetails(details []string) ([]string, []string, []string) {
 	stackDetails := []string{}
 	hints := []string{}
 	rootDetails := []string{}
@@ -87,19 +136,7 @@ func SummarizeCargoTest(input string, maxLines int) string {
 			rootDetails = append(rootDetails, line)
 		}
 	}
-
-	failures = pruneCargoFailureNames(failures)
-	out := append([]string{}, failures...)
-	out = append(out, rootDetails...)
-	out = append(out, shared.SelectUniqueAnchoredLines(stackDetails, maxLines/3+1)...)
-	if resultLine != "" {
-		out = append(out, resultLine)
-	}
-	if rerunLine != "" {
-		out = append(out, rerunLine)
-	}
-	out = append(out, hints...)
-	return joinLimitedLines(out, maxLines)
+	return stackDetails, hints, rootDetails
 }
 
 func SummarizeCargoBuild(input string, maxLines int) string {

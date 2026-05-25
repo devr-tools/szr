@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"szr/internal/szrdev"
-	"szr/test/testutil"
+	"github.com/devr-tools/szr/internal/szrdev"
+	"github.com/devr-tools/szr/test/testutil"
 )
 
 func TestRun(t *testing.T) {

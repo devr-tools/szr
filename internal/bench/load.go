@@ -4,7 +4,7 @@ import (
 	"embed"
 	"fmt"
 
-	"szr/internal/engine"
+	"github.com/devr-tools/szr/internal/engine"
 )
 
 //go:embed testdata/*
