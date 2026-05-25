@@ -35,14 +35,18 @@ jobs:
 
       - name: Check changed code paths have test coverage updates
         shell: bash
+        env:
+          PR_BASE_REF: ${{ github.base_ref }}
         run: |
           set -euo pipefail
 
-          git fetch origin "${{ github.base_ref }}" --depth=1 || true
-          base_ref="origin/${{ github.base_ref }}"
+          git fetch origin "${PR_BASE_REF}" --depth=1 || true
+          base_ref="origin/${PR_BASE_REF}"
           changed_files="$(git diff --name-only "${base_ref}"...HEAD)"
 
-          code_changes="$(printf '%s\n' "$changed_files" | grep -E '^(cmd/|internal/|pkg/).+\.go$' | grep -Ev '(^|/).+_test\.go$' || true)"
+          # Ignore package-doc files so documentation-only Go changes do not
+          # require unrelated test churn.
+          code_changes="$(printf '%s\n' "$changed_files" | grep -E '^(cmd/|internal/|pkg/).+\.go$' | grep -Ev '(^|/).+_test\.go$|(^|/)doc\.go$' || true)"
           test_changes="$(printf '%s\n' "$changed_files" | grep -E '(^test/|_test\.go$)' || true)"
 
           if [ -z "$code_changes" ]; then
@@ -231,6 +235,8 @@ jobs:
       - vet
       - gocyclo
     runs-on: ubuntu-latest
+    env:
+      PR_BASE_REF: ${{ github.base_ref }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -242,7 +248,7 @@ jobs:
           cache: true
 
       - name: Fetch base branch
-        run: git fetch origin "${{ github.base_ref }}" --depth=1
+        run: git fetch origin "${PR_BASE_REF}" --depth=1
 
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }}
@@ -274,7 +280,7 @@ jobs:
           set -euo pipefail
 
           echo "### Critical Files Modified" >> "$GITHUB_STEP_SUMMARY"
-          critical="$(git diff --name-only "origin/${{ github.base_ref }}"...HEAD | grep -E '^(cmd/szr/|cmd/szr-dev/|internal/cli/|internal/engine/|internal/installers/|internal/selfinstall/|internal/config/|go\.mod|go\.sum|Formula/|\.goreleaser\.yaml|\.github/workflows/.*\.yml|\.github/release-please-config\.json|\.release-please-manifest\.json)' || true)"
+          critical="$(git diff --name-only "origin/${PR_BASE_REF}"...HEAD | grep -E '^(cmd/szr/|cmd/szr-dev/|internal/cli/|internal/engine/|internal/installers/|internal/selfinstall/|internal/config/|go\.mod|go\.sum|Formula/|\.goreleaser\.yaml|\.github/workflows/.*\.yml|\.github/release-please-config\.json|\.release-please-manifest\.json)' || true)"
 
           if [ -n "$critical" ]; then
             echo "**HIGH RISK**: critical files were modified:" >> "$GITHUB_STEP_SUMMARY"
@@ -299,7 +305,7 @@ jobs:
           set -euo pipefail
 
           echo "### Dangerous Code Patterns" >> "$GITHUB_STEP_SUMMARY"
-          patterns="$(git diff "origin/${{ github.base_ref }}"...HEAD | grep -E '^\+.*(exec\.Command(Context)?\(|http\.(Get|Post)\(|net\.Dial\(|os\.RemoveAll\(|os\.Setenv\(|syscall\.|unsafe \{|panic!\(|TODO|FIXME)' || true)"
+          patterns="$(git diff "origin/${PR_BASE_REF}"...HEAD | grep -E '^\+.*(exec\.Command(Context)?\(|http\.(Get|Post)\(|net\.Dial\(|os\.RemoveAll\(|os\.Setenv\(|syscall\.|unsafe \{|panic!\(|TODO|FIXME)' || true)"
 
           if [ -n "$patterns" ]; then
             echo "**Potentially sensitive additions detected:**" >> "$GITHUB_STEP_SUMMARY"
@@ -326,7 +332,7 @@ jobs:
 
           echo "### Dependency Changes" >> "$GITHUB_STEP_SUMMARY"
 
-          if git diff "origin/${{ github.base_ref }}"...HEAD -- go.mod | grep -E '^\+[^+]' > go_mod_additions.txt; then
+          if git diff "origin/${PR_BASE_REF}"...HEAD -- go.mod | grep -E '^\+[^+]' > go_mod_additions.txt; then
             echo "**go.mod additions:**" >> "$GITHUB_STEP_SUMMARY"
             echo '```diff' >> "$GITHUB_STEP_SUMMARY"
             sed -n '1,80p' go_mod_additions.txt >> "$GITHUB_STEP_SUMMARY"
@@ -425,20 +431,22 @@ jobs:
       - vet
       - gocyclo
     runs-on: ubuntu-latest
+    env:
+      PR_BASE_REF: ${{ github.base_ref }}
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Fetch base branch
-        run: git fetch origin "${{ github.base_ref }}" --depth=1
+        run: git fetch origin "${PR_BASE_REF}" --depth=1
 
       - name: Check doc-sensitive changes have doc updates
         shell: bash
         run: |
           set -euo pipefail
 
-          changed="$(git diff --name-only "origin/${{ github.base_ref }}"...HEAD)"
+          changed="$(git diff --name-only "origin/${PR_BASE_REF}"...HEAD)"
           ci_cd_only="$(printf '%s\n' "$changed" | grep -E '^(\.github/workflows/|\.github/release-please-config\.json$|\.release-please-manifest\.json$)' || true)"
           doc_sensitive="$(printf '%s\n' "$changed" | grep -E '^(\.goreleaser\.yaml$|Formula/|internal/installers/|internal/selfinstall/|README\.md$|docs/)' || true)"
           docs_changed="$(printf '%s\n' "$changed" | grep -E '^(README\.md|CONTRIBUTING\.md|docs/)' || true)"
