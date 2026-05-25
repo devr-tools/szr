@@ -31,12 +31,13 @@ func (a *App) printHelp() {
 		title: "Setup:",
 		rows: [][]string{
 			{"szr self install", "Install szr globally into ~/.local/bin or ~/bin."},
+			{"szr uninstall", "Uninstall the global szr binary from this machine."},
 			{"szr self update", "Update szr through Homebrew or go install when recognized."},
-			{"szr self doctor", "Check PATH, config, cache, version, and optional tools."},
+			{"szr self doctor [--json]", "Check PATH, config, cache, version, and optional tools."},
 			{"szr install", "List available repo bootstrap targets."},
-			{"szr install codex|claude-code|cursor|gemini|shell", "Generate repo-local bootstrap files for a specific target."},
+			{"szr install codex|claude-code|cursor|gemini|shell", "Install the target-specific szr bootstrap or hook integration."},
 			{"szr install --all --print", "Preview all installer outputs without writing files."},
-			{"szr uninstall codex|claude-code|cursor|gemini|shell", "Remove repo-local bootstrap files for a specific target."},
+			{"szr uninstall codex|claude-code|cursor|gemini|shell", "Remove the target-specific szr bootstrap or hook integration."},
 		},
 	})
 	a.printHelpSection(ui, helpSection{
@@ -48,7 +49,7 @@ func (a *App) printHelp() {
 			{"szr explain <cmd...>", "Show the matched profile, budget, and rewrite decisions."},
 			{"szr tee --latest", "Inspect the latest preserved full failure log."},
 			{"szr profiles", "List builtin reducer profiles."},
-			{"szr doctor [--history]", "Check runtime diagnostics and optional history health."},
+			{"szr doctor [--history|--json]", "Check runtime diagnostics and optional history health."},
 		},
 	})
 	a.printHelpSection(ui, helpSection{
@@ -119,7 +120,7 @@ func (a *App) printCommands() {
 			{"szr recommend [--json]", "Emit concrete tuning recommendations from command history."},
 			{"szr hotspots [--json]", "Rank the commands that most need reducer work."},
 			{"szr profiles", "List builtin profiles and contracts."},
-			{"szr doctor [--history]", "Check runtime tools plus optional history diagnostics."},
+			{"szr doctor [--history|--json]", "Check runtime tools plus optional history diagnostics."},
 			{"szr bench [fixture...]", "Run the built-in benchmark fixtures."},
 		},
 	})
@@ -135,15 +136,17 @@ func (a *App) printCommands() {
 		title: "Install:",
 		rows: [][]string{
 			{"szr self install [--update-shell]", "Install szr globally and optionally update shell rc."},
+			{"szr uninstall [--print]", "Uninstall the global szr binary."},
 			{"szr self update", "Update the current szr install when the channel is recognized."},
-			{"szr self doctor", "Inspect the global install target and PATH state."},
-			{"szr install codex", "Bootstrap this repo for Codex."},
+			{"szr self doctor [--json]", "Inspect the global install target and PATH state."},
+			{"szr install codex", "Patch AGENTS.md and install shared Codex guidance under ~/.codex."},
 			{"szr install shell", "Generate shell integration for this repo."},
-			{"szr install cursor", "Generate repo-local Cursor guidance."},
-			{"szr install claude-code", "Generate repo-local Claude Code guidance."},
-			{"szr install gemini", "Generate repo-local Gemini guidance."},
+			{"szr install cursor", "Install Cursor preToolUse hook files under ~/.cursor."},
+			{"szr install claude-code", "Install Claude Code hook files into ~/.claude."},
+			{"szr install gemini", "Install Gemini BeforeTool hook files under ~/.gemini."},
 			{"szr install --all --print", "Preview all repo bootstrap outputs."},
-			{"szr uninstall codex", "Remove Codex bootstrap files from this repo."},
+			{"szr uninstall codex", "Remove Codex AGENTS.md patch and ~/.codex guidance."},
+			{"szr uninstall claude-code", "Remove ~/.claude Claude Code hook files and settings patch."},
 			{"szr uninstall --all --print", "Preview repo bootstrap removals without writing files."},
 		},
 	})

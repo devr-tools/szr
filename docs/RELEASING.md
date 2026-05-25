@@ -2,6 +2,12 @@
 
 `szr` uses `release-please` to propose stable releases and `goreleaser` to publish artifacts.
 
+Releases are deployment-driven:
+
+- pushes to `main` or `master` let `release-please` manage the next stable release PR
+- merges of that release PR create the stable tag and publish release artifacts
+- pushes to `develop`, or manual runs on non-stable branches, create prerelease tags like `v0.2.0-rc.5`
+
 ## Release checklist
 
 Before you cut or approve a release:
@@ -33,6 +39,16 @@ The prerelease tag is computed from the latest stable tag plus commit history:
 - breaking changes bump major
 - `feat:` commits bump minor
 - everything else bumps patch and appends `-rc.<run-number>`
+
+## Versioning
+
+Prereleases are produced from `develop` and non-`main` or non-`master` manual release runs.
+
+- `BREAKING CHANGE` or `type!:` bumps major
+- `feat:` bumps minor
+- anything else bumps patch
+
+Stable releases are produced from `main` or `master` through `release-please`, which opens or updates the release PR and creates the final stable tag when those changes land.
 
 ## Manual fallback
 

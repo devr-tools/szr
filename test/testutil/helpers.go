@@ -92,18 +92,18 @@ func WriteExecutable(t *testing.T, dir, name, body string) string {
 	if runtime.GOOS == "windows" {
 		scriptName := name + ".sh"
 		scriptPath := filepath.Join(dir, scriptName)
-		if err := os.WriteFile(scriptPath, []byte(body), 0o755); err != nil {
+		if err := writeExecutableFile(scriptPath, []byte(body), 0o755); err != nil {
 			t.Fatalf("write executable %s: %v", scriptName, err)
 		}
 		wrapperPath := filepath.Join(dir, name+".cmd")
 		wrapper := "@echo off\r\n\"" + windowsBashPath() + "\" \"%~dp0" + scriptName + "\" %*\r\n"
-		if err := os.WriteFile(wrapperPath, []byte(wrapper), 0o755); err != nil {
+		if err := writeExecutableFile(wrapperPath, []byte(wrapper), 0o755); err != nil {
 			t.Fatalf("write wrapper %s: %v", filepath.Base(wrapperPath), err)
 		}
 		return wrapperPath
 	}
 	path := filepath.Join(dir, name)
-	if err := os.WriteFile(path, []byte(body), 0o755); err != nil {
+	if err := writeExecutableFile(path, []byte(body), 0o755); err != nil {
 		t.Fatalf("write executable %s: %v", name, err)
 	}
 	return path
@@ -124,9 +124,36 @@ func MustWriteExecutable(t *testing.T, path, content string) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("mkdir %s: %v", path, err)
 	}
-	if err := os.WriteFile(path, []byte(content), 0o755); err != nil {
+	if err := writeExecutableFile(path, []byte(content), 0o755); err != nil {
 		t.Fatalf("write %s: %v", path, err)
 	}
+}
+
+func writeExecutableFile(path string, content []byte, mode os.FileMode) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp.*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer func() {
+		_ = os.Remove(tmpPath)
+	}()
+
+	if _, err := tmp.Write(content); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(mode); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		return err
+	}
+	return nil
 }
 
 func MustReadFile(t *testing.T, path string) []byte {

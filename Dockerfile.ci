@@ -1,5 +1,8 @@
 FROM golang:1.26.3-bookworm
 
+ARG GOVULNCHECK_VERSION=v1.3.0
+ARG GOCYCLO_VERSION=v0.6.0
+
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -18,5 +21,8 @@ RUN apt-get update \
 RUN python3 -m venv "${VIRTUAL_ENV}" \
 	&& "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir --upgrade pip \
 	&& "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir semgrep==1.83.0
+
+RUN GOBIN=/usr/local/bin go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" \
+	&& GOBIN=/usr/local/bin go install "github.com/fzipp/gocyclo/cmd/gocyclo@${GOCYCLO_VERSION}"
 
 WORKDIR /workspace

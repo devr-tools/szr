@@ -40,6 +40,12 @@ func applyFile(
 		return deleteFile(repoRoot, file.Path, remove)
 	case StrategyUnmerge:
 		return unmergeFile(repoRoot, file, readFile, writeFile, chmod, remove)
+	case StrategyClaudeSettingsPrune:
+		return pruneClaudeSettingsFile(repoRoot, file, readFile, writeFile, chmod, remove)
+	case StrategyCursorHooksPrune:
+		return pruneCursorHooksFile(repoRoot, file, readFile, writeFile, chmod, remove)
+	case StrategyGeminiSettingsPrune:
+		return pruneGeminiSettingsFile(repoRoot, file, readFile, writeFile, chmod, remove)
 	default:
 		return writeFileContent(file, mkdirAll, readFile, writeFile, chmod)
 	}
@@ -96,6 +102,107 @@ func writeFileContent(
 	}
 
 	content := materialize(string(existing), file)
+	if file.Strategy == StrategyClaudeSettingsMerge {
+		content, _, err = mergeClaudeSettings(string(existing), file.Content)
+		if err != nil {
+			return err
+		}
+	} else if file.Strategy == StrategyCursorHooksMerge {
+		content, _, err = mergeCursorHooks(string(existing), file.Content)
+		if err != nil {
+			return err
+		}
+	} else if file.Strategy == StrategyGeminiSettingsMerge {
+		content, _, err = mergeGeminiSettings(string(existing), file.Content)
+		if err != nil {
+			return err
+		}
+	}
+	return persistFile(file, content, writeFile, chmod)
+}
+
+func pruneClaudeSettingsFile(
+	repoRoot string,
+	file File,
+	readFile func(string) ([]byte, error),
+	writeFile func(string, []byte, os.FileMode) error,
+	chmod func(string, os.FileMode) error,
+	remove func(string) error,
+) error {
+	existing, err := readFile(file.Path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	content, changed, err := pruneClaudeSettings(string(existing), file.Content)
+	if err != nil {
+		return err
+	}
+	if !changed {
+		return nil
+	}
+	if content == "{}\n" {
+		return deleteFile(repoRoot, file.Path, remove)
+	}
+	return persistFile(file, content, writeFile, chmod)
+}
+
+func pruneCursorHooksFile(
+	repoRoot string,
+	file File,
+	readFile func(string) ([]byte, error),
+	writeFile func(string, []byte, os.FileMode) error,
+	chmod func(string, os.FileMode) error,
+	remove func(string) error,
+) error {
+	existing, err := readFile(file.Path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	content, changed, err := pruneCursorHooks(string(existing), file.Content)
+	if err != nil {
+		return err
+	}
+	if !changed {
+		return nil
+	}
+	if content == "{}\n" {
+		return deleteFile(repoRoot, file.Path, remove)
+	}
+	return persistFile(file, content, writeFile, chmod)
+}
+
+func pruneGeminiSettingsFile(
+	repoRoot string,
+	file File,
+	readFile func(string) ([]byte, error),
+	writeFile func(string, []byte, os.FileMode) error,
+	chmod func(string, os.FileMode) error,
+	remove func(string) error,
+) error {
+	existing, err := readFile(file.Path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	content, changed, err := pruneGeminiSettings(string(existing), file.Content)
+	if err != nil {
+		return err
+	}
+	if !changed {
+		return nil
+	}
+	if content == "{}\n" {
+		return deleteFile(repoRoot, file.Path, remove)
+	}
 	return persistFile(file, content, writeFile, chmod)
 }
 

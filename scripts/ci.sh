@@ -14,7 +14,6 @@ GOCYCLO_VERSION="${GOCYCLO_VERSION:-v0.6.0}"
 SMOKE_HOME="${SMOKE_HOME:-${ROOT_DIR}/.tmp-home}"
 COVERFILE="${COVERFILE:-.coverage.internal.out}"
 BASE_REF="${BASE_REF:-}"
-GO_BIN_DIR="$("${GO}" env GOPATH)/bin"
 
 tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/szr-ci.XXXXXX")"
 trap 'rm -rf "${tmpdir}"' EXIT
@@ -31,6 +30,16 @@ die() {
 	printf 'error: %s\n' "$1" >&2
 	exit 1
 }
+
+sanitize_go_env() {
+	if [[ -n "${GOROOT:-}" && ! -d "${GOROOT}" ]]; then
+		warn "ignoring invalid GOROOT=${GOROOT}"
+		unset GOROOT
+	fi
+}
+
+sanitize_go_env
+GO_BIN_DIR="$("${GO}" env GOPATH)/bin"
 
 validate_govulncheck_mode() {
 	case "${GOVULNCHECK_MODE}" in

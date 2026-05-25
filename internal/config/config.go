@@ -23,6 +23,7 @@ type Config struct {
 type UpdateCheck struct {
 	Enabled       bool `json:"enabled"`
 	IntervalHours int  `json:"interval_hours"`
+	AutoUpdate    bool `json:"auto_update"`
 }
 
 type Paths struct {

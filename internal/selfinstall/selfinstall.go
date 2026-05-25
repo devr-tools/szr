@@ -22,6 +22,7 @@ type Plan struct {
 type Result struct {
 	Plan            Plan
 	Installed       bool
+	Removed         bool
 	ShellConfigured bool
 	ShellUpdated    bool
 }
@@ -75,6 +76,10 @@ func Install(plan Plan, updateShell bool) (Result, error) {
 	return InstallWith(plan, updateShell, os.ReadFile, os.WriteFile, os.MkdirAll)
 }
 
+func Uninstall(plan Plan) (Result, error) {
+	return UninstallWith(plan, os.ReadFile, os.Remove)
+}
+
 func InstallWith(
 	plan Plan,
 	updateShell bool,
@@ -99,6 +104,25 @@ func InstallWith(
 	}
 	result.ShellConfigured = shellResult.ShellConfigured
 	result.ShellUpdated = shellResult.ShellUpdated
+	return result, nil
+}
+
+func UninstallWith(
+	plan Plan,
+	readFile func(string) ([]byte, error),
+	remove func(string) error,
+) (Result, error) {
+	if err := validateInstallPlan(plan); err != nil {
+		return Result{}, err
+	}
+
+	result := Result{Plan: plan}
+	removed, err := uninstallExecutable(plan, readFile, remove)
+	if err != nil {
+		return Result{}, err
+	}
+	result.Removed = removed
+	result.ShellConfigured = shellSnippetConfigured(plan, readFile)
 	return result, nil
 }
 
@@ -169,6 +193,37 @@ func configureShellInstall(
 	result.ShellConfigured = true
 	result.ShellUpdated = true
 	return result, nil
+}
+
+func uninstallExecutable(
+	plan Plan,
+	readFile func(string) ([]byte, error),
+	remove func(string) error,
+) (bool, error) {
+	if _, err := readFile(plan.TargetPath); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
+	}
+	if err := remove(plan.TargetPath); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+func shellSnippetConfigured(plan Plan, readFile func(string) ([]byte, error)) bool {
+	if plan.ShellSnippet == "" || plan.ShellRCPath == "" {
+		return false
+	}
+	existing, err := readFile(plan.ShellRCPath)
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(existing), plan.ShellSnippet)
 }
 
 func chooseInstallDir(

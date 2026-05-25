@@ -79,6 +79,7 @@ func TestBenchMismatchOutput(t *testing.T) {
 	testutil.MustWriteFile(t, filepath.Join(root, "go.mod"), "module example.com/demo\n")
 	testutil.MustWriteFile(t, filepath.Join(root, "cmd", "szr", "main.go"), "package main\n")
 	testutil.MustWriteFile(t, filepath.Join(root, ".szr"), "blocked")
+	t.Setenv("CODEX_HOME", filepath.Join(root, ".szr"))
 
 	restore := testutil.Chdir(t, root)
 	defer restore()
@@ -126,13 +127,13 @@ func TestInstallListAndPrint(t *testing.T) {
 	if code != 0 || stderr != "" {
 		t.Fatalf("unexpected install print stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
-	for _, want := range []string{"plan: cursor", "./.cursor/rules/szr.mdc", "manual steps:"} {
+	for _, want := range []string{"plan: cursor", "hooks.json", "manual steps:"} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("expected install print stdout to contain %q, got %q", want, stdout)
 		}
 	}
-	if _, err := os.Stat(filepath.Join(repo, ".cursor", "rules", "szr.mdc")); !os.IsNotExist(err) {
-		t.Fatalf("expected print mode not to write cursor rule, got err=%v", err)
+	if _, err := os.Stat(filepath.Join(repo, ".cursor", "hooks.json")); !os.IsNotExist(err) {
+		t.Fatalf("expected print mode not to write cursor hooks, got err=%v", err)
 	}
 }
 
@@ -143,15 +144,15 @@ func TestInstallApplyAndAllPlans(t *testing.T) {
 	if code != 0 || stderr != "" {
 		t.Fatalf("unexpected install apply stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
-	for _, want := range []string{"installed codex", "./AGENTS.md", "./.szr/hooks/pre-command.sh"} {
+	for _, want := range []string{"installed codex", "AGENTS.md", ".codex/szr.md"} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("expected install apply stdout to contain %q, got %q", want, stdout)
 		}
 	}
 	for _, path := range []string{
 		filepath.Join(repo, "AGENTS.md"),
-		filepath.Join(repo, ".szr", "hooks", "pre-command.sh"),
-		filepath.Join(repo, ".szr", "install", "codex.md"),
+		filepath.Join(os.Getenv("HOME"), ".codex", "szr.md"),
+		filepath.Join(os.Getenv("HOME"), ".codex", ".szr", "install", "codex.md"),
 	} {
 		if _, err := os.Stat(path); err != nil {
 			t.Fatalf("expected installed file %s: %v", path, err)
@@ -169,26 +170,51 @@ func TestInstallApplyAndAllPlans(t *testing.T) {
 	}
 }
 
-func TestUninstallListAndPrint(t *testing.T) {
+func TestInstallClaudeGlobalPrintAndApply(t *testing.T) {
+	app := testutil.NewTestApp(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	code, stdout, stderr := testutil.RunApp(t, app, "install", "--print", "claude-code")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected global install print stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	for _, want := range []string{"plan: claude-code", "./.claude/szr.md", "./.claude/settings.json"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("expected global install print stdout to contain %q, got %q", want, stdout)
+		}
+	}
+
+	code, stdout, stderr = testutil.RunApp(t, app, "install", "claude-code")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected global install apply stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	for _, want := range []string{"installed claude-code", "./.claude/szr.md", "./.claude/settings.json"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("expected global install apply stdout to contain %q, got %q", want, stdout)
+		}
+	}
+	for _, path := range []string{
+		filepath.Join(home, ".claude", "szr.md"),
+		filepath.Join(home, ".claude", "settings.json"),
+		filepath.Join(home, ".claude", "hooks", "szr-rewrite.sh"),
+	} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("expected installed global file %s: %v", path, err)
+		}
+	}
+}
+
+func TestUninstallPrintRepoTarget(t *testing.T) {
 	app, repo, restore := newInstallCommandsFixture(t)
 	defer restore()
 	_, _, _ = testutil.RunApp(t, app, "install", "codex")
 
-	code, stdout, stderr := testutil.RunApp(t, app, "uninstall")
-	if code != 0 || stderr != "" {
-		t.Fatalf("unexpected uninstall list stdout=%q stderr=%q code=%d", stdout, stderr, code)
-	}
-	for _, want := range []string{"available uninstall targets:", "codex", "claude-code", "cursor", "gemini", "shell", "szr uninstall --all"} {
-		if !strings.Contains(stdout, want) {
-			t.Fatalf("expected uninstall list stdout to contain %q, got %q", want, stdout)
-		}
-	}
-
-	code, stdout, stderr = testutil.RunApp(t, app, "uninstall", "--print", "codex")
+	code, stdout, stderr := testutil.RunApp(t, app, "uninstall", "--print", "codex")
 	if code != 0 || stderr != "" {
 		t.Fatalf("unexpected uninstall print stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
-	for _, want := range []string{"plan: uninstall codex", "./AGENTS.md", "./.szr/install/codex.md", "manual steps:"} {
+	for _, want := range []string{"plan: uninstall codex", "AGENTS.md", ".codex/szr.md", "manual steps:"} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("expected uninstall print stdout to contain %q, got %q", want, stdout)
 		}
@@ -204,14 +230,14 @@ func TestUninstallApplyRemovesFiles(t *testing.T) {
 	if code != 0 || stderr != "" {
 		t.Fatalf("unexpected uninstall apply stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
-	for _, want := range []string{"uninstalled codex", "./AGENTS.md", "./.szr/hooks/pre-command.sh"} {
+	for _, want := range []string{"uninstalled codex", "AGENTS.md", ".codex/szr.md"} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("expected uninstall apply stdout to contain %q, got %q", want, stdout)
 		}
 	}
 	for _, path := range []string{
-		filepath.Join(repo, ".szr", "hooks", "pre-command.sh"),
-		filepath.Join(repo, ".szr", "install", "codex.md"),
+		filepath.Join(os.Getenv("HOME"), ".codex", ".szr", "install", "codex.md"),
+		filepath.Join(os.Getenv("HOME"), ".codex", "szr.md"),
 	} {
 		if _, err := os.Stat(path); !os.IsNotExist(err) {
 			t.Fatalf("expected uninstalled file %s to be gone: %v", path, err)
@@ -219,11 +245,48 @@ func TestUninstallApplyRemovesFiles(t *testing.T) {
 	}
 	agentsPath := filepath.Join(repo, "AGENTS.md")
 	if data, err := os.ReadFile(agentsPath); err == nil {
-		if strings.Contains(string(data), "## szr for Codex") {
+		if strings.Contains(string(data), "Use szr as the default wrapper") {
 			t.Fatalf("expected Codex instructions removed, got %q", string(data))
 		}
 	} else if !os.IsNotExist(err) {
 		t.Fatalf("read %s: %v", agentsPath, err)
+	}
+}
+
+func TestUninstallClaudeGlobalPrintAndApply(t *testing.T) {
+	app := testutil.NewTestApp(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	_, _, _ = testutil.RunApp(t, app, "install", "claude-code")
+
+	code, stdout, stderr := testutil.RunApp(t, app, "uninstall", "--print", "claude-code")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected global uninstall print stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	for _, want := range []string{"plan: uninstall claude-code", "./.claude/szr.md", "./.claude/settings.json"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("expected global uninstall print stdout to contain %q, got %q", want, stdout)
+		}
+	}
+
+	code, stdout, stderr = testutil.RunApp(t, app, "uninstall", "claude-code")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected global uninstall apply stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	for _, want := range []string{"uninstalled claude-code", "./.claude/szr.md", "./.claude/settings.json"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("expected global uninstall apply stdout to contain %q, got %q", want, stdout)
+		}
+	}
+	for _, path := range []string{
+		filepath.Join(home, ".claude", "szr.md"),
+		filepath.Join(home, ".claude", "settings.json"),
+		filepath.Join(home, ".claude", "hooks", "szr-rewrite.sh"),
+	} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("expected uninstalled global file %s to be gone: %v", path, err)
+		}
 	}
 }
 
@@ -246,10 +309,25 @@ func TestInstallAllAndUninstallAllPrint(t *testing.T) {
 	}
 }
 
+func TestInstallClaudeGlobalFlagRejected(t *testing.T) {
+	app := testutil.NewTestApp(t)
+
+	code, stdout, stderr := testutil.RunApp(t, app, "install", "--global", "claude-code")
+	if code != 2 || stdout != "" || !strings.Contains(stderr, "unknown install flag --global") {
+		t.Fatalf("unexpected global install flag handling stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+
+	code, stdout, stderr = testutil.RunApp(t, app, "uninstall", "--global", "claude-code")
+	if code != 2 || stdout != "" || !strings.Contains(stderr, "unknown uninstall flag --global") {
+		t.Fatalf("unexpected global uninstall flag handling stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+}
+
 func newInstallCommandsFixture(t *testing.T) (*cli.App, string, func()) {
 	t.Helper()
 	app := testutil.NewTestApp(t)
 	repo := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
 	testutil.MustWriteFile(t, filepath.Join(repo, "go.mod"), "module example.com/demo\n")
 	testutil.MustWriteFile(t, filepath.Join(repo, "cmd", "szr", "main.go"), "package main\n")
 	restore := testutil.Chdir(t, repo)
@@ -300,6 +378,32 @@ func TestSelfInstallCommands(t *testing.T) {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("expected self install stdout to contain %q, got %q", want, stdout)
 		}
+	}
+
+	code, stdout, stderr = testutil.RunApp(t, app, "uninstall", "--print")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected self uninstall print stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	for _, want := range []string{
+		"plan: self uninstall",
+		target,
+		filepath.Join(home, ".zshrc"),
+		`export PATH="$HOME/.local/bin:$PATH"`,
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("expected self uninstall print stdout to contain %q, got %q", want, stdout)
+		}
+	}
+
+	code, stdout, stderr = testutil.RunApp(t, app, "uninstall")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected self uninstall stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	if _, err := os.Stat(target); !os.IsNotExist(err) {
+		t.Fatalf("expected uninstalled szr binary at %s to be gone: %v", target, err)
+	}
+	if !strings.Contains(stdout, "uninstalled: "+target) {
+		t.Fatalf("expected self uninstall stdout to contain target, got %q", stdout)
 	}
 }
 

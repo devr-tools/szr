@@ -35,10 +35,10 @@ func TestLoadVariants(t *testing.T) {
 		func() (string, error) { return root, nil },
 		func(string) (os.FileInfo, error) { return nil, os.ErrNotExist },
 		func(string) ([]byte, error) {
-			return []byte(`{"tee_on_failure":false,"max_preview_lines":7,"max_match_groups":4,"reasoning_budget":"agent","update_check":{"enabled":true,"interval_hours":12}}`), nil
+			return []byte(`{"tee_on_failure":false,"max_preview_lines":7,"max_match_groups":4,"reasoning_budget":"agent","update_check":{"enabled":true,"interval_hours":12,"auto_update":true}}`), nil
 		},
 	)
-	if err != nil || cfg.TeeOnFailure || cfg.MaxPreviewLines != 7 || cfg.MaxMatchGroups != 4 || cfg.ReasoningBudgetMode != config.ReasoningBudgetAgent || !cfg.UpdateCheck.Enabled || cfg.UpdateCheck.IntervalHours != 12 {
+	if err != nil || cfg.TeeOnFailure || cfg.MaxPreviewLines != 7 || cfg.MaxMatchGroups != 4 || cfg.ReasoningBudgetMode != config.ReasoningBudgetAgent || !cfg.UpdateCheck.Enabled || cfg.UpdateCheck.IntervalHours != 12 || !cfg.UpdateCheck.AutoUpdate {
 		t.Fatalf("unexpected loaded config: %#v err=%v", cfg, err)
 	}
 

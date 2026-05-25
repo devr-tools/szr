@@ -39,7 +39,7 @@ func TestCommandErrorMatrix(t *testing.T) {
 		{"install mixed targets", []string{"install", "--all", "codex"}, 2, nil, []string{"either --all or explicit targets"}},
 		{"install bad flag", []string{"install", "--bad"}, 2, nil, []string{"unknown install flag"}},
 		{"uninstall mixed targets", []string{"uninstall", "--all", "codex"}, 2, nil, []string{"either --all or explicit targets"}},
-		{"uninstall bad flag", []string{"uninstall", "--bad"}, 2, nil, []string{"unknown uninstall flag"}},
+		{"uninstall bad flag", []string{"uninstall", "--bad"}, 2, nil, []string{"unknown self uninstall flag"}},
 		{"bench bad flag", []string{"bench", "--bad"}, 2, nil, []string{"unknown bench flag"}},
 		{"bench no fixtures", []string{"bench", "missing-fixture"}, 2, nil, []string{"no benchmark fixtures matched"}},
 		{"read missing", []string{"read"}, 2, nil, []string{"read requires a file"}},

@@ -38,6 +38,10 @@ func (a *App) runInstall(args []string) int {
 }
 
 func (a *App) runUninstall(args []string) int {
+	if shouldRunSelfUninstall(args) {
+		return a.runSelfUninstall(args)
+	}
+
 	allTargets, printOnly, targets, code := parseTargetArgs("uninstall", args)
 	if code != 0 {
 		return code
@@ -61,6 +65,27 @@ func (a *App) runUninstall(args []string) int {
 	}
 
 	return applyUninstallPlans(plans, printOnly)
+}
+
+func shouldRunSelfUninstall(args []string) bool {
+	if len(args) == 0 {
+		return true
+	}
+	for _, arg := range args {
+		if arg == "--all" || isRepoInstallTarget(arg) {
+			return false
+		}
+	}
+	return true
+}
+
+func isRepoInstallTarget(arg string) bool {
+	for _, target := range installers.Targets() {
+		if string(target) == arg {
+			return true
+		}
+	}
+	return false
 }
 
 func parseTargetArgs(verb string, args []string) (bool, bool, []installers.Target, int) {
@@ -105,8 +130,9 @@ func installPathErrorCode(allTargets bool) int {
 }
 
 func renderInstallPlans(cwd string, allTargets bool, targets []installers.Target) ([]installers.Plan, int) {
+	homeDir := resolveInstallHome()
 	if allTargets {
-		plans, err := installers.RenderAll(installers.Options{RepoRoot: cwd})
+		plans, err := installers.RenderAll(installers.Options{RepoRoot: cwd, HomeDir: homeDir})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "szr: %v\n", err)
 			return nil, 1
@@ -116,7 +142,10 @@ func renderInstallPlans(cwd string, allTargets bool, targets []installers.Target
 
 	plans := make([]installers.Plan, 0, len(targets))
 	for _, target := range targets {
-		plan, err := installers.Render(target, installers.Options{RepoRoot: cwd})
+		plan, err := installers.Render(target, installers.Options{
+			RepoRoot: cwd,
+			HomeDir:  homeDir,
+		})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "szr: %v\n", err)
 			return nil, 2
@@ -127,8 +156,9 @@ func renderInstallPlans(cwd string, allTargets bool, targets []installers.Target
 }
 
 func renderUninstallPlans(cwd string, allTargets bool, targets []installers.Target) ([]installers.Plan, int) {
+	homeDir := resolveInstallHome()
 	if allTargets {
-		plans, err := installers.RenderAllUninstall(installers.Options{RepoRoot: cwd})
+		plans, err := installers.RenderAllUninstall(installers.Options{RepoRoot: cwd, HomeDir: homeDir})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "szr: %v\n", err)
 			return nil, 1
@@ -138,7 +168,10 @@ func renderUninstallPlans(cwd string, allTargets bool, targets []installers.Targ
 
 	plans := make([]installers.Plan, 0, len(targets))
 	for _, target := range targets {
-		plan, err := installers.RenderUninstall(target, installers.Options{RepoRoot: cwd})
+		plan, err := installers.RenderUninstall(target, installers.Options{
+			RepoRoot: cwd,
+			HomeDir:  homeDir,
+		})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "szr: %v\n", err)
 			return nil, 2
@@ -146,6 +179,14 @@ func renderUninstallPlans(cwd string, allTargets bool, targets []installers.Targ
 		plans = append(plans, plan)
 	}
 	return plans, 0
+}
+
+func resolveInstallHome() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return home
 }
 
 func applyInstallPlans(plans []installers.Plan, printOnly bool) int {

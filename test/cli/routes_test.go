@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
@@ -56,7 +57,7 @@ func TestRunRoutes(t *testing.T) {
 		stdin      string
 	}{
 		{"help empty", nil, 0, []string{`szr or "sizer" is a token-aware CLI proxy built in Go`, "Setup:"}, nil, ""},
-		{"help flag", []string{"--help"}, 0, []string{"Setup:", "Insight:", "Discover:", "szr commands", "--reasoning-budget <standard|agent>", "szr uninstall codex|claude-code|cursor|..."}, nil, ""},
+		{"help flag", []string{"--help"}, 0, []string{"Setup:", "Insight:", "Discover:", "szr commands", "--reasoning-budget <standard|agent>", "szr uninstall", "szr uninstall codex|claude-code|cursor|..."}, nil, ""},
 		{"help ultra", []string{"-u", "help"}, 0, []string{"Setup:"}, nil, ""},
 		{"help verbose long", []string{"--verbose", "help"}, 0, []string{"Setup:"}, nil, ""},
 		{"help verbose exact", []string{"-vv", "help"}, 0, []string{"Setup:"}, nil, ""},
@@ -199,20 +200,219 @@ func TestDoctorShowsUpdateCheckStatusAndNotice(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("unexpected git status stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
-	if !strings.Contains(stderr, "szr: update available: v0.2.0 (current v0.1.0). Run: go install github.com/devr-tools/szr/cmd/szr@latest") {
-		t.Fatalf("expected update notice, got stderr=%q", stderr)
+	if stderr != "" {
+		t.Fatalf("expected no inline update notice for non-interactive stderr, got stderr=%q", stderr)
+	}
+}
+
+func TestDoctorJSONIncludesUpdateStatus(t *testing.T) {
+	paths := testutil.Paths(t.TempDir())
+	testutil.EnsurePaths(t, paths)
+	cfg := config.Default()
+	cfg.UpdateCheck.Enabled = true
+	cfg.UpdateCheck.IntervalHours = 12
+	app := cli.NewWithDependenciesAndUpdater("v0.1.0", cfg, paths, nil, testutil.AppEngine(t, paths), stubUpdater{
+		report: updates.DoctorReport{
+			Enabled:         true,
+			Interval:        12 * time.Hour,
+			Method:          updates.InstallMethodGo,
+			UpgradeCommand:  "go install github.com/devr-tools/szr/cmd/szr@latest",
+			LatestVersion:   "v0.2.0",
+			LatestURL:       "https://github.com/devr-tools/szr/releases/tag/v0.2.0",
+			CheckedAt:       time.Date(2026, 5, 25, 12, 0, 0, 0, time.UTC),
+			UpdateAvailable: true,
+		},
+	})
+
+	code, stdout, stderr := testutil.RunApp(t, app, "self", "doctor", "--json")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected self doctor json stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+
+	var payload struct {
+		Version string `json:"version"`
+		Update  struct {
+			Enabled         bool   `json:"enabled"`
+			AutoUpdate      bool   `json:"auto_update"`
+			InstallMethod   string `json:"install_method"`
+			LatestVersion   string `json:"latest_version"`
+			LatestURL       string `json:"latest_url"`
+			CheckedAt       string `json:"checked_at"`
+			UpdateAvailable bool   `json:"update_available"`
+			UpgradeCommand  string `json:"upgrade_command"`
+		} `json:"update"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("decode self doctor json: %v", err)
+	}
+	if payload.Version != "v0.1.0" {
+		t.Fatalf("unexpected version %#v", payload)
+	}
+	if !payload.Update.Enabled || payload.Update.AutoUpdate || !payload.Update.UpdateAvailable {
+		t.Fatalf("expected enabled available update, got %#v", payload.Update)
+	}
+	for _, want := range []string{
+		payload.Update.InstallMethod,
+		payload.Update.LatestVersion,
+		payload.Update.LatestURL,
+		payload.Update.CheckedAt,
+		payload.Update.UpgradeCommand,
+	} {
+		if want == "" {
+			t.Fatalf("expected populated update json, got %#v", payload.Update)
+		}
+	}
+	if payload.Update.InstallMethod != "go-install" || payload.Update.LatestVersion != "v0.2.0" {
+		t.Fatalf("unexpected update json %#v", payload.Update)
+	}
+}
+
+func TestDoctorJSONUsesCachedUpdateStateWithRealUpdater(t *testing.T) {
+	cases := []struct {
+		name                string
+		version             string
+		latestVersion       string
+		wantUpdateAvailable bool
+	}{
+		{
+			name:                "update available from cached semver",
+			version:             "v0.1.0",
+			latestVersion:       "v0.2.0",
+			wantUpdateAvailable: true,
+		},
+		{
+			name:                "prerelease treated as same stable version",
+			version:             "v0.2.0-rc1",
+			latestVersion:       "v0.2.0",
+			wantUpdateAvailable: false,
+		},
+		{
+			name:                "invalid cached version suppresses update flag",
+			version:             "v0.1.0",
+			latestVersion:       "stable",
+			wantUpdateAvailable: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			paths := testutil.Paths(t.TempDir())
+			testutil.EnsurePaths(t, paths)
+
+			cfg := config.Default()
+			cfg.UpdateCheck.Enabled = true
+			cfg.UpdateCheck.IntervalHours = 24
+			cfg.UpdateCheck.AutoUpdate = true
+
+			now := time.Now().UTC().Truncate(time.Second)
+			cache := map[string]any{
+				"checked_at":                    now.Format(time.RFC3339),
+				"latest_version":                tc.latestVersion,
+				"latest_url":                    "https://example.com/releases/" + tc.latestVersion,
+				"auto_update_attempted_at":      now.Add(-2 * time.Hour).Format(time.RFC3339),
+				"auto_update_attempted_version": tc.latestVersion,
+				"auto_update_succeeded_at":      now.Add(-time.Hour).Format(time.RFC3339),
+				"auto_update_succeeded_version": tc.latestVersion,
+			}
+			data, err := json.Marshal(cache)
+			if err != nil {
+				t.Fatalf("marshal cache: %v", err)
+			}
+			if err := os.WriteFile(filepath.Join(paths.DataDir, "update-check.json"), append(data, '\n'), 0o644); err != nil {
+				t.Fatalf("write cache: %v", err)
+			}
+
+			app := cli.NewWithDependencies(tc.version, cfg, paths, nil, testutil.AppEngine(t, paths))
+			code, stdout, stderr := testutil.RunApp(t, app, "self", "doctor", "--json")
+			if code != 0 || stderr != "" {
+				t.Fatalf("unexpected self doctor json stdout=%q stderr=%q code=%d", stdout, stderr, code)
+			}
+
+			var payload struct {
+				Update struct {
+					Enabled          bool   `json:"enabled"`
+					AutoUpdate       bool   `json:"auto_update"`
+					LatestVersion    string `json:"latest_version"`
+					LatestURL        string `json:"latest_url"`
+					FromCache        bool   `json:"from_cache"`
+					UpdateAvailable  bool   `json:"update_available"`
+					AttemptedAt      string `json:"attempted_at"`
+					AttemptedVersion string `json:"attempted_version"`
+					SucceededAt      string `json:"succeeded_at"`
+					SucceededVersion string `json:"succeeded_version"`
+				} `json:"update"`
+			}
+			if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+				t.Fatalf("decode self doctor json: %v", err)
+			}
+			if !payload.Update.Enabled || !payload.Update.AutoUpdate || !payload.Update.FromCache {
+				t.Fatalf("expected cached enabled auto update payload, got %#v", payload.Update)
+			}
+			if payload.Update.LatestVersion != tc.latestVersion || payload.Update.LatestURL == "" {
+				t.Fatalf("unexpected cached version payload %#v", payload.Update)
+			}
+			if payload.Update.UpdateAvailable != tc.wantUpdateAvailable {
+				t.Fatalf("unexpected update availability %#v", payload.Update)
+			}
+			for _, want := range []string{
+				payload.Update.AttemptedAt,
+				payload.Update.AttemptedVersion,
+				payload.Update.SucceededAt,
+				payload.Update.SucceededVersion,
+			} {
+				if want == "" {
+					t.Fatalf("expected populated auto update state, got %#v", payload.Update)
+				}
+			}
+		})
+	}
+}
+
+func TestRunTriggersAutoUpdateForNormalCommands(t *testing.T) {
+	paths := testutil.Paths(t.TempDir())
+	testutil.EnsurePaths(t, paths)
+	cfg := config.Default()
+	cfg.UpdateCheck.Enabled = true
+	cfg.UpdateCheck.AutoUpdate = true
+	binDir := t.TempDir()
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	testutil.WriteExecutable(t, binDir, "git", "#!/bin/sh\necho \"## main...origin/main\"\n")
+
+	updater := &countingUpdater{}
+	app := cli.NewWithDependenciesAndUpdater("v0.1.0", cfg, paths, nil, testutil.AppEngine(t, paths), updater)
+
+	code, _, _ := testutil.RunApp(t, app, "git", "status")
+	if code != 0 {
+		t.Fatalf("unexpected exit code %d", code)
+	}
+	if updater.autoCalls != 1 {
+		t.Fatalf("expected auto update once, got %d", updater.autoCalls)
+	}
+
+	code, _, _ = testutil.RunApp(t, app, "self", "doctor")
+	if code != 0 {
+		t.Fatalf("unexpected exit code %d", code)
+	}
+	if updater.autoCalls != 1 {
+		t.Fatalf("expected self doctor to skip auto update, got %d", updater.autoCalls)
 	}
 }
 
 type stubUpdater struct {
 	report       updates.DoctorReport
+	autoResult   updates.AutoUpdateResult
 	updateResult updates.SelfUpdateResult
 	updateErr    error
 	updateStdout string
+	autoCalls    int
 }
 
 func (s stubUpdater) Doctor(context.Context, string, config.UpdateCheck) updates.DoctorReport {
 	return s.report
+}
+
+func (s stubUpdater) AutoUpdate(context.Context, string, config.UpdateCheck, io.Writer, io.Writer) updates.AutoUpdateResult {
+	return s.autoResult
 }
 
 func (s stubUpdater) SelfUpdate(_ context.Context, stdout, _ io.Writer) (updates.SelfUpdateResult, error) {
@@ -220,4 +420,21 @@ func (s stubUpdater) SelfUpdate(_ context.Context, stdout, _ io.Writer) (updates
 		_, _ = io.WriteString(stdout, s.updateStdout)
 	}
 	return s.updateResult, s.updateErr
+}
+
+type countingUpdater struct {
+	autoCalls int
+}
+
+func (u *countingUpdater) Doctor(context.Context, string, config.UpdateCheck) updates.DoctorReport {
+	return updates.DoctorReport{}
+}
+
+func (u *countingUpdater) AutoUpdate(context.Context, string, config.UpdateCheck, io.Writer, io.Writer) updates.AutoUpdateResult {
+	u.autoCalls++
+	return updates.AutoUpdateResult{}
+}
+
+func (u *countingUpdater) SelfUpdate(context.Context, io.Writer, io.Writer) (updates.SelfUpdateResult, error) {
+	return updates.SelfUpdateResult{}, nil
 }
