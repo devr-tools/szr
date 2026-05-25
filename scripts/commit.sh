@@ -19,6 +19,19 @@ require_clean_message() {
 	[[ -n "${value}" ]] || die "commit message cannot be empty"
 }
 
+confirm() {
+	local prompt="$1"
+	local answer
+
+	printf '%s [y/N]: ' "${prompt}" >&2
+	read -r answer
+
+	case "${answer}" in
+		y|Y|yes|YES) return 0 ;;
+		*) return 1 ;;
+	esac
+}
+
 require_branch() {
 	local branch
 
@@ -59,6 +72,28 @@ commit_subject() {
 
 push_branch() {
 	local branch="$1"
+
+	if git rev-parse --verify --quiet "@{upstream}" >/dev/null; then
+		if git push; then
+			return 0
+		fi
+	else
+		if git push -u origin "${branch}"; then
+			return 0
+		fi
+	fi
+
+	printf 'Push failed, likely because the remote branch has new commits.\n' >&2
+
+	if ! confirm "Rebase your branch onto origin/${branch} and retry the push?"; then
+		die "push cancelled; run git pull --rebase origin ${branch} and push again when ready"
+	fi
+
+	if ! git pull --rebase origin "${branch}"; then
+		die "rebase failed; resolve conflicts, run git rebase --continue if needed, then push manually"
+	fi
+
+	printf 'Retrying push for branch: %s\n' "${branch}"
 
 	if git rev-parse --verify --quiet "@{upstream}" >/dev/null; then
 		git push

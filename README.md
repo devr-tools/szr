@@ -188,6 +188,8 @@ make prepush
 - `minor` -> `feat:` for new functionality
 - `patch` -> `fix:` for patch-level changes
 
+If the push is rejected because the remote branch moved ahead, `make commit` offers to run `git pull --rebase origin <current-branch>` and retry the push.
+
 ## Release Versioning
 
 Prereleases are produced from `develop` and non-`main`/`master` manual CD runs. The prerelease workflow computes the next semver bump from commit messages since the last stable tag:
