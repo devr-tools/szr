@@ -81,7 +81,7 @@ func TestCommandErrorMatrix(t *testing.T) {
 }
 
 func TestSpreadCommandOutputs(t *testing.T) {
-	app := testutil.NewTestApp(t)
+	app := newSpreadFixtureApp(t)
 	code, stdout, stderr := testutil.RunApp(t, app, "spread")
 	if code != 0 || !strings.Contains(stdout, "commands:") || !strings.Contains(stdout, "duration p50/p95:") || stderr != "" {
 		t.Fatalf("unexpected spread output stdout=%q stderr=%q code=%d", stdout, stderr, code)
@@ -103,7 +103,7 @@ func TestSpreadCommandOutputs(t *testing.T) {
 }
 
 func TestSpreadCommandEmptyAndErrorCases(t *testing.T) {
-	app := testutil.NewTestApp(t)
+	app := newSpreadFixtureApp(t)
 	emptyApp := testutil.NewTestApp(t)
 	code, stdout, stderr := testutil.RunApp(t, emptyApp, "spread")
 	if code != 0 || strings.TrimSpace(stdout) != "no tracked commands yet" || stderr != "" {
@@ -132,6 +132,67 @@ func TestSpreadCommandEmptyAndErrorCases(t *testing.T) {
 	if code != 0 || !strings.Contains(stdout, "commands:") || stderr != "" {
 		t.Fatalf("unexpected gain alias output stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
+}
+
+func newSpreadFixtureApp(t *testing.T) *cli.App {
+	t.Helper()
+	paths := testutil.Paths(t.TempDir())
+	testutil.EnsurePaths(t, paths)
+	store := history.New(paths.HistoryFile)
+	for _, rec := range []history.Record{
+		{
+			Timestamp:         time.Date(2026, 5, 20, 10, 0, 0, 0, time.UTC),
+			Command:           "szr git status --short",
+			Profile:           "git-status",
+			ProfileConfidence: "high",
+			DurationMS:        30,
+			ExitCode:          0,
+			RawBytesRead:      120,
+			BytesParsed:       60,
+			BytesEmitted:      20,
+			RawTokens:         100,
+			FilteredTokens:    20,
+			SavedTokens:       80,
+			SavingsPct:        80,
+		},
+		{
+			Timestamp:         time.Date(2026, 5, 20, 11, 0, 0, 0, time.UTC),
+			Command:           "szr go test ./...",
+			Profile:           "go-test-json",
+			ProfileConfidence: "high",
+			DurationMS:        90,
+			ExitCode:          1,
+			RawBytesRead:      180,
+			BytesParsed:       110,
+			BytesEmitted:      40,
+			RawTokens:         120,
+			FilteredTokens:    40,
+			SavedTokens:       80,
+			SavingsPct:        66.67,
+			TeePath:           "/tmp/go-test.log",
+		},
+		{
+			Timestamp:         time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC),
+			Command:           "szr custom command",
+			Profile:           "passthrough",
+			ProfileConfidence: "low",
+			DurationMS:        10,
+			ExitCode:          2,
+			RawBytesRead:      90,
+			BytesParsed:       90,
+			BytesEmitted:      60,
+			RawTokens:         60,
+			FilteredTokens:    60,
+			SavedTokens:       0,
+			SavingsPct:        0,
+			FallbackUsed:      true,
+		},
+	} {
+		if err := store.Append(rec); err != nil {
+			t.Fatalf("append history record: %v", err)
+		}
+	}
+	return cli.NewWithDependencies("test", config.Default(), paths, store, testutil.AppEngine(t, paths))
 }
 
 func TestSpreadReportingHistoryOutput(t *testing.T) {
