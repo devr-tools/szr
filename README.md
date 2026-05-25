@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/devr-tools/szr/actions/workflows/release.yml">
-    <img src="https://github.com/devr-tools/szr/actions/workflows/release.yml/badge.svg?branch=main&event=release" alt="release.yml" />
+    <img src="https://github.com/devr-tools/szr/actions/workflows/release.yml/badge.svg" alt="release.yml" />
   </a>
 
   <a href="https://github.com/devr-tools/szr/actions/workflows/cd.yml">
