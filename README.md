@@ -28,7 +28,7 @@
   </a>
 
   <a href="https://opensource.org/licenses/MIT">
-    <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT" />
+    <img src="https://img.shields.io/badge/License-Apache-green.svg" alt="License: Apache 2.0" />
   </a>
 
   <a href="https://www.linkedin.com/in/alxxjohn">
