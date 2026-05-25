@@ -9,6 +9,7 @@ GO="${GO:-go}"
 GOCACHE="${GOCACHE:-${ROOT_DIR}/.gocache}"
 MIN_INTERNAL_COVERAGE="${MIN_INTERNAL_COVERAGE:-80.0}"
 GOVULNCHECK_VERSION="${GOVULNCHECK_VERSION:-v1.1.1}"
+GOVULNCHECK_MODE="${GOVULNCHECK_MODE:-warn}"
 GOCYCLO_VERSION="${GOCYCLO_VERSION:-v0.6.0}"
 SMOKE_HOME="${SMOKE_HOME:-${ROOT_DIR}/.tmp-home}"
 COVERFILE="${COVERFILE:-.coverage.internal.out}"
@@ -31,6 +32,16 @@ die() {
 	exit 1
 }
 
+validate_govulncheck_mode() {
+	case "${GOVULNCHECK_MODE}" in
+		required|warn|off)
+			;;
+		*)
+			die "invalid GOVULNCHECK_MODE=${GOVULNCHECK_MODE}; expected required, warn, or off"
+			;;
+	esac
+}
+
 ensure_go_tool() {
 	local binary="$1"
 	local module="$2"
@@ -50,6 +61,48 @@ ensure_go_tool() {
 	[[ -x "${GO_BIN_DIR}/${binary}" ]] || die "failed to install ${binary} (${module}@${version})"
 	printf '%s\n' "${GO_BIN_DIR}/${binary}"
 }
+
+ensure_go_tool_optional() {
+	local binary="$1"
+	local module="$2"
+	local version="$3"
+
+	if ensure_go_tool "${binary}" "${module}" "${version}"; then
+		return 0
+	fi
+
+	case "${GOVULNCHECK_MODE}" in
+		required)
+			die "failed to install ${binary} (${module}@${version})"
+			;;
+		warn)
+			warn "skipping ${binary}: failed to install ${module}@${version} with ${GO}"
+			return 1
+			;;
+		off)
+			return 1
+			;;
+	esac
+}
+
+run_govulncheck() {
+	local govulncheck_bin
+
+	if [[ "${GOVULNCHECK_MODE}" == "off" ]]; then
+		warn "skipping govulncheck: GOVULNCHECK_MODE=off"
+		return 0
+	fi
+
+	if ! govulncheck_bin="$(ensure_go_tool_optional govulncheck golang.org/x/vuln/cmd/govulncheck "${GOVULNCHECK_VERSION}")"; then
+		return 0
+	fi
+
+	if ! "${govulncheck_bin}" ./...; then
+		warn "govulncheck reported findings"
+	fi
+}
+
+validate_govulncheck_mode
 
 if [[ -z "${BASE_REF}" ]]; then
 	BASE_REF="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')"
@@ -139,10 +192,7 @@ env HOME="${SMOKE_HOME}" GOCACHE="${GOCACHE}" "${GO}" run ./cmd/szr install code
 env HOME="${SMOKE_HOME}" GOCACHE="${GOCACHE}" "${GO}" run ./cmd/szr-dev --version >/dev/null
 
 log "security scan"
-govulncheck_bin="$(ensure_go_tool govulncheck golang.org/x/vuln/cmd/govulncheck "${GOVULNCHECK_VERSION}")"
-if ! "${govulncheck_bin}" ./...; then
-	warn "govulncheck reported findings"
-fi
+run_govulncheck
 
 critical="$(printf '%s\n' "${changed_files}" | grep -E '^(cmd/szr/|cmd/szr-dev/|internal/cli/|internal/engine/|internal/installers/|internal/selfinstall/|internal/config/|go\.mod|go\.sum|Formula/|\.goreleaser\.yaml|\.github/workflows/.*\.yml|\.github/release-please-config\.json|\.release-please-manifest\.json)' || true)"
 if [[ -n "${critical}" ]]; then

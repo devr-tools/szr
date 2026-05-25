@@ -14,6 +14,7 @@ permissions:
 env:
   GOCACHE: ${{ github.workspace }}/.gocache
   GO111MODULE: "on"
+  GOVULNCHECK_MODE: required
   GOVULNCHECK_VERSION: v1.1.1
   GOCYCLO_VERSION: v0.6.0
   MIN_INTERNAL_COVERAGE: "80.0"
@@ -245,7 +246,20 @@ jobs:
         run: git fetch origin "${{ github.base_ref }}" --depth=1
 
       - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if go install golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }}; then
+            exit 0
+          fi
+
+          if [ "${GOVULNCHECK_MODE}" = "required" ]; then
+            echo "::error title=govulncheck install failed::Failed to install govulncheck@${GOVULNCHECK_VERSION}"
+            exit 1
+          fi
+
+          echo "::warning::Failed to install govulncheck@${GOVULNCHECK_VERSION}; continuing because GOVULNCHECK_MODE=${GOVULNCHECK_MODE}"
 
       - name: Dependency and code vulnerability scan
         shell: bash
@@ -256,7 +270,12 @@ jobs:
           echo >> "$GITHUB_STEP_SUMMARY"
           echo "### govulncheck" >> "$GITHUB_STEP_SUMMARY"
 
-          if "$(go env GOPATH)/bin/govulncheck" ./... 2>&1 | tee govulncheck.log; then
+          if [ "${GOVULNCHECK_MODE}" = "off" ]; then
+            echo "Skipped because GOVULNCHECK_MODE=off." >> "$GITHUB_STEP_SUMMARY"
+          elif [ ! -x "$(go env GOPATH)/bin/govulncheck" ]; then
+            echo "::warning::govulncheck binary is unavailable"
+            echo "Skipped because govulncheck could not be installed for this Go toolchain." >> "$GITHUB_STEP_SUMMARY"
+          elif "$(go env GOPATH)/bin/govulncheck" ./... 2>&1 | tee govulncheck.log; then
             echo "No known Go vulnerabilities detected." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "::warning::govulncheck reported findings"
