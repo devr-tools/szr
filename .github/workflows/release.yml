@@ -45,9 +45,26 @@ jobs:
             else
               prerelease="false"
             fi
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            raw_tag="${{ github.event.inputs.tag }}"
+            prerelease="${{ github.event.inputs.prerelease }}"
           else
-            tag="${{ inputs.tag }}"
+            raw_tag="${{ inputs.tag }}"
             prerelease="${{ inputs.prerelease }}"
+
+            # Reusable callers already pass normalized tags, but keep the same
+            # manual-input cleanup here so both entry points behave the same.
+          fi
+
+          if [ "${{ github.event_name }}" != "push" ]; then
+            tag="$(printf '%s' "$raw_tag" | tr -d '[:space:]')"
+            tag="${tag#refs/tags/}"
+            tag="${tag#tag=}"
+            tag="${tag##*:}"
+
+            if [[ "$tag" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+              tag="v$tag"
+            fi
           fi
 
           echo "tag=$tag" >>"$GITHUB_OUTPUT"
@@ -63,6 +80,7 @@ jobs:
 
           if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "tag must look like v1.2.3 or v1.2.3-rc.4"
+            echo "received: '$tag'"
             exit 1
           fi
 
