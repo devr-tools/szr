@@ -19,8 +19,8 @@
     <img src="https://github.com/devr-tools/szr/actions/workflows/homebrew-validation.yml/badge.svg" alt="homebrew-validation.yml" />
   </a>
 
-  <a href="https://pkg.go.dev/github.com/devr-tools/szr">
-    <img src="https://pkg.go.dev/badge/github.com/devr-tools/szr.svg" alt="Go Reference" />
+  <a href="https://pkg.go.dev/github.com/devr-tools/szr/pkg/szr">
+    <img src="https://pkg.go.dev/badge/github.com/devr-tools/szr/pkg/szr.svg" alt="Go Reference" />
   </a>
 
   <a href="https://goreportcard.com/report/github.com/devr-tools/szr">
@@ -131,8 +131,8 @@ That keeps global binary installation separate from repo-specific agent/editor w
 ## Usage
 
 ```bash
-# Install szr
-go install ./cmd/szr
+# Install szr from GitHub
+go install github.com/devr-tools/szr/cmd/szr@latest
 szr self doctor
 
 # Bootstrap this repo for agent/shell use
@@ -153,6 +153,19 @@ szr tee --latest
 szr explain go test ./...
 szr commands
 ```
+
+## Go Package
+
+The public Go package for embedding `szr` is:
+
+```go
+import "github.com/devr-tools/szr/pkg/szr"
+```
+
+The `pkg.go.dev` pages are:
+
+- library package: `https://pkg.go.dev/github.com/devr-tools/szr/pkg/szr`
+- CLI command: `https://pkg.go.dev/github.com/devr-tools/szr/cmd/szr`
 
 ## Local Development
 
@@ -177,4 +190,3 @@ For most code changes, the minimum bar is:
 - add or update tests with the behavior change
 - run `make fmt` and `make test`
 - explain the user-facing impact and verification steps in the PR
-

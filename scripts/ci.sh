@@ -123,7 +123,9 @@ printf 'merge-base: %s\nhead: %s\n' "${merge_base}" "${head_sha}"
 printf 'note: this runs the same checks locally on the current OS; GitHub still validates the ubuntu, macos, and windows matrix.\n'
 
 log "test presence"
-code_changes="$(printf '%s\n' "${changed_files}" | grep -E '^(cmd/|internal/|pkg/).+\.go$' | grep -Ev '(^|/).+_test\.go$' || true)"
+# Ignore package-doc files so documentation-only Go changes do not require
+# unrelated test churn.
+code_changes="$(printf '%s\n' "${changed_files}" | grep -E '^(cmd/|internal/|pkg/).+\.go$' | grep -Ev '(^|/).+_test\.go$|(^|/)doc\.go$' || true)"
 test_changes="$(printf '%s\n' "${changed_files}" | grep -E '(^test/|_test\.go$)' || true)"
 
 if [[ -n "${code_changes}" && -z "${test_changes}" ]]; then
