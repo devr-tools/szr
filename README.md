@@ -3,12 +3,12 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/devr-tools/szr/actions/workflows/release.yml">
-    <img src="https://github.com/devr-tools/szr/actions/workflows/release.yml/badge.svg?branch=main&event=release" alt="release.yml" />
+  <a href="https://github.com/devr-tools/szr/releases">
+    <img src="https://img.shields.io/github/v/release/devr-tools/szr?display_name=tag&include_prereleases" alt="release version" />
   </a>
 
   <a href="https://github.com/devr-tools/szr/actions/workflows/cd.yml">
-    <img src="https://github.com/devr-tools/szr/actions/workflows/cd.yml/badge.svg?branch=main" alt="cd.yml" />
+    <img src="https://github.com/devr-tools/szr/actions/workflows/cd.yml/badge.svg?branch=main&event=push" alt="cd.yml" />
   </a>
 
   <a href="https://github.com/devr-tools/szr/actions/workflows/ci.yml">
