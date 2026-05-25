@@ -15,7 +15,7 @@ env:
   GOCACHE: ${{ github.workspace }}/.gocache
   GO111MODULE: "on"
   GOVULNCHECK_MODE: required
-  GOVULNCHECK_VERSION: v1.1.1
+  GOVULNCHECK_VERSION: v1.3.0
   GOCYCLO_VERSION: v0.6.0
   MIN_INTERNAL_COVERAGE: "80.0"
 
