@@ -8,15 +8,15 @@
   </a>
 
   <a href="https://github.com/devr-tools/szr/actions/workflows/cd.yml">
-    <img src="https://github.com/devr-tools/szr/actions/workflows/cd.yml/badge.svg?branch=main&event=push" alt="cd.yml" />
+    <img src="https://github.com/devr-tools/szr/actions/workflows/cd.yml/badge.svg?branch=main&event=push" alt="CD" />
   </a>
 
   <a href="https://github.com/devr-tools/szr/actions/workflows/ci.yml">
-    <img src="https://github.com/devr-tools/szr/actions/workflows/ci.yml/badge.svg" alt="ci.yml" />
+    <img src="https://github.com/devr-tools/szr/actions/workflows/ci.yml/badge.svg" alt="CI" />
   </a>
 
   <a href="https://github.com/devr-tools/szr/actions/workflows/homebrew-validation.yml">
-    <img src="https://github.com/devr-tools/szr/actions/workflows/homebrew-validation.yml/badge.svg" alt="homebrew-validation.yml" />
+    <img src="https://github.com/devr-tools/szr/actions/workflows/homebrew-validation.yml/badge.svg" alt="homebrew-validation" />
   </a>
 
   <a href="https://pkg.go.dev/github.com/devr-tools/szr/pkg/szr">
