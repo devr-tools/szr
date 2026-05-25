@@ -60,6 +60,7 @@ jobs:
             tag="$(printf '%s' "$raw_tag" | tr -d '[:space:]')"
             tag="${tag#refs/tags/}"
             tag="${tag#tag=}"
+            tag="${tag##*:}"
 
             if [[ "$tag" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
               tag="v$tag"

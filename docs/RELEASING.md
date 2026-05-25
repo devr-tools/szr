@@ -57,7 +57,7 @@ If release automation needs help, there are two manual fallback paths:
 1. Dispatch `.github/workflows/release.yml` with:
    - `tag=v1.2.3` and `prerelease=false` for a stable release
    - `tag=v1.2.3-rc.4` and `prerelease=true` for a prerelease
-   - the workflow also normalizes common manual inputs like `1.2.3`, `refs/tags/v1.2.3`, or `tag=v1.2.3`
+   - the workflow also normalizes common inputs like `1.2.3`, `refs/tags/v1.2.3`, `tag=v1.2.3`, or `szr: v1.2.3`
 2. Push a tag that matches `v*`, which still triggers `.github/workflows/release.yml`:
 
 ```bash
