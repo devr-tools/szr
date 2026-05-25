@@ -31,8 +31,8 @@
     <img src="https://img.shields.io/badge/License-Apache-green.svg" alt="License: Apache 2.0" />
   </a>
 
-  <a href="https://www.linkedin.com/in/alxxjohn">
-    <img src="https://img.shields.io/badge/LinkedIn-alxxjohn-blue?logo=linkedin" alt="LinkedIn" />
+  <a href="https://www.linkedin.com/in/alxjohn">
+    <img src="https://img.shields.io/badge/LinkedIn-alxjohn-blue?logo=linkedin" alt="LinkedIn" />
   </a>
 </p>
 
