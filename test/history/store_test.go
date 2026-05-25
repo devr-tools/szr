@@ -13,13 +13,84 @@ import (
 	"github.com/devr-tools/szr/test/testutil"
 )
 
-func TestStoreAndSummary(t *testing.T) {
+func TestStoreLoadAll(t *testing.T) {
+	_, records, _ := newHistorySummaryFixture(t)
+	if len(records) != 3 {
+		t.Fatalf("expected 3 records, got %d", len(records))
+	}
+}
+
+func TestStoreSummaryTotals(t *testing.T) {
+	_, _, summary := newHistorySummaryFixture(t)
+	if summary.Commands != 3 || summary.Failures != 2 || summary.SavedTokens != 160 {
+		t.Fatalf("unexpected summary: %#v", summary)
+	}
+	if summary.DurationP50MS != 30 || summary.DurationP95MS != 90 {
+		t.Fatalf("unexpected duration percentiles: %#v", summary)
+	}
+	if !closeEnough(summary.FailureRate, 66.67, 0.01) || !closeEnough(summary.FallbackRate, 33.33, 0.01) || !closeEnough(summary.TeeRate, 33.33, 0.01) {
+		t.Fatalf("unexpected rates: %#v", summary)
+	}
+}
+
+func TestStoreSummaryCommandGroupings(t *testing.T) {
+	_, _, summary := newHistorySummaryFixture(t)
+	if len(summary.TopCommands) != 1 || summary.TopCommands[0].Command != "szr custom command" {
+		t.Fatalf("unexpected top commands: %#v", summary.TopCommands)
+	}
+	if len(summary.Recent) != 1 || summary.Recent[0].Command != "szr custom command" {
+		t.Fatalf("unexpected recent: %#v", summary.Recent)
+	}
+	if summary.Profiles["git-status"] != 1 || summary.Profiles["go-test-json"] != 1 || summary.Profiles["passthrough"] != 1 {
+		t.Fatalf("unexpected profiles: %#v", summary.Profiles)
+	}
+}
+
+func TestStoreSummaryProfileStats(t *testing.T) {
+	_, _, summary := newHistorySummaryFixture(t)
+	if len(summary.ProfileStats) != 3 {
+		t.Fatalf("unexpected profile stats: %#v", summary.ProfileStats)
+	}
+	statsByName := map[string]history.ProfileStat{}
+	for _, stat := range summary.ProfileStats {
+		statsByName[stat.Name] = stat
+	}
+	if stat := statsByName["git-status"]; stat.SavedTokens != 80 || stat.DurationP50MS != 30 || stat.DurationP95MS != 30 || !closeEnough(stat.AveragePct, 80, 0.01) {
+		t.Fatalf("unexpected git-status stat: %#v", stat)
+	}
+	if stat := statsByName["go-test-json"]; stat.TeeCount != 1 || stat.Failures != 1 || !closeEnough(stat.FailureRate, 100, 0.01) || stat.DurationP50MS != 90 {
+		t.Fatalf("unexpected go-test-json stat: %#v", stat)
+	}
+	if stat := statsByName["passthrough"]; stat.SavedTokens != 0 || stat.Failures != 1 || stat.DurationP50MS != 10 {
+		t.Fatalf("unexpected passthrough stat: %#v", stat)
+	}
+}
+
+func TestStoreEmptySummary(t *testing.T) {
+	empty := history.Summarize(nil, 2)
+	if empty.Commands != 0 || len(empty.Profiles) != 0 || len(empty.ProfileStats) != 0 {
+		t.Fatalf("unexpected empty summary: %#v", empty)
+	}
+}
+
+func newHistorySummaryFixture(t *testing.T) (*history.Store, []history.Record, history.Summary) {
+	t.Helper()
 	path := filepath.Join(t.TempDir(), "history.jsonl")
 	store := history.New(path)
 	if store == nil {
 		t.Fatal("expected store")
 	}
 
+	appendHistoryRecords(t, store, path)
+	records, err := store.LoadAll()
+	if err != nil {
+		t.Fatalf("load all: %v", err)
+	}
+	return store, records, history.Summarize(records, 1)
+}
+
+func appendHistoryRecords(t *testing.T, store *history.Store, path string) {
+	t.Helper()
 	if err := store.Append(history.Record{
 		Timestamp:      time.Date(2026, 5, 20, 10, 0, 0, 0, time.UTC),
 		Command:        "szr git status --short",
@@ -62,55 +133,6 @@ func TestStoreAndSummary(t *testing.T) {
 		SavingsPct:     0,
 	}); err != nil {
 		t.Fatalf("append 3: %v", err)
-	}
-
-	records, err := store.LoadAll()
-	if err != nil {
-		t.Fatalf("load all: %v", err)
-	}
-	if len(records) != 3 {
-		t.Fatalf("expected 3 records, got %d", len(records))
-	}
-
-	summary := history.Summarize(records, 1)
-	if summary.Commands != 3 || summary.Failures != 2 || summary.SavedTokens != 160 {
-		t.Fatalf("unexpected summary: %#v", summary)
-	}
-	if summary.DurationP50MS != 30 || summary.DurationP95MS != 90 {
-		t.Fatalf("unexpected duration percentiles: %#v", summary)
-	}
-	if !closeEnough(summary.FailureRate, 66.67, 0.01) || !closeEnough(summary.FallbackRate, 33.33, 0.01) || !closeEnough(summary.TeeRate, 33.33, 0.01) {
-		t.Fatalf("unexpected rates: %#v", summary)
-	}
-	if len(summary.TopCommands) != 1 || summary.TopCommands[0].Command != "szr custom command" {
-		t.Fatalf("unexpected top commands: %#v", summary.TopCommands)
-	}
-	if len(summary.Recent) != 1 || summary.Recent[0].Command != "szr custom command" {
-		t.Fatalf("unexpected recent: %#v", summary.Recent)
-	}
-	if summary.Profiles["git-status"] != 1 || summary.Profiles["go-test-json"] != 1 || summary.Profiles["passthrough"] != 1 {
-		t.Fatalf("unexpected profiles: %#v", summary.Profiles)
-	}
-	if len(summary.ProfileStats) != 3 {
-		t.Fatalf("unexpected profile stats: %#v", summary.ProfileStats)
-	}
-	statsByName := map[string]history.ProfileStat{}
-	for _, stat := range summary.ProfileStats {
-		statsByName[stat.Name] = stat
-	}
-	if stat := statsByName["git-status"]; stat.SavedTokens != 80 || stat.DurationP50MS != 30 || stat.DurationP95MS != 30 || !closeEnough(stat.AveragePct, 80, 0.01) {
-		t.Fatalf("unexpected git-status stat: %#v", stat)
-	}
-	if stat := statsByName["go-test-json"]; stat.TeeCount != 1 || stat.Failures != 1 || !closeEnough(stat.FailureRate, 100, 0.01) || stat.DurationP50MS != 90 {
-		t.Fatalf("unexpected go-test-json stat: %#v", stat)
-	}
-	if stat := statsByName["passthrough"]; stat.SavedTokens != 0 || stat.Failures != 1 || stat.DurationP50MS != 10 {
-		t.Fatalf("unexpected passthrough stat: %#v", stat)
-	}
-
-	empty := history.Summarize(nil, 2)
-	if empty.Commands != 0 || len(empty.Profiles) != 0 || len(empty.ProfileStats) != 0 {
-		t.Fatalf("unexpected empty summary: %#v", empty)
 	}
 }
 

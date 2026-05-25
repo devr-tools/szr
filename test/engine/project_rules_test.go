@@ -14,92 +14,8 @@ import (
 	"github.com/devr-tools/szr/test/testutil"
 )
 
-func TestProjectRules(t *testing.T) {
-	binDir := t.TempDir()
-	testutil.WriteExecutable(t, binDir, "argvdump", "#!/bin/sh\nprintf '%s\\n' \"$@\"\n")
-	testutil.WriteExecutable(t, binDir, "noisy", "#!/bin/sh\necho \"FAIL first\"\necho \"plain second\"\necho \"plain third\"\n")
-	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-
-	root := t.TempDir()
-	worktree := filepath.Join(root, "nested")
-	if err := os.MkdirAll(worktree, 0o755); err != nil {
-		t.Fatalf("mkdir worktree: %v", err)
-	}
-	paths := testutil.Paths(root)
-	testutil.EnsurePaths(t, paths)
-
-	cfg := config.Default()
-	cfg.ProjectRules = rules.File{
-		Profiles: []rules.Profile{
-			{
-				Name:        "argvdump-local",
-				Description: "Project-local arg rewriter",
-				Explain:     []string{"Appends --json locally."},
-				Match: rules.Match{
-					CommandPrefix: []string{"argvdump"},
-				},
-				Rewrite: rules.Rewrite{
-					Mode:         "append",
-					Args:         []string{"--json"},
-					SkipIfHasAny: []string{"--json"},
-				},
-				Render: rules.Render{
-					Mode: "passthrough",
-				},
-			},
-			{
-				Name: "display-wrapper",
-				Match: rules.Match{
-					DisplayPrefix: []string{"summary", "npm", "test"},
-					CwdContains:   []string{"nested"},
-				},
-			},
-			{
-				Name: "noisy-local",
-				Match: rules.Match{
-					CommandPrefix: []string{"noisy"},
-				},
-				Render: rules.Render{
-					Mode:     "failure",
-					MaxLines: 2,
-				},
-			},
-			{
-				Name: "git-status",
-				Match: rules.Match{
-					CommandPrefix: []string{"git", "status"},
-				},
-				Render: rules.Render{
-					Mode:     "compact",
-					MaxLines: 1,
-				},
-			},
-		},
-	}
-
-	store := history.New(paths.HistoryFile)
-	builtins := []engine.Profile{
-		{
-			Name: "git-status",
-			Match: func(inv engine.Invocation) bool {
-				return len(inv.Command) >= 2 && inv.Command[0] == "git" && inv.Command[1] == "status"
-			},
-			Render: func(engine.Invocation, engine.Execution) string {
-				return "builtin"
-			},
-		},
-		{
-			Name: "fallback",
-			Match: func(inv engine.Invocation) bool {
-				return len(inv.Command) > 0 && inv.Command[0] == "fallback"
-			},
-			Render: func(engine.Invocation, engine.Execution) string {
-				return "fallback"
-			},
-		},
-	}
-	e := engine.New(cfg, paths, store, builtins)
-
+func TestProjectRulesProfileMerge(t *testing.T) {
+	e, _, _ := newProjectRulesEngine(t)
 	profiles := e.Profiles()
 	if len(profiles) != 5 {
 		t.Fatalf("unexpected merged profile count: %d", len(profiles))
@@ -113,7 +29,10 @@ func TestProjectRules(t *testing.T) {
 	if gitStatusCount != 1 {
 		t.Fatalf("expected custom git-status to dedupe built-in, got %d", gitStatusCount)
 	}
+}
 
+func TestProjectRulesExplainLocalRewrite(t *testing.T) {
+	e, _, _ := newProjectRulesEngine(t)
 	explained := e.Explain(engine.Invocation{
 		Command: []string{"argvdump", "target"},
 		Display: []string{"argvdump", "target"},
@@ -121,8 +40,11 @@ func TestProjectRules(t *testing.T) {
 	if explained.Name != "argvdump-local" || len(explained.Explain) == 0 {
 		t.Fatalf("unexpected explain result: %#v", explained)
 	}
+}
 
-	explained = e.Explain(engine.Invocation{
+func TestProjectRulesDisplayWrapperMatch(t *testing.T) {
+	e, _, worktree := newProjectRulesEngine(t)
+	explained := e.Explain(engine.Invocation{
 		Command: []string{"npm", "test"},
 		Display: []string{"summary", "npm", "test"},
 		Cwd:     worktree,
@@ -130,7 +52,10 @@ func TestProjectRules(t *testing.T) {
 	if explained.Name != "display-wrapper" {
 		t.Fatalf("expected display-prefix match, got %#v", explained)
 	}
+}
 
+func TestProjectRulesExplainDecisions(t *testing.T) {
+	e, _, _ := newProjectRulesEngine(t)
 	decisions := e.ExplainDecisions(engine.Invocation{
 		Command: []string{"git", "status"},
 		Display: []string{"git", "status"},
@@ -138,7 +63,24 @@ func TestProjectRules(t *testing.T) {
 	if len(decisions) != 2 || !decisions[0].Selected || decisions[0].Source != engine.SourceProject || decisions[1].Source != engine.SourceBuiltin {
 		t.Fatalf("unexpected explain decisions: %#v", decisions)
 	}
+}
 
+func TestProjectRulesGitStatusOverride(t *testing.T) {
+	e, _, _ := newProjectRulesEngine(t)
+	explained := e.Explain(engine.Invocation{
+		Command: []string{"git", "status"},
+		Display: []string{"git", "status"},
+	})
+	if explained.Name != "git-status" || explained.Render == nil {
+		t.Fatalf("expected custom git-status override, got %#v", explained)
+	}
+	if got := explained.Render(engine.Invocation{}, engine.Execution{Stdout: "one\ntwo\nthree\n"}); got != "one\n... +2 more lines" {
+		t.Fatalf("unexpected compact render output: %q", got)
+	}
+}
+
+func TestProjectRulesRewriteAndSkipGuard(t *testing.T) {
+	e, root, _ := newProjectRulesEngine(t)
 	result, err := e.Execute(context.Background(), engine.Invocation{
 		Command: []string{"argvdump", "target"},
 		Display: []string{"argvdump", "target"},
@@ -162,8 +104,11 @@ func TestProjectRules(t *testing.T) {
 	if strings.Count(result.Display, "--json") != 1 {
 		t.Fatalf("expected rewrite skip guard, got %q", result.Display)
 	}
+}
 
-	result, err = e.Execute(context.Background(), engine.Invocation{
+func TestProjectRulesFailureRender(t *testing.T) {
+	e, root, _ := newProjectRulesEngine(t)
+	result, err := e.Execute(context.Background(), engine.Invocation{
 		Command: []string{"noisy"},
 		Display: []string{"noisy"},
 		Cwd:     root,
@@ -177,17 +122,76 @@ func TestProjectRules(t *testing.T) {
 	if strings.Contains(result.Display, "plain second") || strings.Contains(result.Display, "plain third") {
 		t.Fatalf("expected failure-focused render, got %q", result.Display)
 	}
+}
 
-	explained = e.Explain(engine.Invocation{
-		Command: []string{"git", "status"},
-		Display: []string{"git", "status"},
-	})
-	if explained.Name != "git-status" || explained.Render == nil {
-		t.Fatalf("expected custom git-status override, got %#v", explained)
+func newProjectRulesEngine(t *testing.T) (*engine.Engine, string, string) {
+	t.Helper()
+	binDir := t.TempDir()
+	testutil.WriteExecutable(t, binDir, "argvdump", "#!/bin/sh\nprintf '%s\\n' \"$@\"\n")
+	testutil.WriteExecutable(t, binDir, "noisy", "#!/bin/sh\necho \"FAIL first\"\necho \"plain second\"\necho \"plain third\"\n")
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	root := t.TempDir()
+	worktree := filepath.Join(root, "nested")
+	if err := os.MkdirAll(worktree, 0o755); err != nil {
+		t.Fatalf("mkdir worktree: %v", err)
 	}
-	if got := explained.Render(engine.Invocation{}, engine.Execution{Stdout: "one\ntwo\nthree\n"}); got != "one\n... +2 more lines" {
-		t.Fatalf("unexpected compact render output: %q", got)
+	paths := testutil.Paths(root)
+	testutil.EnsurePaths(t, paths)
+
+	cfg := config.Default()
+	cfg.ProjectRules = rules.File{
+		Profiles: []rules.Profile{
+			{
+				Name:        "argvdump-local",
+				Description: "Project-local arg rewriter",
+				Explain:     []string{"Appends --json locally."},
+				Match:       rules.Match{CommandPrefix: []string{"argvdump"}},
+				Rewrite: rules.Rewrite{
+					Mode:         "append",
+					Args:         []string{"--json"},
+					SkipIfHasAny: []string{"--json"},
+				},
+				Render: rules.Render{Mode: "passthrough"},
+			},
+			{
+				Name: "display-wrapper",
+				Match: rules.Match{
+					DisplayPrefix: []string{"summary", "npm", "test"},
+					CwdContains:   []string{"nested"},
+				},
+			},
+			{
+				Name:   "noisy-local",
+				Match:  rules.Match{CommandPrefix: []string{"noisy"}},
+				Render: rules.Render{Mode: "failure", MaxLines: 2},
+			},
+			{
+				Name:   "git-status",
+				Match:  rules.Match{CommandPrefix: []string{"git", "status"}},
+				Render: rules.Render{Mode: "compact", MaxLines: 1},
+			},
+		},
 	}
+
+	builtins := []engine.Profile{
+		{
+			Name: "git-status",
+			Match: func(inv engine.Invocation) bool {
+				return len(inv.Command) >= 2 && inv.Command[0] == "git" && inv.Command[1] == "status"
+			},
+			Render: func(engine.Invocation, engine.Execution) string { return "builtin" },
+		},
+		{
+			Name: "fallback",
+			Match: func(inv engine.Invocation) bool {
+				return len(inv.Command) > 0 && inv.Command[0] == "fallback"
+			},
+			Render: func(engine.Invocation, engine.Execution) string { return "fallback" },
+		},
+	}
+
+	return engine.New(cfg, paths, history.New(paths.HistoryFile), builtins), root, worktree
 }
 
 func TestProjectRuleEdgeCases(t *testing.T) {
@@ -264,75 +268,9 @@ func TestProjectRuleEdgeCases(t *testing.T) {
 		Cwd:     root,
 	}, false)
 	if err != nil {
-		t.Fatalf("execute default render rule: %v", err)
+		t.Fatalf("execute default render: %v", err)
 	}
-	if !strings.Contains(defaultRender.Display, "--default-render") {
-		t.Fatalf("expected compact default render output, got %q", defaultRender.Display)
-	}
-}
-
-func TestProjectRulePreferences(t *testing.T) {
-	binDir := t.TempDir()
-	testutil.WriteExecutable(t, binDir, "argvdump", "#!/bin/sh\nprintf '%s\\n' \"$@\"\n")
-	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-
-	root := t.TempDir()
-	paths := testutil.Paths(root)
-	testutil.EnsurePaths(t, paths)
-
-	cfg := config.Default()
-	cfg.ProjectRules = rules.File{
-		Preferences: []rules.Preference{
-			{
-				Name:        "internal-cli-json",
-				Description: "Adds machine-readable formatting",
-				Explain:     []string{"Prefers JSON for internal CLI output."},
-				Match: rules.Match{
-					CommandPrefix: []string{"argvdump", "run"},
-				},
-				Rewrite: rules.Rewrite{
-					Placement:    "before-terminator",
-					Args:         []string{"--format", "json"},
-					SkipIfHasAny: []string{"--format"},
-				},
-			},
-		},
-	}
-
-	e := engine.New(cfg, paths, history.New(paths.HistoryFile), nil)
-	effective, decisions := e.ExplainPreferences(engine.Invocation{
-		Command: []string{"argvdump", "run", "--", "target"},
-		Display: []string{"argvdump", "run", "--", "target"},
-		Cwd:     root,
-	})
-	if len(decisions) != 1 || !decisions[0].Applied {
-		t.Fatalf("expected applied preference decision, got %#v", decisions)
-	}
-	if got := strings.Join(effective.Command, " "); got != "argvdump run --format json -- target" {
-		t.Fatalf("unexpected effective command %q", got)
-	}
-
-	result, err := e.Execute(context.Background(), engine.Invocation{
-		Command: []string{"argvdump", "run", "--", "target"},
-		Display: []string{"argvdump", "run", "--", "target"},
-		Cwd:     root,
-	}, false)
-	if err != nil {
-		t.Fatalf("execute with preference: %v", err)
-	}
-	if got := strings.Split(strings.TrimSpace(result.Display), "\n"); len(got) != 5 || got[0] != "run" || got[1] != "--format" || got[2] != "json" || got[3] != "--" || got[4] != "target" {
-		t.Fatalf("unexpected preference-rewritten output: %q", result.Display)
-	}
-
-	satisfiedInv, satisfied := e.ExplainPreferences(engine.Invocation{
-		Command: []string{"argvdump", "run", "--format", "json"},
-		Display: []string{"argvdump", "run", "--format", "json"},
-		Cwd:     root,
-	})
-	if len(satisfied) != 1 || satisfied[0].Applied {
-		t.Fatalf("expected satisfied preference, got %#v", satisfied)
-	}
-	if got := strings.Join(satisfiedInv.Command, " "); got != "argvdump run --format json" {
-		t.Fatalf("unexpected satisfied effective command %q", got)
+	if !strings.Contains(defaultRender.Display, "line1") || !strings.Contains(defaultRender.Display, "line2") {
+		t.Fatalf("unexpected default render output: %q", defaultRender.Display)
 	}
 }

@@ -63,15 +63,10 @@ func TestRecommendAndHotspotsCommands(t *testing.T) {
 	}
 }
 
-func TestReplayAndCompareCommands(t *testing.T) {
-	root := t.TempDir()
-	paths := testutil.Paths(root)
-	testutil.EnsurePaths(t, paths)
-	app := cli.NewWithDependencies("test", config.Default(), paths, history.New(paths.HistoryFile), testutil.AppEngine(t, paths))
-
+func TestReplayCommandWithFile(t *testing.T) {
+	root, paths, app := newWorkflowApp(t)
 	diffPath := filepath.Join(root, "diff.log")
 	testutil.MustWriteFile(t, diffPath, "diff --git a/a.go b/a.go\na/a.go | 2 +-\n1 file changed, 1 insertion(+), 1 deletion(-)\n")
-
 	code, stdout, stderr := testutil.RunApp(t, app, "replay", diffPath, "--command", "git diff")
 	if code != 0 || stderr != "" {
 		t.Fatalf("unexpected replay stdout=%q stderr=%q code=%d", stdout, stderr, code)
@@ -81,7 +76,11 @@ func TestReplayAndCompareCommands(t *testing.T) {
 			t.Fatalf("expected replay output %q in %q", want, stdout)
 		}
 	}
+	_ = paths
+}
 
+func TestReplayCommandWithTee(t *testing.T) {
+	root, paths, app := newWorkflowApp(t)
 	store := teeindex.New(paths.TeeDir)
 	teePath := filepath.Join(paths.TeeDir, "100_git_diff.log")
 	testutil.MustWriteFile(t, teePath, "diff --git a/a.go b/a.go\na/a.go | 2 +-\n1 file changed, 1 insertion(+), 1 deletion(-)\n")
@@ -95,7 +94,7 @@ func TestReplayAndCompareCommands(t *testing.T) {
 		t.Fatalf("append tee entry: %v", err)
 	}
 
-	code, stdout, stderr = testutil.RunApp(t, app, "replay", "100_git_diff")
+	code, stdout, stderr := testutil.RunApp(t, app, "replay", "100_git_diff")
 	if code != 0 || stderr != "" || !strings.Contains(stdout, "profile: git-diff") {
 		t.Fatalf("unexpected replay tee stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
@@ -114,11 +113,14 @@ func TestReplayAndCompareCommands(t *testing.T) {
 	if display, _ := replayPayload["display"].(string); !strings.Contains(display, "files=1") {
 		t.Fatalf("expected summarized replay display, got %#v", replayPayload)
 	}
+}
 
+func TestCompareCommand(t *testing.T) {
+	_, _, app := newWorkflowApp(t)
 	binDir := t.TempDir()
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	testutil.WriteExecutable(t, binDir, "git", "#!/bin/sh\nif [ \"$1\" = \"diff\" ]; then\n  echo \"diff --git a/a.go b/a.go\"\n  echo \" a.go | 2 +-\"\n  echo \" 1 file changed, 1 insertion(+), 1 deletion(-)\"\nfi\n")
-	code, stdout, stderr = testutil.RunApp(t, app, "compare", "git", "diff")
+	code, stdout, stderr := testutil.RunApp(t, app, "compare", "git", "diff")
 	if code != 0 || stderr != "" {
 		t.Fatalf("unexpected compare stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
@@ -129,7 +131,111 @@ func TestReplayAndCompareCommands(t *testing.T) {
 	}
 }
 
-func TestRulesScaffoldAndDoctorHistory(t *testing.T) {
+func TestRulesCheckAndTest(t *testing.T) {
+	root, _, app := newRulesWorkflowApp(t)
+	writeWorkflowRulesFile(t, root)
+	restore := testutil.Chdir(t, root)
+	defer restore()
+
+	code, stdout, stderr := testutil.RunApp(t, app, "rules", "check")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected rules check stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	for _, want := range []string{"rules: ", ".szr.yaml", "profiles: 1", "preferences: 1", "status: valid"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("expected rules check output %q in %q", want, stdout)
+		}
+	}
+
+	code, stdout, stderr = testutil.RunApp(t, app, "rules", "test", "go", "test", "./...")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected rules test stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	for _, want := range []string{"selected profile: project-go-test", "source: project-local (", ".szr.yaml", "preferences:", "applied add-json"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("expected rules test output %q in %q", want, stdout)
+		}
+	}
+}
+
+func TestScaffoldProfileWorkflow(t *testing.T) {
+	root, _, app := newRulesWorkflowApp(t)
+	writeWorkflowRulesFile(t, root)
+	restore := testutil.Chdir(t, root)
+	defer restore()
+
+	code, stdout, stderr := testutil.RunApp(t, app, "scaffold", "profile", "demo-profile", "--print")
+	if code != 0 || stderr != "" || !strings.Contains(stdout, "plan: scaffold profile demo-profile") {
+		t.Fatalf("unexpected scaffold print stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+
+	code, stdout, stderr = testutil.RunApp(t, app, "scaffold", "profile", "demo-profile")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected scaffold apply stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	for _, path := range []string{
+		filepath.Join(root, ".szr", "scaffold", "demo-profile", "profile.yaml"),
+		filepath.Join(root, ".szr", "scaffold", "demo-profile", "expected.txt"),
+	} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("expected scaffolded file %s: %v", path, err)
+		}
+	}
+}
+
+func TestDoctorHistoryWorkflow(t *testing.T) {
+	root, _, app := newRulesWorkflowApp(t)
+	writeWorkflowRulesFile(t, root)
+	restore := testutil.Chdir(t, root)
+	defer restore()
+
+	code, stdout, stderr := testutil.RunApp(t, app, "doctor", "--history")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected doctor history stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	for _, want := range []string{"history diagnostics:", "commands: 3", "recommendations:", "hotspots:"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("expected doctor history output %q in %q", want, stdout)
+		}
+	}
+}
+
+func writeWorkflowRulesFile(t *testing.T, root string) {
+	t.Helper()
+	testutil.MustWriteFile(t, filepath.Join(root, ".szr.yaml"), `version: 1
+profiles:
+  - name: project-go-test
+    description: project override
+    match:
+      command_prefix:
+        - go
+        - test
+    render:
+      mode: failure
+      max_lines: 6
+preferences:
+  - name: add-json
+    match:
+      command_prefix:
+        - go
+        - test
+    rewrite:
+      args:
+        - -json
+`)
+}
+
+func newWorkflowApp(t *testing.T) (string, config.Paths, *cli.App) {
+	t.Helper()
+	root := t.TempDir()
+	paths := testutil.Paths(root)
+	testutil.EnsurePaths(t, paths)
+	app := cli.NewWithDependencies("test", config.Default(), paths, history.New(paths.HistoryFile), testutil.AppEngine(t, paths))
+	return root, paths, app
+}
+
+func newRulesWorkflowApp(t *testing.T) (string, config.Paths, *cli.App) {
+	t.Helper()
 	root := t.TempDir()
 	paths := testutil.Paths(root)
 	testutil.EnsurePaths(t, paths)
@@ -153,79 +259,6 @@ func TestRulesScaffoldAndDoctorHistory(t *testing.T) {
 			t.Fatalf("append history record: %v", err)
 		}
 	}
-
-	rulesPath := filepath.Join(root, ".szr.yaml")
-	testutil.MustWriteFile(t, rulesPath, `version: 1
-profiles:
-  - name: project-go-test
-    description: project override
-    match:
-      command_prefix:
-        - go
-        - test
-    render:
-      mode: failure
-      max_lines: 6
-preferences:
-  - name: add-json
-    match:
-      command_prefix:
-        - go
-        - test
-    rewrite:
-      args:
-        - -json
-`)
-
-	restore := testutil.Chdir(t, root)
-	defer restore()
-
 	app := cli.NewWithDependencies("test", config.Default(), paths, store, testutil.AppEngine(t, paths))
-	code, stdout, stderr := testutil.RunApp(t, app, "rules", "check")
-	if code != 0 || stderr != "" {
-		t.Fatalf("unexpected rules check stdout=%q stderr=%q code=%d", stdout, stderr, code)
-	}
-	for _, want := range []string{"rules: ", ".szr.yaml", "profiles: 1", "preferences: 1", "status: valid"} {
-		if !strings.Contains(stdout, want) {
-			t.Fatalf("expected rules check output %q in %q", want, stdout)
-		}
-	}
-
-	code, stdout, stderr = testutil.RunApp(t, app, "rules", "test", "go", "test", "./...")
-	if code != 0 || stderr != "" {
-		t.Fatalf("unexpected rules test stdout=%q stderr=%q code=%d", stdout, stderr, code)
-	}
-	for _, want := range []string{"selected profile: project-go-test", "source: project-local (", ".szr.yaml", "preferences:", "applied add-json"} {
-		if !strings.Contains(stdout, want) {
-			t.Fatalf("expected rules test output %q in %q", want, stdout)
-		}
-	}
-
-	code, stdout, stderr = testutil.RunApp(t, app, "scaffold", "profile", "demo-profile", "--print")
-	if code != 0 || stderr != "" || !strings.Contains(stdout, "plan: scaffold profile demo-profile") {
-		t.Fatalf("unexpected scaffold print stdout=%q stderr=%q code=%d", stdout, stderr, code)
-	}
-
-	code, stdout, stderr = testutil.RunApp(t, app, "scaffold", "profile", "demo-profile")
-	if code != 0 || stderr != "" {
-		t.Fatalf("unexpected scaffold apply stdout=%q stderr=%q code=%d", stdout, stderr, code)
-	}
-	for _, path := range []string{
-		filepath.Join(root, ".szr", "scaffold", "demo-profile", "profile.yaml"),
-		filepath.Join(root, ".szr", "scaffold", "demo-profile", "expected.txt"),
-	} {
-		if _, err := os.Stat(path); err != nil {
-			t.Fatalf("expected scaffolded file %s: %v", path, err)
-		}
-	}
-
-	code, stdout, stderr = testutil.RunApp(t, app, "doctor", "--history")
-	if code != 0 || stderr != "" {
-		t.Fatalf("unexpected doctor history stdout=%q stderr=%q code=%d", stdout, stderr, code)
-	}
-	for _, want := range []string{"history diagnostics:", "commands: 3", "recommendations:", "hotspots:"} {
-		if !strings.Contains(stdout, want) {
-			t.Fatalf("expected doctor history output %q in %q", want, stdout)
-		}
-	}
+	return root, paths, app
 }

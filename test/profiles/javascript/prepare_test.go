@@ -25,106 +25,123 @@ func TestJSProfilesPrepare(t *testing.T) {
 	}
 
 	pm := testutil.FindProfile(t, list, "js-package-test")
-	if !pm.Match(engine.Invocation{Display: []string{"npm", "test"}}) {
-		t.Fatal("expected npm test to match package profile")
-	}
-	if !pm.Match(engine.Invocation{Display: []string{"test", "npm", "test"}, Command: []string{"npm", "test"}}) {
-		t.Fatal("expected wrapped npm test to match package profile")
-	}
-	if !pm.Match(engine.Invocation{Display: []string{"pnpm", "run", "test"}}) {
-		t.Fatal("expected pnpm run test to match package profile")
-	}
-	if !pm.Match(engine.Invocation{Display: []string{"yarn", "run", "test"}}) {
-		t.Fatal("expected yarn run test to match package profile")
-	}
-	if pm.Match(engine.Invocation{Display: []string{"npm", "install"}}) {
-		t.Fatal("did not expect npm install to match package profile")
-	}
-
-	npmVitest := pm.Prepare(engine.Invocation{
-		Command: []string{"npm", "test"},
-		Display: []string{"npm", "test"},
-		Cwd:     writePackageJSON(t, "vitest run"),
+	t.Run("match", func(t *testing.T) {
+		for _, tc := range []struct {
+			inv  engine.Invocation
+			want bool
+		}{
+			{engine.Invocation{Display: []string{"npm", "test"}}, true},
+			{engine.Invocation{Display: []string{"test", "npm", "test"}, Command: []string{"npm", "test"}}, true},
+			{engine.Invocation{Display: []string{"pnpm", "run", "test"}}, true},
+			{engine.Invocation{Display: []string{"yarn", "run", "test"}}, true},
+			{engine.Invocation{Display: []string{"npm", "install"}}, false},
+		} {
+			if got := pm.Match(tc.inv); got != tc.want {
+				t.Fatalf("unexpected match result for %#v: got %t want %t", tc.inv, got, tc.want)
+			}
+		}
 	})
-	if want := []string{"npm", "test", "--", "--reporter=json"}; !reflect.DeepEqual(npmVitest, want) {
-		t.Fatalf("unexpected npm vitest prepare: %#v", npmVitest)
-	}
 
-	pnpmJest := pm.Prepare(engine.Invocation{
-		Command: []string{"pnpm", "test"},
-		Display: []string{"pnpm", "test"},
-		Cwd:     writePackageJSON(t, "jest --runInBand"),
-	})
-	if want := []string{"pnpm", "test", "--", "--json"}; !reflect.DeepEqual(pnpmJest, want) {
-		t.Fatalf("unexpected pnpm jest prepare: %#v", pnpmJest)
-	}
+	t.Run("prepare", func(t *testing.T) {
+		invalidRoot := t.TempDir()
+		if err := os.WriteFile(filepath.Join(invalidRoot, "package.json"), []byte("{bad"), 0o644); err != nil {
+			t.Fatalf("write invalid package.json: %v", err)
+		}
 
-	yarnVitest := pm.Prepare(engine.Invocation{
-		Command: []string{"yarn", "test", "--watch"},
-		Display: []string{"yarn", "test", "--watch"},
-		Cwd:     writePackageJSON(t, "vitest"),
+		for _, tc := range []struct {
+			name string
+			inv  engine.Invocation
+			want []string
+		}{
+			{
+				name: "npm vitest",
+				inv: engine.Invocation{
+					Command: []string{"npm", "test"},
+					Display: []string{"npm", "test"},
+					Cwd:     writePackageJSON(t, "vitest run"),
+				},
+				want: []string{"npm", "test", "--", "--reporter=json"},
+			},
+			{
+				name: "pnpm jest",
+				inv: engine.Invocation{
+					Command: []string{"pnpm", "test"},
+					Display: []string{"pnpm", "test"},
+					Cwd:     writePackageJSON(t, "jest --runInBand"),
+				},
+				want: []string{"pnpm", "test", "--", "--json"},
+			},
+			{
+				name: "yarn vitest",
+				inv: engine.Invocation{
+					Command: []string{"yarn", "test", "--watch"},
+					Display: []string{"yarn", "test", "--watch"},
+					Cwd:     writePackageJSON(t, "vitest"),
+				},
+				want: []string{"yarn", "test", "--watch", "--reporter=json"},
+			},
+			{
+				name: "unknown script passthrough",
+				inv: engine.Invocation{
+					Command: []string{"npm", "test"},
+					Display: []string{"npm", "test"},
+					Cwd:     writePackageJSON(t, "tsx scripts/smoke.ts"),
+				},
+				want: []string{"npm", "test"},
+			},
+			{
+				name: "preserve npm structured args",
+				inv: engine.Invocation{
+					Command: []string{"npm", "test", "--", "--json"},
+					Display: []string{"npm", "test", "--", "--json"},
+					Cwd:     writePackageJSON(t, "jest"),
+				},
+				want: []string{"npm", "test", "--", "--json"},
+			},
+			{
+				name: "preserve pnpm separator",
+				inv: engine.Invocation{
+					Command: []string{"pnpm", "test", "--", "--runInBand"},
+					Display: []string{"pnpm", "test", "--", "--runInBand"},
+					Cwd:     writePackageJSON(t, "jest"),
+				},
+				want: []string{"pnpm", "test", "--", "--runInBand", "--json"},
+			},
+			{
+				name: "infer jest from args",
+				inv: engine.Invocation{
+					Command: []string{"npm", "test", "--", "--runInBand"},
+					Display: []string{"test", "npm", "test", "--", "--runInBand"},
+					Cwd:     t.TempDir(),
+				},
+				want: []string{"npm", "test", "--", "--runInBand", "--json"},
+			},
+			{
+				name: "missing package json",
+				inv: engine.Invocation{
+					Command: []string{"npm", "test"},
+					Display: []string{"npm", "test"},
+					Cwd:     t.TempDir(),
+				},
+				want: []string{"npm", "test"},
+			},
+			{
+				name: "invalid package json",
+				inv: engine.Invocation{
+					Command: []string{"npm", "test"},
+					Display: []string{"npm", "test"},
+					Cwd:     invalidRoot,
+				},
+				want: []string{"npm", "test"},
+			},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				if got := pm.Prepare(tc.inv); !reflect.DeepEqual(got, tc.want) {
+					t.Fatalf("unexpected prepare result: got %#v want %#v", got, tc.want)
+				}
+			})
+		}
 	})
-	if want := []string{"yarn", "test", "--watch", "--reporter=json"}; !reflect.DeepEqual(yarnVitest, want) {
-		t.Fatalf("unexpected yarn vitest prepare: %#v", yarnVitest)
-	}
-
-	unknown := pm.Prepare(engine.Invocation{
-		Command: []string{"npm", "test"},
-		Display: []string{"npm", "test"},
-		Cwd:     writePackageJSON(t, "tsx scripts/smoke.ts"),
-	})
-	if want := []string{"npm", "test"}; !reflect.DeepEqual(unknown, want) {
-		t.Fatalf("expected unknown script passthrough: %#v", unknown)
-	}
-
-	preserved := pm.Prepare(engine.Invocation{
-		Command: []string{"npm", "test", "--", "--json"},
-		Display: []string{"npm", "test", "--", "--json"},
-		Cwd:     writePackageJSON(t, "jest"),
-	})
-	if want := []string{"npm", "test", "--", "--json"}; !reflect.DeepEqual(preserved, want) {
-		t.Fatalf("expected structured npm args to be preserved: %#v", preserved)
-	}
-
-	pnpmPreserved := pm.Prepare(engine.Invocation{
-		Command: []string{"pnpm", "test", "--", "--runInBand"},
-		Display: []string{"pnpm", "test", "--", "--runInBand"},
-		Cwd:     writePackageJSON(t, "jest"),
-	})
-	if want := []string{"pnpm", "test", "--", "--runInBand", "--json"}; !reflect.DeepEqual(pnpmPreserved, want) {
-		t.Fatalf("expected pnpm forwarded args to reuse existing separator: %#v", pnpmPreserved)
-	}
-
-	inferredJest := pm.Prepare(engine.Invocation{
-		Command: []string{"npm", "test", "--", "--runInBand"},
-		Display: []string{"test", "npm", "test", "--", "--runInBand"},
-		Cwd:     t.TempDir(),
-	})
-	if want := []string{"npm", "test", "--", "--runInBand", "--json"}; !reflect.DeepEqual(inferredJest, want) {
-		t.Fatalf("expected jest inference from args, got %#v", inferredJest)
-	}
-
-	missingPkg := pm.Prepare(engine.Invocation{
-		Command: []string{"npm", "test"},
-		Display: []string{"npm", "test"},
-		Cwd:     t.TempDir(),
-	})
-	if want := []string{"npm", "test"}; !reflect.DeepEqual(missingPkg, want) {
-		t.Fatalf("expected missing package.json passthrough: %#v", missingPkg)
-	}
-
-	invalidRoot := t.TempDir()
-	if err := os.WriteFile(filepath.Join(invalidRoot, "package.json"), []byte("{bad"), 0o644); err != nil {
-		t.Fatalf("write invalid package.json: %v", err)
-	}
-	invalidPkg := pm.Prepare(engine.Invocation{
-		Command: []string{"npm", "test"},
-		Display: []string{"npm", "test"},
-		Cwd:     invalidRoot,
-	})
-	if want := []string{"npm", "test"}; !reflect.DeepEqual(invalidPkg, want) {
-		t.Fatalf("expected invalid package.json passthrough: %#v", invalidPkg)
-	}
 }
 
 func TestStructuredJSProfilesPrepare(t *testing.T) {
