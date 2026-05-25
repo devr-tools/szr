@@ -60,7 +60,10 @@ Use `make commit` if you want an interactive helper that runs `git add .`, asks 
 ## Commit guidance
 
 - Use focused commits with clear subjects.
-- Prefer conventional-commit style prefixes when practical because release automation depends on readable history.
+- Prefer conventional-commit style prefixes because release automation depends on them.
+- Pushes to `main` or `master` trigger `release-please` through `.github/workflows/cd.yml`.
+- A merge to `main` or `master` only produces a release PR or tag when the merged commits are releasable conventional commits such as `fix:`, `feat:`, or `feat!:` / `type!:` with a breaking change.
+- Subjects like `save`, `wip`, or other non-conventional messages can still merge, but they are likely to result in a `release-please` no-op.
 - Do not mix refactors, feature work, and doc-only cleanup into one commit unless they are tightly coupled.
 - If your PR targets `develop`, include a `Signed-off-by:` trailer to satisfy the DCO workflow.
 
