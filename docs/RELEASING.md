@@ -21,10 +21,12 @@ Before you cut or approve a release:
 
 Pushes to `main` or `master` trigger `.github/workflows/cd.yml`. That workflow runs `release-please`, which opens or updates a release PR based on conventional commits and `CHANGELOG.md`.
 
+`release-please` must authenticate with `RELEASE_PLEASE_TOKEN`, not the default `GITHUB_TOKEN`. GitHub suppresses `pull_request` workflow runs for PRs created by `GITHUB_TOKEN`, which leaves required checks pending forever on the release PR. Configure `RELEASE_PLEASE_TOKEN` as a repo secret backed by the `please-release` bot account or a GitHub App token with permission to open and update pull requests.
+
 When the release PR is merged:
 
 - `release-please` creates the stable tag
-- `.github/workflows/release.yml` runs through `workflow_call`
+- the tag push triggers `.github/workflows/release.yml`
 - `goreleaser` publishes release artifacts and `checksums.txt`
 - the workflow also uploads the `dist/*` bundle as a GitHub Actions artifact for the tagged release run
 
@@ -74,13 +76,13 @@ Use stable semantic versions for stable releases and prerelease suffixes like `-
 
 ## Homebrew follow-up
 
-After a stable release is published, update `Formula/szr.rb` to point at the public release archive or tag archive and copy the matching `sha256`.
+After a stable release is published, `.github/workflows/release.yml` opens or refreshes a PR that updates `Formula/szr.rb` to the released tag and pins the matching source tarball `sha256`.
 
-For `v0.1.0`, the formula uses the public tag archive:
+When `RELEASE_PLEASE_TOKEN` is available, the workflow pushes a branch and opens a PR against the default branch. The generated PR is expected to run the normal Homebrew validation workflow before merge.
 
-`https://github.com/devr-tools/szr/archive/refs/tags/v0.1.0.tar.gz`
+If `RELEASE_PLEASE_TOKEN` is missing or cannot push or open the PR, the release still succeeds and the workflow writes a manual follow-up summary with the exact tag archive URL and `sha256` to apply in `Formula/szr.rb`.
 
-Minimum stable-release follow-up:
+If the automation needs help, the manual fallback is still:
 
 1. Download or inspect the published source archive for the stable tag.
 2. Compute or copy the matching `sha256`.
