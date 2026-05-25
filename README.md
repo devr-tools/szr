@@ -116,7 +116,7 @@ szr self doctor
 ```
 
 The first stable formula release is `v0.1.0`. Future tagged releases are documented in [docs/RELEASING.md](/docs/RELEASING.md).
-
+g 
 ### Updating szr
 
 `szr self update` upgrades installs that `szr` can recognize today:

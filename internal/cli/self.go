@@ -157,11 +157,7 @@ func (a *App) runSelfUpdate(ctx context.Context, args []string) int {
 	}
 	result, err := a.updater.SelfUpdate(ctx, os.Stdout, os.Stderr)
 	if err != nil {
-		if result.UpgradeCommand != "" {
-			fmt.Fprintf(os.Stderr, "szr: failed to update via %s: %v\n", result.UpgradeCommand, err)
-		} else {
-			fmt.Fprintf(os.Stderr, "szr: %v\n", err)
-		}
+		fmt.Fprintf(os.Stderr, "szr: %v\n", err)
 		return 1
 	}
 	fmt.Printf("updated via: %s\n", result.Method)

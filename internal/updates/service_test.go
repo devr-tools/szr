@@ -162,10 +162,14 @@ func TestSelfUpdateRunsExpectedCommand(t *testing.T) {
 		lookPath:     func(string) (string, error) { return "ok", nil },
 		getenv:       func(string) string { return "" },
 		userHomeDir:  func() (string, error) { return root, nil },
-		runCommand: func(_ context.Context, name string, args []string, stdout, stderr io.Writer) error {
-			ranName = name
-			ranArgs = append([]string(nil), args...)
+		runGoInstall: func(_ context.Context, stdout, stderr io.Writer) error {
+			ranName = "go"
+			ranArgs = []string{"install", goInstallRef}
 			_, _ = io.WriteString(stdout, "updated\n")
+			return nil
+		},
+		runBrew: func(context.Context, io.Writer, io.Writer) error {
+			t.Fatal("unexpected brew update call")
 			return nil
 		},
 	}

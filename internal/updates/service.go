@@ -66,7 +66,8 @@ type Service struct {
 	getenv       func(string) string
 	userHomeDir  func() (string, error)
 	fetchLatest  func(context.Context) (Release, error)
-	runCommand   func(context.Context, string, []string, io.Writer, io.Writer) error
+	runBrew      func(context.Context, io.Writer, io.Writer) error
+	runGoInstall func(context.Context, io.Writer, io.Writer) error
 }
 
 func New(paths config.Paths) *Service {
@@ -82,7 +83,8 @@ func New(paths config.Paths) *Service {
 		getenv:       os.Getenv,
 		userHomeDir:  os.UserHomeDir,
 		fetchLatest:  fetchLatestRelease,
-		runCommand:   runCommand,
+		runBrew:      runBrewUpgrade,
+		runGoInstall: runGoInstallLatest,
 	}
 }
 
@@ -147,12 +149,18 @@ func (s *Service) SelfUpdate(ctx context.Context, stdout, stderr io.Writer) (Sel
 		if _, err := s.lookPath("brew"); err != nil {
 			return result, fmt.Errorf("brew is not installed or not on PATH")
 		}
-		return result, s.runCommand(ctx, "brew", []string{"upgrade", "szr"}, stdout, stderr)
+		if err := s.runBrew(ctx, stdout, stderr); err != nil {
+			return result, fmt.Errorf("failed to update via %s: %w", result.UpgradeCommand, err)
+		}
+		return result, nil
 	case InstallMethodGo:
 		if _, err := s.lookPath("go"); err != nil {
 			return result, fmt.Errorf("go is not installed or not on PATH")
 		}
-		return result, s.runCommand(ctx, "go", []string{"install", goInstallRef}, stdout, stderr)
+		if err := s.runGoInstall(ctx, stdout, stderr); err != nil {
+			return result, fmt.Errorf("failed to update via %s: %w", result.UpgradeCommand, err)
+		}
+		return result, nil
 	default:
 		return result, errors.New("unable to determine how this szr binary was installed")
 	}
@@ -303,8 +311,15 @@ func fetchLatestRelease(ctx context.Context) (Release, error) {
 	return Release{Version: payload.TagName, URL: payload.HTMLURL}, nil
 }
 
-func runCommand(ctx context.Context, name string, args []string, stdout, stderr io.Writer) error {
-	cmd := exec.CommandContext(ctx, name, args...)
+func runBrewUpgrade(ctx context.Context, stdout, stderr io.Writer) error {
+	cmd := exec.CommandContext(ctx, "brew", "upgrade", "szr")
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	return cmd.Run()
+}
+
+func runGoInstallLatest(ctx context.Context, stdout, stderr io.Writer) error {
+	cmd := exec.CommandContext(ctx, "go", "install", goInstallRef)
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	return cmd.Run()
