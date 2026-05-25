@@ -30,7 +30,7 @@ Use `make prepush` for the quick local gate.
 Use `make ci` when you want the host-mode local reproduction of the GitHub CI pipeline.
 Use `make ci-docker` when you want the pinned Linux container reproduction with Semgrep and `govulncheck` available inside the image.
 If your PR targets a non-default branch, run `make ci BASE_REF=develop` or the matching branch name.
-The containerized path still does not replace the GitHub macOS and Windows jobs, so the hosted matrix remains the final authority.
+Use `make commit` if you want an interactive helper that runs `git add .`, asks for `major`/`minor`/`patch`, converts that to `feat!:` / `feat:` / `fix:`, then commits and pushes the current branch.
 
 ## Project layout
 

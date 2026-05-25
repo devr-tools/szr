@@ -97,6 +97,8 @@ jobs:
     needs: prepare-prerelease
     if: needs.prepare-prerelease.result == 'success'
     uses: ./.github/workflows/release.yml
+    permissions:
+      contents: write
     with:
       tag: ${{ needs.prepare-prerelease.outputs.tag }}
       prerelease: true
@@ -124,6 +126,8 @@ jobs:
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true'
     uses: ./.github/workflows/release.yml
+    permissions:
+      contents: write
     with:
       tag: ${{ needs.release-please.outputs.tag_name }}
       prerelease: false
