@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"szr/test/testutil"
+	"github.com/devr-tools/szr/test/testutil"
 )
 
 func TestRunRoutes(t *testing.T) {

@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	"szr/internal/config"
-	"szr/internal/engine"
-	"szr/internal/history"
-	"szr/internal/rules"
-	"szr/test/testutil"
+	"github.com/devr-tools/szr/internal/config"
+	"github.com/devr-tools/szr/internal/engine"
+	"github.com/devr-tools/szr/internal/history"
+	"github.com/devr-tools/szr/internal/rules"
+	"github.com/devr-tools/szr/test/testutil"
 )
 
 func TestProjectRules(t *testing.T) {

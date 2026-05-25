@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"szr/internal/config"
-	"szr/internal/filters"
+	"github.com/devr-tools/szr/internal/config"
+	"github.com/devr-tools/szr/internal/filters"
 )
 
 func (a *App) runLS(args []string) int {

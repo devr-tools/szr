@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	gitfilter "szr/internal/filters/git"
+	gitfilter "github.com/devr-tools/szr/internal/filters/git"
 )
 
 func TestGitSummaries(t *testing.T) {

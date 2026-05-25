@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"os"
 
-	"szr/internal/config"
-	"szr/internal/engine"
-	"szr/internal/history"
-	"szr/internal/profiles"
+	"github.com/devr-tools/szr/internal/config"
+	"github.com/devr-tools/szr/internal/engine"
+	"github.com/devr-tools/szr/internal/history"
+	"github.com/devr-tools/szr/internal/profiles"
 )
 
 type App struct {

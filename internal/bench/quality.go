@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"szr/internal/filters"
+	"github.com/devr-tools/szr/internal/filters"
 )
 
 var failureTokenPattern = regexp.MustCompile(`([[:alnum:]_./-]+\.[[:alnum:]_./-]+:\d+(?::\d+)?)|([[:alnum:]_./-]+:\d+(?::\d+)?)`)

@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"szr/internal/history"
-	"szr/test/testutil"
+	"github.com/devr-tools/szr/internal/history"
+	"github.com/devr-tools/szr/test/testutil"
 )
 
 func TestStoreAndSummary(t *testing.T) {

@@ -1,10 +1,10 @@
 package cpp
 
 import (
-	"szr/internal/engine"
-	shared "szr/internal/filters"
-	cppfilter "szr/internal/filters/cpp"
-	"szr/internal/profilekit"
+	"github.com/devr-tools/szr/internal/engine"
+	shared "github.com/devr-tools/szr/internal/filters"
+	cppfilter "github.com/devr-tools/szr/internal/filters/cpp"
+	"github.com/devr-tools/szr/internal/profilekit"
 )
 
 func Profiles(maxLines int) []engine.Profile {

@@ -5,8 +5,11 @@ COVERPKG := ./internal/...
 COVERFILE := .coverage.internal.out
 MIN_INTERNAL_COVERAGE ?= 80.0
 SMOKE_HOME := $(CURDIR)/.tmp-home
+GOVULNCHECK_VERSION ?= v1.1.1
+GOCYCLO_VERSION ?= v0.6.0
+BASE_REF ?= $(shell git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')
 
-.PHONY: help fmt test cover cover-func cover-html build smoke prepush clean
+.PHONY: help fmt test cover cover-func cover-html build smoke ci prepush clean
 
 help:
 	@printf '%s\n' \
@@ -17,7 +20,8 @@ help:
 		'make cover-html - render HTML coverage report' \
 		'make build      - build ./bin/szr and ./bin/szr-dev' \
 		'make smoke      - run quick local CLI smoke checks for szr and szr-dev, including bench/install flows' \
-		'make prepush    - fmt + test + cover + smoke' \
+		'make ci         - run the local reproduction of the GitHub CI pipeline (override BASE_REF=...)' \
+		'make prepush    - run the quick local gate: fmt + test + cover + smoke' \
 		'make clean      - remove local build and coverage artifacts'
 
 fmt:
@@ -53,6 +57,17 @@ smoke:
 	env HOME=$(SMOKE_HOME) GOCACHE=$(GOCACHE) $(GO) run ./cmd/szr bench clean-pass >/dev/null
 	env HOME=$(SMOKE_HOME) GOCACHE=$(GOCACHE) $(GO) run ./cmd/szr install codex --print >/dev/null
 	env HOME=$(SMOKE_HOME) GOCACHE=$(GOCACHE) $(GO) run ./cmd/szr-dev --version >/dev/null
+
+ci:
+	env \
+		BASE_REF=$(BASE_REF) \
+		GO=$(GO) \
+		GOCACHE=$(GOCACHE) \
+		MIN_INTERNAL_COVERAGE=$(MIN_INTERNAL_COVERAGE) \
+		GOVULNCHECK_VERSION=$(GOVULNCHECK_VERSION) \
+		GOCYCLO_VERSION=$(GOCYCLO_VERSION) \
+		SMOKE_HOME=$(SMOKE_HOME) \
+		./scripts/ci.sh
 
 prepush: fmt test cover smoke
 

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	pyfilter "szr/internal/filters/python"
+	pyfilter "github.com/devr-tools/szr/internal/filters/python"
 )
 
 func TestSummarizePytestFailures(t *testing.T) {

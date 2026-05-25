@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	buildfilter "szr/internal/filters/build"
+	buildfilter "github.com/devr-tools/szr/internal/filters/build"
 )
 
 func TestSummarizeBuildSystem(t *testing.T) {

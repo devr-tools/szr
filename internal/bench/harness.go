@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"szr/internal/engine"
-	"szr/internal/profiles"
+	"github.com/devr-tools/szr/internal/engine"
+	"github.com/devr-tools/szr/internal/profiles"
 )
 
 type Harness struct {

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"szr/internal/installers"
-	"szr/test/testutil"
+	"github.com/devr-tools/szr/internal/installers"
+	"github.com/devr-tools/szr/test/testutil"
 )
 
 func TestApplyPlanMergeAndIdempotence(t *testing.T) {

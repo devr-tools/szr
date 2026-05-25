@@ -1,8 +1,8 @@
 package engine
 
 import (
-	"szr/internal/filters"
-	"szr/internal/rules"
+	"github.com/devr-tools/szr/internal/filters"
+	"github.com/devr-tools/szr/internal/rules"
 )
 
 func renderRule(render rules.Render, exec Execution, defaultMaxLines int) string {

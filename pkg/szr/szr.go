@@ -3,7 +3,7 @@ package szr
 import (
 	"context"
 
-	"szr/internal/cli"
+	"github.com/devr-tools/szr/internal/cli"
 )
 
 // App exposes the public szr entrypoint without leaking internal CLI wiring.

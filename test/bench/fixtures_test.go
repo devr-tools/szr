@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"szr/internal/bench"
-	"szr/internal/engine"
+	"github.com/devr-tools/szr/internal/bench"
+	"github.com/devr-tools/szr/internal/engine"
 )
 
 func TestFixturesAndHarness(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"szr/internal/filters"
+	"github.com/devr-tools/szr/internal/filters"
 )
 
 func TestRipgrepAndTreeHelpers(t *testing.T) {

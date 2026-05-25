@@ -1,10 +1,10 @@
 package build
 
 import (
-	"szr/internal/engine"
-	shared "szr/internal/filters"
-	buildfilter "szr/internal/filters/build"
-	"szr/internal/profilekit"
+	"github.com/devr-tools/szr/internal/engine"
+	shared "github.com/devr-tools/szr/internal/filters"
+	buildfilter "github.com/devr-tools/szr/internal/filters/build"
+	"github.com/devr-tools/szr/internal/profilekit"
 )
 
 func Profiles(maxLines int) []engine.Profile {

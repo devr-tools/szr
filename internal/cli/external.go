@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"szr/internal/engine"
-	"szr/internal/history"
+	"github.com/devr-tools/szr/internal/engine"
+	"github.com/devr-tools/szr/internal/history"
 )
 
 func (a *App) runExternal(ctx context.Context, flags globalFlags, name string, args []string, passthrough bool) int {

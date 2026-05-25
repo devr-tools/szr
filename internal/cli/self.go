@@ -5,9 +5,9 @@ import (
 	"os"
 	"os/exec"
 
-	"szr/internal/config"
-	"szr/internal/history"
-	"szr/internal/selfinstall"
+	"github.com/devr-tools/szr/internal/config"
+	"github.com/devr-tools/szr/internal/history"
+	"github.com/devr-tools/szr/internal/selfinstall"
 )
 
 func (a *App) runSelf(flags globalFlags, args []string) int {

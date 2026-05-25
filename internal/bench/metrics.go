@@ -4,7 +4,7 @@ import (
 	"sort"
 	"time"
 
-	"szr/internal/history"
+	"github.com/devr-tools/szr/internal/history"
 )
 
 const defaultSamples = 9

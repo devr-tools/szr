@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	shared "szr/internal/filters"
+	shared "github.com/devr-tools/szr/internal/filters"
 )
 
 func SummarizePatchDiff(input string, maxLines int) string {

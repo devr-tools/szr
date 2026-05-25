@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"szr/internal/bench"
-	"szr/internal/installers"
+	"github.com/devr-tools/szr/internal/bench"
+	"github.com/devr-tools/szr/internal/installers"
 )
 
 func (a *App) runInstall(args []string) int {

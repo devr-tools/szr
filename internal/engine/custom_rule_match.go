@@ -3,7 +3,7 @@ package engine
 import (
 	"strings"
 
-	"szr/internal/rules"
+	"github.com/devr-tools/szr/internal/rules"
 )
 
 func matchRule(match rules.Match, inv Invocation) bool {

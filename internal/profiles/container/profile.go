@@ -1,10 +1,10 @@
 package container
 
 import (
-	"szr/internal/engine"
-	shared "szr/internal/filters"
-	containerfilter "szr/internal/filters/container"
-	"szr/internal/profilekit"
+	"github.com/devr-tools/szr/internal/engine"
+	shared "github.com/devr-tools/szr/internal/filters"
+	containerfilter "github.com/devr-tools/szr/internal/filters/container"
+	"github.com/devr-tools/szr/internal/profilekit"
 )
 
 func Profiles(maxLines int) []engine.Profile {

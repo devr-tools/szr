@@ -1,9 +1,9 @@
 package engine
 
 import (
-	"szr/internal/config"
-	"szr/internal/history"
-	"szr/internal/rules"
+	"github.com/devr-tools/szr/internal/config"
+	"github.com/devr-tools/szr/internal/history"
+	"github.com/devr-tools/szr/internal/rules"
 )
 
 type Engine struct {

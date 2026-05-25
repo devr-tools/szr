@@ -3,7 +3,7 @@ package build
 import (
 	"strings"
 
-	shared "szr/internal/filters"
+	shared "github.com/devr-tools/szr/internal/filters"
 )
 
 func SummarizeBuildSystem(input string, maxLines int) string {

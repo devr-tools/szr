@@ -3,8 +3,8 @@ package github
 import (
 	"strings"
 
-	"szr/internal/engine"
-	shared "szr/internal/filters"
+	"github.com/devr-tools/szr/internal/engine"
+	shared "github.com/devr-tools/szr/internal/filters"
 )
 
 func ghCommand(args []string) (int, int, string, string, bool) {

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"szr/internal/config"
-	"szr/test/testutil"
+	"github.com/devr-tools/szr/internal/config"
+	"github.com/devr-tools/szr/test/testutil"
 )
 
 func TestLoadWithProjectRules(t *testing.T) {

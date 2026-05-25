@@ -5,13 +5,13 @@ import (
 	"strings"
 	"testing"
 
-	"szr/internal/cli"
-	"szr/internal/config"
-	"szr/internal/engine"
-	"szr/internal/history"
-	"szr/internal/profiles"
-	"szr/internal/rules"
-	"szr/test/testutil"
+	"github.com/devr-tools/szr/internal/cli"
+	"github.com/devr-tools/szr/internal/config"
+	"github.com/devr-tools/szr/internal/engine"
+	"github.com/devr-tools/szr/internal/history"
+	"github.com/devr-tools/szr/internal/profiles"
+	"github.com/devr-tools/szr/internal/rules"
+	"github.com/devr-tools/szr/test/testutil"
 )
 
 func TestExplainShowsProjectAndBuiltinDecisions(t *testing.T) {

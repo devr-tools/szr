@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"szr/internal/rules"
+	"github.com/devr-tools/szr/internal/rules"
 )
 
 func TestParseJSONAndValidate(t *testing.T) {

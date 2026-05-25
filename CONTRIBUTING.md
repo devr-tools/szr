@@ -26,7 +26,9 @@ make test
 make cover
 ```
 
-Use `make prepush` when you want the full local gate.
+Use `make prepush` for the quick local gate.
+Use `make ci` when you want the closest local reproduction of the GitHub CI pipeline.
+If your PR targets a non-default branch, run `make ci BASE_REF=develop` or the matching branch name.
 
 ## Project layout
 

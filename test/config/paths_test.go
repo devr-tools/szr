@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"szr/internal/config"
+	"github.com/devr-tools/szr/internal/config"
 )
 
 func TestResolvePathsWithVariants(t *testing.T) {

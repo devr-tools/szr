@@ -3,10 +3,10 @@ package python
 import (
 	"strings"
 
-	"szr/internal/engine"
-	shared "szr/internal/filters"
-	pyfilter "szr/internal/filters/python"
-	"szr/internal/profilekit"
+	"github.com/devr-tools/szr/internal/engine"
+	shared "github.com/devr-tools/szr/internal/filters"
+	pyfilter "github.com/devr-tools/szr/internal/filters/python"
+	"github.com/devr-tools/szr/internal/profilekit"
 )
 
 func Profiles(maxLines int) []engine.Profile {

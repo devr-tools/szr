@@ -3,7 +3,7 @@ package bench_test
 import (
 	"testing"
 
-	"szr/internal/bench"
+	"github.com/devr-tools/szr/internal/bench"
 )
 
 func BenchmarkCompressionFixtures(b *testing.B) {

@@ -1,10 +1,10 @@
 package git
 
 import (
-	"szr/internal/engine"
-	shared "szr/internal/filters"
-	gitfilter "szr/internal/filters/git"
-	"szr/internal/profilekit"
+	"github.com/devr-tools/szr/internal/engine"
+	shared "github.com/devr-tools/szr/internal/filters"
+	gitfilter "github.com/devr-tools/szr/internal/filters/git"
+	"github.com/devr-tools/szr/internal/profilekit"
 )
 
 func Profiles(maxLines int) []engine.Profile {

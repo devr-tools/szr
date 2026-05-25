@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"szr/internal/rules"
+	"github.com/devr-tools/szr/internal/rules"
 )
 
 const appName = "szr"

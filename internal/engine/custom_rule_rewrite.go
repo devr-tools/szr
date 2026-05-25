@@ -1,6 +1,6 @@
 package engine
 
-import "szr/internal/rules"
+import "github.com/devr-tools/szr/internal/rules"
 
 func rewriteRule(rewrite rules.Rewrite, inv Invocation) []string {
 	mode := rewrite.Mode

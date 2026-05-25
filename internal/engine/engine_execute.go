@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"szr/internal/filters"
-	"szr/internal/history"
-	"szr/internal/teeindex"
+	"github.com/devr-tools/szr/internal/filters"
+	"github.com/devr-tools/szr/internal/history"
+	"github.com/devr-tools/szr/internal/teeindex"
 )
 
 func (e *Engine) Execute(ctx context.Context, inv Invocation, passthrough bool) (Result, error) {

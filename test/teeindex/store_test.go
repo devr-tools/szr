@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"szr/internal/teeindex"
+	"github.com/devr-tools/szr/internal/teeindex"
 )
 
 func TestStoreListLatestFind(t *testing.T) {

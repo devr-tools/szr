@@ -4,7 +4,7 @@ import (
 	"context"
 	"os"
 
-	szrpkg "szr/pkg/szr"
+	szrpkg "github.com/devr-tools/szr/pkg/szr"
 )
 
 var version = "dev"

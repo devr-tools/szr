@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	jsfilter "szr/internal/filters/javascript"
+	jsfilter "github.com/devr-tools/szr/internal/filters/javascript"
 )
 
 func TestSummarizeJSTestJSON(t *testing.T) {

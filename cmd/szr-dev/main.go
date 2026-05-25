@@ -4,7 +4,7 @@ import (
 	"context"
 	"os"
 
-	"szr/internal/szrdev"
+	"github.com/devr-tools/szr/internal/szrdev"
 )
 
 func main() {

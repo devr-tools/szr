@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"szr/internal/filters"
+	"github.com/devr-tools/szr/internal/filters"
 )
 
 func TestReadLevels(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"szr/internal/history"
+	"github.com/devr-tools/szr/internal/history"
 )
 
 func (a *App) runSpread(args []string) int {

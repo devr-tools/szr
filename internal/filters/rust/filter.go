@@ -3,7 +3,7 @@ package rust
 import (
 	"strings"
 
-	shared "szr/internal/filters"
+	shared "github.com/devr-tools/szr/internal/filters"
 )
 
 func SummarizeCargoTest(input string, maxLines int) string {

@@ -1,10 +1,10 @@
 package patch
 
 import (
-	"szr/internal/engine"
-	shared "szr/internal/filters"
-	patchfilter "szr/internal/filters/patch"
-	"szr/internal/profilekit"
+	"github.com/devr-tools/szr/internal/engine"
+	shared "github.com/devr-tools/szr/internal/filters"
+	patchfilter "github.com/devr-tools/szr/internal/filters/patch"
+	"github.com/devr-tools/szr/internal/profilekit"
 )
 
 func Profiles(maxLines int) []engine.Profile {

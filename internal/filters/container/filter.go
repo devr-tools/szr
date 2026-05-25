@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	shared "szr/internal/filters"
+	shared "github.com/devr-tools/szr/internal/filters"
 )
 
 func SummarizeDockerPS(input string, maxLines int) string {

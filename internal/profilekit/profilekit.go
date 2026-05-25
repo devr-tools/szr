@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"szr/internal/engine"
+	"github.com/devr-tools/szr/internal/engine"
 )
 
 func AtLeast(value, floor int) int {

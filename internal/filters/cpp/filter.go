@@ -3,7 +3,7 @@ package cpp
 import (
 	"strings"
 
-	shared "szr/internal/filters"
+	shared "github.com/devr-tools/szr/internal/filters"
 )
 
 func SummarizeCTest(input string, maxLines int) string {

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"szr/internal/teeindex"
+	"github.com/devr-tools/szr/internal/teeindex"
 )
 
 func (a *App) runTee(args []string) int {

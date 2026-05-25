@@ -144,6 +144,7 @@ The public Go package lives under `pkg/szr`, while `cmd/szr-dev` is the develope
 make test
 make cover
 make smoke
+make ci
 make prepush
 ```
 
@@ -157,5 +158,4 @@ For most code changes, the minimum bar is:
 - add or update tests with the behavior change
 - run `make fmt` and `make test`
 - explain the user-facing impact and verification steps in the PR
-
 

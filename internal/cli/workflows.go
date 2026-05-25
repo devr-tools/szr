@@ -14,13 +14,13 @@ import (
 	"strings"
 	"time"
 
-	"szr/internal/config"
-	"szr/internal/engine"
-	"szr/internal/filters"
-	"szr/internal/history"
-	"szr/internal/profiles"
-	"szr/internal/rules"
-	"szr/internal/teeindex"
+	"github.com/devr-tools/szr/internal/config"
+	"github.com/devr-tools/szr/internal/engine"
+	"github.com/devr-tools/szr/internal/filters"
+	"github.com/devr-tools/szr/internal/history"
+	"github.com/devr-tools/szr/internal/profiles"
+	"github.com/devr-tools/szr/internal/rules"
+	"github.com/devr-tools/szr/internal/teeindex"
 )
 
 type hotspotStat struct {
@@ -1174,7 +1174,7 @@ profiles:
 func builtinProfileStub(name string) string {
 	return fmt.Sprintf(`package %s
 
-import "szr/internal/engine"
+import "github.com/devr-tools/szr/internal/engine"
 
 func Profiles(maxLines int) []engine.Profile {
 	return []engine.Profile{{
@@ -1205,7 +1205,7 @@ func builtinProfileTestStub(name string) string {
 import (
 	"testing"
 
-	"szr/test/testutil"
+	"github.com/devr-tools/szr/test/testutil"
 )
 
 func Test%sStub(t *testing.T) {

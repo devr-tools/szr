@@ -1,10 +1,10 @@
 package kubernetes
 
 import (
-	"szr/internal/engine"
-	shared "szr/internal/filters"
-	kubefilter "szr/internal/filters/kubernetes"
-	"szr/internal/profilekit"
+	"github.com/devr-tools/szr/internal/engine"
+	shared "github.com/devr-tools/szr/internal/filters"
+	kubefilter "github.com/devr-tools/szr/internal/filters/kubernetes"
+	"github.com/devr-tools/szr/internal/profilekit"
 )
 
 func Profiles(maxLines int) []engine.Profile {

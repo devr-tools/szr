@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	patchfilter "szr/internal/filters/patch"
+	patchfilter "github.com/devr-tools/szr/internal/filters/patch"
 )
 
 func TestSummarizePatchDiff(t *testing.T) {
