@@ -31,6 +31,7 @@ func (a *App) printHelp() {
 		title: "Setup:",
 		rows: [][]string{
 			{"szr self install", "Install szr globally into ~/.local/bin or ~/bin."},
+			{"szr self update", "Update szr through Homebrew or go install when recognized."},
 			{"szr self doctor", "Check PATH, config, cache, version, and optional tools."},
 			{"szr install", "List available repo bootstrap targets."},
 			{"szr install codex|claude-code|cursor|gemini|shell", "Generate repo-local bootstrap files for a specific target."},
@@ -134,6 +135,7 @@ func (a *App) printCommands() {
 		title: "Install:",
 		rows: [][]string{
 			{"szr self install [--update-shell]", "Install szr globally and optionally update shell rc."},
+			{"szr self update", "Update the current szr install when the channel is recognized."},
 			{"szr self doctor", "Inspect the global install target and PATH state."},
 			{"szr install codex", "Bootstrap this repo for Codex."},
 			{"szr install shell", "Generate shell integration for this repo."},

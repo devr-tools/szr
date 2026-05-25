@@ -4,7 +4,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -157,12 +156,9 @@ func TestLoadAllErrorsAndHelpers(t *testing.T) {
 		t.Fatal("expected directory load error")
 	}
 
-	protectedPath := filepath.Join(t.TempDir(), "protected.jsonl")
-	if err := os.WriteFile(protectedPath, []byte("{}\n"), 0o000); err != nil {
-		t.Fatalf("write protected file: %v", err)
-	}
-	if _, err := history.New(protectedPath).LoadAll(); err == nil && runtime.GOOS != "windows" {
-		t.Fatal("expected protected file open error")
+	invalidPath := string([]byte{'b', 'a', 'd', 0, '.', 'j', 's', 'o', 'n', 'l'})
+	if _, err := history.New(invalidPath).LoadAll(); err == nil {
+		t.Fatal("expected invalid path open error")
 	}
 
 	if got := history.EstimateTokens(""); got != 0 {

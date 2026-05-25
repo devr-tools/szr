@@ -3,12 +3,14 @@ package cli
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/devr-tools/szr/internal/config"
 	"github.com/devr-tools/szr/internal/engine"
 	"github.com/devr-tools/szr/internal/history"
 	"github.com/devr-tools/szr/internal/profiles"
+	"github.com/devr-tools/szr/internal/updates"
 )
 
 type App struct {
@@ -17,6 +19,12 @@ type App struct {
 	paths   config.Paths
 	history *history.Store
 	engine  *engine.Engine
+	updater updater
+}
+
+type updater interface {
+	Doctor(context.Context, string, config.UpdateCheck) updates.DoctorReport
+	SelfUpdate(context.Context, io.Writer, io.Writer) (updates.SelfUpdateResult, error)
 }
 
 func New(version string) *App {
@@ -30,6 +38,17 @@ func NewWithDependencies(
 	store *history.Store,
 	eng *engine.Engine,
 ) *App {
+	return NewWithDependenciesAndUpdater(version, cfg, paths, store, eng, updates.New(paths))
+}
+
+func NewWithDependenciesAndUpdater(
+	version string,
+	cfg config.Config,
+	paths config.Paths,
+	store *history.Store,
+	eng *engine.Engine,
+	updater updater,
+) *App {
 	cfg.ReasoningBudgetMode = config.ResolveReasoningBudgetMode(cfg.ReasoningBudgetMode)
 	return &App{
 		version: version,
@@ -37,6 +56,7 @@ func NewWithDependencies(
 		paths:   paths,
 		history: store,
 		engine:  eng,
+		updater: updater,
 	}
 }
 
@@ -53,12 +73,13 @@ func NewWithLoader(
 	}
 
 	store := history.New(paths.HistoryFile)
-	return NewWithDependencies(
+	return NewWithDependenciesAndUpdater(
 		version,
 		cfg,
 		paths,
 		store,
 		engine.New(cfg, paths, store, profiles.Builtins(cfg.MaxPreviewLines)),
+		updates.New(paths),
 	)
 }
 
@@ -73,10 +94,26 @@ func (a *App) Run(ctx context.Context, args []string) int {
 		return 0
 	}
 
+	a.maybePrintUpdateNotice(ctx, rest)
+
 	if code, ok := a.runBuiltInCommand(ctx, flags, rest); ok {
 		return code
 	}
 	return a.runExternal(ctx, flags, "run", rest, false)
+}
+
+func (a *App) maybePrintUpdateNotice(ctx context.Context, rest []string) {
+	if a.updater == nil || !a.config.UpdateCheck.Enabled || len(rest) == 0 {
+		return
+	}
+	if rest[0] == "doctor" || (rest[0] == "self" && len(rest) > 1 && (rest[1] == "doctor" || rest[1] == "update")) {
+		return
+	}
+	report := a.updater.Doctor(ctx, a.version, a.config.UpdateCheck)
+	if !report.Enabled || !report.UpdateAvailable || report.UpgradeCommand == "" {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "szr: update available: %s (current %s). Run: %s\n", report.LatestVersion, a.version, report.UpgradeCommand)
 }
 
 func (a *App) runBuiltInCommand(ctx context.Context, flags globalFlags, rest []string) (int, bool) {
@@ -93,8 +130,8 @@ func (a *App) runBuiltInCommand(ctx context.Context, flags globalFlags, rest []s
 		"recommend": func() int { return a.runRecommend(rest[1:]) },
 		"hotspots":  func() int { return a.runHotspots(rest[1:]) },
 		"profiles":  func() int { return a.runProfiles() },
-		"doctor":    func() int { return a.runDoctor(a.configForFlags(flags), rest[1:]) },
-		"self":      func() int { return a.runSelf(flags, rest[1:]) },
+		"doctor":    func() int { return a.runDoctor(ctx, a.configForFlags(flags), rest[1:]) },
+		"self":      func() int { return a.runSelf(ctx, flags, rest[1:]) },
 		"install":   func() int { return a.runInstall(rest[1:]) },
 		"uninstall": func() int { return a.runUninstall(rest[1:]) },
 		"bench":     func() int { return a.runBench(rest[1:]) },

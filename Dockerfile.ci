@@ -1,0 +1,22 @@
+FROM golang:1.26.3-bookworm
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV VIRTUAL_ENV=/opt/semgrep-venv
+ENV PATH=/opt/semgrep-venv/bin:/usr/local/go/bin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends \
+		ca-certificates \
+		git \
+		python3 \
+		python3-venv \
+		python3-pip \
+	&& rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m venv "${VIRTUAL_ENV}" \
+	&& "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir --upgrade pip \
+	&& "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir semgrep==1.83.0
+
+WORKDIR /workspace

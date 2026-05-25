@@ -1,11 +1,17 @@
 package cli_test
 
 import (
+	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/devr-tools/szr/internal/cli"
+	"github.com/devr-tools/szr/internal/config"
+	"github.com/devr-tools/szr/internal/updates"
 	"github.com/devr-tools/szr/test/testutil"
 )
 
@@ -58,8 +64,8 @@ func TestRunRoutes(t *testing.T) {
 		{"commands", []string{"commands"}, 0, []string{"commands", "Execution:", "Local Tools:", "Install:", "szr rg <pattern> [path]", "szr uninstall codex"}, nil, ""},
 		{"version", []string{"--version"}, 0, []string{"szr test"}, nil, ""},
 		{"profiles", []string{"profiles"}, 0, []string{"git-status", "generic-summary"}, nil, ""},
-		{"doctor", []string{"doctor"}, 0, []string{"version: test", "reasoning budget mode: standard", "go:", "git:", "rg:"}, nil, ""},
-		{"self doctor", []string{"self", "doctor"}, 0, []string{"version: test", "install target:", "config dir:"}, nil, ""},
+		{"doctor", []string{"doctor"}, 0, []string{"version: test", "reasoning budget mode: standard", "update checks: disabled", "go:", "git:", "rg:"}, nil, ""},
+		{"self doctor", []string{"self", "doctor"}, 0, []string{"version: test", "install target:", "config dir:", "update checks: disabled"}, nil, ""},
 		{"doctor missing tool", []string{"doctor"}, 0, []string{"go: missing"}, nil, ""},
 		{"git status", []string{"git", "status"}, 0, []string{"staged=1"}, nil, ""},
 		{"git log", []string{"git", "log"}, 0, []string{"2 commits"}, nil, ""},
@@ -152,4 +158,66 @@ func TestDoctorMarksRipgrepOptional(t *testing.T) {
 	if !strings.Contains(stdout, "rg: missing (optional; only needed for `szr rg`)") {
 		t.Fatalf("expected optional rg status, got %q", stdout)
 	}
+}
+
+func TestDoctorShowsUpdateCheckStatusAndNotice(t *testing.T) {
+	paths := testutil.Paths(t.TempDir())
+	testutil.EnsurePaths(t, paths)
+	cfg := config.Default()
+	cfg.UpdateCheck.Enabled = true
+	cfg.UpdateCheck.IntervalHours = 12
+	app := cli.NewWithDependenciesAndUpdater("v0.1.0", cfg, paths, nil, testutil.AppEngine(t, paths), stubUpdater{
+		report: updates.DoctorReport{
+			Enabled:         true,
+			Interval:        12 * time.Hour,
+			Method:          updates.InstallMethodGo,
+			UpgradeCommand:  "go install github.com/devr-tools/szr/cmd/szr@latest",
+			LatestVersion:   "v0.2.0",
+			CheckedAt:       time.Date(2026, 5, 25, 12, 0, 0, 0, time.UTC),
+			UpdateAvailable: true,
+		},
+	})
+
+	code, stdout, stderr := testutil.RunApp(t, app, "doctor")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected doctor stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	for _, want := range []string{
+		"update checks: enabled",
+		"update check interval: 12h0m0s",
+		"install method: go-install",
+		"latest stable: v0.2.0",
+		"update available: yes",
+		"upgrade command: go install github.com/devr-tools/szr/cmd/szr@latest",
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("expected doctor stdout to contain %q, got %q", want, stdout)
+		}
+	}
+
+	code, stdout, stderr = testutil.RunApp(t, app, "git", "status")
+	if code != 0 {
+		t.Fatalf("unexpected git status stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	if !strings.Contains(stderr, "szr: update available: v0.2.0 (current v0.1.0). Run: go install github.com/devr-tools/szr/cmd/szr@latest") {
+		t.Fatalf("expected update notice, got stderr=%q", stderr)
+	}
+}
+
+type stubUpdater struct {
+	report       updates.DoctorReport
+	updateResult updates.SelfUpdateResult
+	updateErr    error
+	updateStdout string
+}
+
+func (s stubUpdater) Doctor(context.Context, string, config.UpdateCheck) updates.DoctorReport {
+	return s.report
+}
+
+func (s stubUpdater) SelfUpdate(_ context.Context, stdout, _ io.Writer) (updates.SelfUpdateResult, error) {
+	if s.updateStdout != "" {
+		_, _ = io.WriteString(stdout, s.updateStdout)
+	}
+	return s.updateResult, s.updateErr
 }
