@@ -11,7 +11,9 @@ GOCYCLO_VERSION ?= v0.6.0
 BASE_REF ?= $(shell git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')
 DOCKER ?= docker
 CI_DOCKER_IMAGE ?= szr-ci:local
-CI_DOCKER_GOCACHE ?= /workspace/.gocache-docker
+CI_DOCKER_GOCACHE ?= /tmp/.gocache-docker
+CI_DOCKER_GOMODCACHE ?= /tmp/.gomodcache-docker
+CI_DOCKER_HOME ?= /tmp/szr-ci-home
 CI_DOCKER_SMOKE_HOME ?= /tmp/szr-smoke-home
 
 .PHONY: help fmt test cover cover-func cover-html build smoke ci ci-docker prepush clean
@@ -26,7 +28,7 @@ help:
 		'make build      - build ./bin/szr and ./bin/szr-dev' \
 		'make smoke      - run quick local CLI smoke checks for szr and szr-dev, including bench/install flows' \
 		'make ci         - run the host-mode local reproduction of the GitHub CI pipeline (override BASE_REF=...)' \
-		'make ci-docker  - build and run the pinned Linux CI container with semgrep and govulncheck required' \
+		'make ci-docker  - build and run the pinned Linux CI container with semgrep, govulncheck, and gocyclo preinstalled' \
 		'make commit     - interactively git add ., choose commit type, commit, and push the current branch' \
 		'make prepush    - run the quick local gate: fmt + test + cover + smoke' \
 		'make clean      - remove local build and coverage artifacts'
@@ -78,13 +80,20 @@ ci:
 		./scripts/ci.sh
 
 ci-docker:
-	$(DOCKER) build -f Dockerfile.ci -t $(CI_DOCKER_IMAGE) .
+	$(DOCKER) build \
+		--build-arg GOVULNCHECK_VERSION=$(GOVULNCHECK_VERSION) \
+		--build-arg GOCYCLO_VERSION=$(GOCYCLO_VERSION) \
+		-f Dockerfile.ci \
+		-t $(CI_DOCKER_IMAGE) .
 	$(DOCKER) run --rm -t \
+		--user $$(id -u):$$(id -g) \
 		-v $(CURDIR):/workspace \
 		-w /workspace \
 		-e BASE_REF=$(BASE_REF) \
 		-e GO=go \
+		-e HOME=$(CI_DOCKER_HOME) \
 		-e GOCACHE=$(CI_DOCKER_GOCACHE) \
+		-e GOMODCACHE=$(CI_DOCKER_GOMODCACHE) \
 		-e MIN_INTERNAL_COVERAGE=$(MIN_INTERNAL_COVERAGE) \
 		-e GOVULNCHECK_MODE=required \
 		-e GOVULNCHECK_VERSION=$(GOVULNCHECK_VERSION) \

@@ -79,6 +79,7 @@ func TestBenchMismatchOutput(t *testing.T) {
 	testutil.MustWriteFile(t, filepath.Join(root, "go.mod"), "module example.com/demo\n")
 	testutil.MustWriteFile(t, filepath.Join(root, "cmd", "szr", "main.go"), "package main\n")
 	testutil.MustWriteFile(t, filepath.Join(root, ".szr"), "blocked")
+	t.Setenv("CODEX_HOME", filepath.Join(root, ".szr"))
 
 	restore := testutil.Chdir(t, root)
 	defer restore()

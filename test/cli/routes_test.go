@@ -267,6 +267,107 @@ func TestDoctorJSONIncludesUpdateStatus(t *testing.T) {
 	}
 }
 
+func TestDoctorJSONUsesCachedUpdateStateWithRealUpdater(t *testing.T) {
+	cases := []struct {
+		name                string
+		version             string
+		latestVersion       string
+		wantUpdateAvailable bool
+	}{
+		{
+			name:                "update available from cached semver",
+			version:             "v0.1.0",
+			latestVersion:       "v0.2.0",
+			wantUpdateAvailable: true,
+		},
+		{
+			name:                "prerelease treated as same stable version",
+			version:             "v0.2.0-rc1",
+			latestVersion:       "v0.2.0",
+			wantUpdateAvailable: false,
+		},
+		{
+			name:                "invalid cached version suppresses update flag",
+			version:             "v0.1.0",
+			latestVersion:       "stable",
+			wantUpdateAvailable: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			paths := testutil.Paths(t.TempDir())
+			testutil.EnsurePaths(t, paths)
+
+			cfg := config.Default()
+			cfg.UpdateCheck.Enabled = true
+			cfg.UpdateCheck.IntervalHours = 24
+			cfg.UpdateCheck.AutoUpdate = true
+
+			now := time.Now().UTC().Truncate(time.Second)
+			cache := map[string]any{
+				"checked_at":                    now.Format(time.RFC3339),
+				"latest_version":                tc.latestVersion,
+				"latest_url":                    "https://example.com/releases/" + tc.latestVersion,
+				"auto_update_attempted_at":      now.Add(-2 * time.Hour).Format(time.RFC3339),
+				"auto_update_attempted_version": tc.latestVersion,
+				"auto_update_succeeded_at":      now.Add(-time.Hour).Format(time.RFC3339),
+				"auto_update_succeeded_version": tc.latestVersion,
+			}
+			data, err := json.Marshal(cache)
+			if err != nil {
+				t.Fatalf("marshal cache: %v", err)
+			}
+			if err := os.WriteFile(filepath.Join(paths.DataDir, "update-check.json"), append(data, '\n'), 0o644); err != nil {
+				t.Fatalf("write cache: %v", err)
+			}
+
+			app := cli.NewWithDependencies(tc.version, cfg, paths, nil, testutil.AppEngine(t, paths))
+			code, stdout, stderr := testutil.RunApp(t, app, "self", "doctor", "--json")
+			if code != 0 || stderr != "" {
+				t.Fatalf("unexpected self doctor json stdout=%q stderr=%q code=%d", stdout, stderr, code)
+			}
+
+			var payload struct {
+				Update struct {
+					Enabled          bool   `json:"enabled"`
+					AutoUpdate       bool   `json:"auto_update"`
+					LatestVersion    string `json:"latest_version"`
+					LatestURL        string `json:"latest_url"`
+					FromCache        bool   `json:"from_cache"`
+					UpdateAvailable  bool   `json:"update_available"`
+					AttemptedAt      string `json:"attempted_at"`
+					AttemptedVersion string `json:"attempted_version"`
+					SucceededAt      string `json:"succeeded_at"`
+					SucceededVersion string `json:"succeeded_version"`
+				} `json:"update"`
+			}
+			if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+				t.Fatalf("decode self doctor json: %v", err)
+			}
+			if !payload.Update.Enabled || !payload.Update.AutoUpdate || !payload.Update.FromCache {
+				t.Fatalf("expected cached enabled auto update payload, got %#v", payload.Update)
+			}
+			if payload.Update.LatestVersion != tc.latestVersion || payload.Update.LatestURL == "" {
+				t.Fatalf("unexpected cached version payload %#v", payload.Update)
+			}
+			if payload.Update.UpdateAvailable != tc.wantUpdateAvailable {
+				t.Fatalf("unexpected update availability %#v", payload.Update)
+			}
+			for _, want := range []string{
+				payload.Update.AttemptedAt,
+				payload.Update.AttemptedVersion,
+				payload.Update.SucceededAt,
+				payload.Update.SucceededVersion,
+			} {
+				if want == "" {
+					t.Fatalf("expected populated auto update state, got %#v", payload.Update)
+				}
+			}
+		})
+	}
+}
+
 func TestRunTriggersAutoUpdateForNormalCommands(t *testing.T) {
 	paths := testutil.Paths(t.TempDir())
 	testutil.EnsurePaths(t, paths)
