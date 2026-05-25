@@ -1,6 +1,6 @@
 # Homebrew Core Readiness
 
-This repo is set up to ship a stable Homebrew formula from the `devr-tools/szr` tap and to validate formula builds on the two platforms that matter for Homebrew formulae:
+This repo is set up to ship a stable Homebrew formula from the shared `devr-tools/tap` tap and to validate formula builds on the two platforms that matter for Homebrew formulae:
 
 - macOS
 - Linux

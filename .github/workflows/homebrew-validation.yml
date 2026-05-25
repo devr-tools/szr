@@ -31,16 +31,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          brew tap devr-tools/szr "$GITHUB_WORKSPACE"
+          brew tap devr-tools/tap "$GITHUB_WORKSPACE"
 
       - name: Build formula from source
         shell: bash
         run: |
           set -euo pipefail
-          HOMEBREW_NO_AUTO_UPDATE=1 brew install --build-from-source devr-tools/szr/szr
+          HOMEBREW_NO_AUTO_UPDATE=1 brew install --build-from-source devr-tools/tap/szr
 
       - name: Run formula test
         shell: bash
         run: |
           set -euo pipefail
-          brew test devr-tools/szr/szr
+          brew test devr-tools/tap/szr

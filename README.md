@@ -87,31 +87,18 @@ If your shell does not already include that install directory on `PATH`, `szr se
 ./bin/szr self install --update-shell
 ```
 
-Homebrew is also wired up through this repo's tap:
+Homebrew is also wired up for a shared `devr-tools/tap` layout:
 
 ```bash
 # From a local checkout
-brew tap devr-tools/szr "$(pwd)"
+brew tap devr-tools/tap "$(pwd)"
 brew install szr
 szr self doctor
 ```
 
 ```bash
-# From GitHub
-brew tap devr-tools/szr
-brew install szr
-szr self doctor
-```
-
-```bash
-# One-line direct install from the tap
-brew install devr-tools/szr/szr
-szr self doctor
-```
-
-```bash
-# Latest main branch instead of the stable tag
-brew install --HEAD devr-tools/szr/szr
+# From a local checkout without adding a tap
+brew install --formula ./Formula/szr.rb
 szr self doctor
 ```
 
