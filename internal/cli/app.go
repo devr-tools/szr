@@ -24,6 +24,7 @@ type App struct {
 
 type updater interface {
 	Doctor(context.Context, string, config.UpdateCheck) updates.DoctorReport
+	AutoUpdate(context.Context, string, config.UpdateCheck, io.Writer, io.Writer) updates.AutoUpdateResult
 	SelfUpdate(context.Context, io.Writer, io.Writer) (updates.SelfUpdateResult, error)
 }
 
@@ -94,7 +95,8 @@ func (a *App) Run(ctx context.Context, args []string) int {
 		return 0
 	}
 
-	a.maybePrintUpdateNotice(ctx, rest)
+	autoResult := a.maybeAutoUpdate(ctx, rest)
+	a.maybePrintUpdateNotice(ctx, rest, autoResult)
 
 	if code, ok := a.runBuiltInCommand(ctx, flags, rest); ok {
 		return code
@@ -102,11 +104,24 @@ func (a *App) Run(ctx context.Context, args []string) int {
 	return a.runExternal(ctx, flags, "run", rest, false)
 }
 
-func (a *App) maybePrintUpdateNotice(ctx context.Context, rest []string) {
-	if a.updater == nil || !a.config.UpdateCheck.Enabled || len(rest) == 0 {
+func (a *App) maybeAutoUpdate(ctx context.Context, rest []string) updates.AutoUpdateResult {
+	if a.updater == nil || len(rest) == 0 {
+		return updates.AutoUpdateResult{}
+	}
+	if rest[0] == "doctor" || (rest[0] == "self" && len(rest) > 1 && (rest[1] == "doctor" || rest[1] == "update")) {
+		return updates.AutoUpdateResult{}
+	}
+	return a.updater.AutoUpdate(ctx, a.version, a.config.UpdateCheck, os.Stdout, os.Stderr)
+}
+
+func (a *App) maybePrintUpdateNotice(ctx context.Context, rest []string, autoResult updates.AutoUpdateResult) {
+	if a.updater == nil || !a.config.UpdateCheck.Enabled || len(rest) == 0 || !isInteractiveFile(os.Stderr) {
 		return
 	}
 	if rest[0] == "doctor" || (rest[0] == "self" && len(rest) > 1 && (rest[1] == "doctor" || rest[1] == "update")) {
+		return
+	}
+	if autoResult.Updated {
 		return
 	}
 	report := a.updater.Doctor(ctx, a.version, a.config.UpdateCheck)
@@ -114,6 +129,17 @@ func (a *App) maybePrintUpdateNotice(ctx context.Context, rest []string) {
 		return
 	}
 	fmt.Fprintf(os.Stderr, "szr: update available: %s (current %s). Run: %s\n", report.LatestVersion, a.version, report.UpgradeCommand)
+}
+
+func isInteractiveFile(file *os.File) bool {
+	if file == nil {
+		return false
+	}
+	info, err := file.Stat()
+	if err != nil {
+		return false
+	}
+	return info.Mode()&os.ModeCharDevice != 0
 }
 
 func (a *App) runBuiltInCommand(ctx context.Context, flags globalFlags, rest []string) (int, bool) {

@@ -187,6 +187,102 @@ func TestSelfUpdateRunsExpectedCommand(t *testing.T) {
 	}
 }
 
+func TestAutoUpdateRunsOncePerVersion(t *testing.T) {
+	root := t.TempDir()
+	paths := testPaths(root)
+	cfg := config.Default().UpdateCheck
+	cfg.Enabled = true
+	cfg.AutoUpdate = true
+	cfg.IntervalHours = 12
+
+	var updateCalls int
+	svc := &Service{
+		paths:        paths,
+		now:          func() time.Time { return time.Date(2026, 5, 25, 12, 0, 0, 0, time.UTC) },
+		readFile:     os.ReadFile,
+		writeFile:    os.WriteFile,
+		mkdirAll:     os.MkdirAll,
+		executable:   func() (string, error) { return filepath.Join(root, "go", "bin", "szr"), nil },
+		evalSymlinks: func(path string) (string, error) { return path, nil },
+		lookPath:     func(string) (string, error) { return "ok", nil },
+		getenv:       func(string) string { return "" },
+		userHomeDir:  func() (string, error) { return root, nil },
+		fetchLatest: func(context.Context) (Release, error) {
+			return Release{Version: "v0.2.0", URL: "https://example.com/v0.2.0"}, nil
+		},
+		runGoInstall: func(_ context.Context, stdout, stderr io.Writer) error {
+			updateCalls++
+			_, _ = io.WriteString(stdout, "updated\n")
+			return nil
+		},
+	}
+
+	var stdout strings.Builder
+	result := svc.AutoUpdate(context.Background(), "v0.1.0", cfg, &stdout, io.Discard)
+	if !result.Attempted || !result.Updated || updateCalls != 1 {
+		t.Fatalf("unexpected first auto update result=%#v calls=%d", result, updateCalls)
+	}
+
+	result = svc.AutoUpdate(context.Background(), "v0.1.0", cfg, &stdout, io.Discard)
+	if !result.Attempted || result.Updated || updateCalls != 1 {
+		t.Fatalf("unexpected second auto update result=%#v calls=%d", result, updateCalls)
+	}
+
+	report := svc.Doctor(context.Background(), "v0.1.0", cfg)
+	if !report.AutoUpdate || report.AutoUpdateState.SucceededVersion != "v0.2.0" || report.AutoUpdateState.LastError != "" {
+		t.Fatalf("unexpected doctor auto update state %#v", report)
+	}
+}
+
+func TestAutoUpdateFailureIsCachedUntilIntervalExpires(t *testing.T) {
+	root := t.TempDir()
+	paths := testPaths(root)
+	cfg := config.Default().UpdateCheck
+	cfg.Enabled = true
+	cfg.AutoUpdate = true
+	cfg.IntervalHours = 12
+
+	now := time.Date(2026, 5, 25, 12, 0, 0, 0, time.UTC)
+	var updateCalls int
+	svc := &Service{
+		paths:     paths,
+		now:       func() time.Time { return now },
+		readFile:  os.ReadFile,
+		writeFile: os.WriteFile,
+		mkdirAll:  os.MkdirAll,
+		executable: func() (string, error) {
+			return filepath.Join(root, "go", "bin", "szr"), nil
+		},
+		evalSymlinks: func(path string) (string, error) { return path, nil },
+		lookPath:     func(string) (string, error) { return "ok", nil },
+		getenv:       func(string) string { return "" },
+		userHomeDir:  func() (string, error) { return root, nil },
+		fetchLatest: func(context.Context) (Release, error) {
+			return Release{Version: "v0.2.0", URL: "https://example.com/v0.2.0"}, nil
+		},
+		runGoInstall: func(_ context.Context, stdout, stderr io.Writer) error {
+			updateCalls++
+			return errors.New("boom")
+		},
+	}
+
+	result := svc.AutoUpdate(context.Background(), "v0.1.0", cfg, io.Discard, io.Discard)
+	if !result.Attempted || result.Updated || result.Error == "" || updateCalls != 1 {
+		t.Fatalf("unexpected first failure result=%#v calls=%d", result, updateCalls)
+	}
+
+	result = svc.AutoUpdate(context.Background(), "v0.1.0", cfg, io.Discard, io.Discard)
+	if !result.Attempted || result.Updated || updateCalls != 1 {
+		t.Fatalf("unexpected cached failure result=%#v calls=%d", result, updateCalls)
+	}
+
+	now = now.Add(13 * time.Hour)
+	result = svc.AutoUpdate(context.Background(), "v0.1.0", cfg, io.Discard, io.Discard)
+	if !result.Attempted || result.Updated || updateCalls != 2 {
+		t.Fatalf("unexpected retry after interval result=%#v calls=%d", result, updateCalls)
+	}
+}
+
 func testPaths(root string) config.Paths {
 	return config.Paths{
 		ConfigDir:   filepath.Join(root, "config"),

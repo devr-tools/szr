@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
@@ -56,7 +57,7 @@ func TestRunRoutes(t *testing.T) {
 		stdin      string
 	}{
 		{"help empty", nil, 0, []string{`szr or "sizer" is a token-aware CLI proxy built in Go`, "Setup:"}, nil, ""},
-		{"help flag", []string{"--help"}, 0, []string{"Setup:", "Insight:", "Discover:", "szr commands", "--reasoning-budget <standard|agent>", "szr uninstall codex|claude-code|cursor|..."}, nil, ""},
+		{"help flag", []string{"--help"}, 0, []string{"Setup:", "Insight:", "Discover:", "szr commands", "--reasoning-budget <standard|agent>", "szr uninstall", "szr uninstall codex|claude-code|cursor|..."}, nil, ""},
 		{"help ultra", []string{"-u", "help"}, 0, []string{"Setup:"}, nil, ""},
 		{"help verbose long", []string{"--verbose", "help"}, 0, []string{"Setup:"}, nil, ""},
 		{"help verbose exact", []string{"-vv", "help"}, 0, []string{"Setup:"}, nil, ""},
@@ -199,20 +200,118 @@ func TestDoctorShowsUpdateCheckStatusAndNotice(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("unexpected git status stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
-	if !strings.Contains(stderr, "szr: update available: v0.2.0 (current v0.1.0). Run: go install github.com/devr-tools/szr/cmd/szr@latest") {
-		t.Fatalf("expected update notice, got stderr=%q", stderr)
+	if stderr != "" {
+		t.Fatalf("expected no inline update notice for non-interactive stderr, got stderr=%q", stderr)
+	}
+}
+
+func TestDoctorJSONIncludesUpdateStatus(t *testing.T) {
+	paths := testutil.Paths(t.TempDir())
+	testutil.EnsurePaths(t, paths)
+	cfg := config.Default()
+	cfg.UpdateCheck.Enabled = true
+	cfg.UpdateCheck.IntervalHours = 12
+	app := cli.NewWithDependenciesAndUpdater("v0.1.0", cfg, paths, nil, testutil.AppEngine(t, paths), stubUpdater{
+		report: updates.DoctorReport{
+			Enabled:         true,
+			Interval:        12 * time.Hour,
+			Method:          updates.InstallMethodGo,
+			UpgradeCommand:  "go install github.com/devr-tools/szr/cmd/szr@latest",
+			LatestVersion:   "v0.2.0",
+			LatestURL:       "https://github.com/devr-tools/szr/releases/tag/v0.2.0",
+			CheckedAt:       time.Date(2026, 5, 25, 12, 0, 0, 0, time.UTC),
+			UpdateAvailable: true,
+		},
+	})
+
+	code, stdout, stderr := testutil.RunApp(t, app, "self", "doctor", "--json")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected self doctor json stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+
+	var payload struct {
+		Version string `json:"version"`
+		Update  struct {
+			Enabled         bool   `json:"enabled"`
+			AutoUpdate      bool   `json:"auto_update"`
+			InstallMethod   string `json:"install_method"`
+			LatestVersion   string `json:"latest_version"`
+			LatestURL       string `json:"latest_url"`
+			CheckedAt       string `json:"checked_at"`
+			UpdateAvailable bool   `json:"update_available"`
+			UpgradeCommand  string `json:"upgrade_command"`
+		} `json:"update"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("decode self doctor json: %v", err)
+	}
+	if payload.Version != "v0.1.0" {
+		t.Fatalf("unexpected version %#v", payload)
+	}
+	if !payload.Update.Enabled || payload.Update.AutoUpdate || !payload.Update.UpdateAvailable {
+		t.Fatalf("expected enabled available update, got %#v", payload.Update)
+	}
+	for _, want := range []string{
+		payload.Update.InstallMethod,
+		payload.Update.LatestVersion,
+		payload.Update.LatestURL,
+		payload.Update.CheckedAt,
+		payload.Update.UpgradeCommand,
+	} {
+		if want == "" {
+			t.Fatalf("expected populated update json, got %#v", payload.Update)
+		}
+	}
+	if payload.Update.InstallMethod != "go-install" || payload.Update.LatestVersion != "v0.2.0" {
+		t.Fatalf("unexpected update json %#v", payload.Update)
+	}
+}
+
+func TestRunTriggersAutoUpdateForNormalCommands(t *testing.T) {
+	paths := testutil.Paths(t.TempDir())
+	testutil.EnsurePaths(t, paths)
+	cfg := config.Default()
+	cfg.UpdateCheck.Enabled = true
+	cfg.UpdateCheck.AutoUpdate = true
+	binDir := t.TempDir()
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	testutil.WriteExecutable(t, binDir, "git", "#!/bin/sh\necho \"## main...origin/main\"\n")
+
+	updater := &countingUpdater{}
+	app := cli.NewWithDependenciesAndUpdater("v0.1.0", cfg, paths, nil, testutil.AppEngine(t, paths), updater)
+
+	code, _, _ := testutil.RunApp(t, app, "git", "status")
+	if code != 0 {
+		t.Fatalf("unexpected exit code %d", code)
+	}
+	if updater.autoCalls != 1 {
+		t.Fatalf("expected auto update once, got %d", updater.autoCalls)
+	}
+
+	code, _, _ = testutil.RunApp(t, app, "self", "doctor")
+	if code != 0 {
+		t.Fatalf("unexpected exit code %d", code)
+	}
+	if updater.autoCalls != 1 {
+		t.Fatalf("expected self doctor to skip auto update, got %d", updater.autoCalls)
 	}
 }
 
 type stubUpdater struct {
 	report       updates.DoctorReport
+	autoResult   updates.AutoUpdateResult
 	updateResult updates.SelfUpdateResult
 	updateErr    error
 	updateStdout string
+	autoCalls    int
 }
 
 func (s stubUpdater) Doctor(context.Context, string, config.UpdateCheck) updates.DoctorReport {
 	return s.report
+}
+
+func (s stubUpdater) AutoUpdate(context.Context, string, config.UpdateCheck, io.Writer, io.Writer) updates.AutoUpdateResult {
+	return s.autoResult
 }
 
 func (s stubUpdater) SelfUpdate(_ context.Context, stdout, _ io.Writer) (updates.SelfUpdateResult, error) {
@@ -220,4 +319,21 @@ func (s stubUpdater) SelfUpdate(_ context.Context, stdout, _ io.Writer) (updates
 		_, _ = io.WriteString(stdout, s.updateStdout)
 	}
 	return s.updateResult, s.updateErr
+}
+
+type countingUpdater struct {
+	autoCalls int
+}
+
+func (u *countingUpdater) Doctor(context.Context, string, config.UpdateCheck) updates.DoctorReport {
+	return updates.DoctorReport{}
+}
+
+func (u *countingUpdater) AutoUpdate(context.Context, string, config.UpdateCheck, io.Writer, io.Writer) updates.AutoUpdateResult {
+	u.autoCalls++
+	return updates.AutoUpdateResult{}
+}
+
+func (u *countingUpdater) SelfUpdate(context.Context, io.Writer, io.Writer) (updates.SelfUpdateResult, error) {
+	return updates.SelfUpdateResult{}, nil
 }

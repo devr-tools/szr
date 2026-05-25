@@ -73,6 +73,38 @@ func TestDetectPathsVariants(t *testing.T) {
 		}
 	})
 
+	t.Run("detects claude paths", func(t *testing.T) {
+		t.Parallel()
+
+		home := t.TempDir()
+
+		paths, err := installers.DetectClaudeGlobalPaths(home)
+		if err != nil {
+			t.Fatalf("detect claude paths: %v", err)
+		}
+		if paths.Binary != "szr" {
+			t.Fatalf("unexpected global binary: %q", paths.Binary)
+		}
+		if !strings.HasSuffix(paths.HookFile, filepath.Join(".claude", "hooks", "szr-rewrite.sh")) {
+			t.Fatalf("unexpected global hook path: %q", paths.HookFile)
+		}
+		if !strings.HasSuffix(paths.ClaudeConfig, filepath.Join(".claude", "settings.json")) {
+			t.Fatalf("unexpected global settings path: %q", paths.ClaudeConfig)
+		}
+		if !strings.HasSuffix(paths.CodexSZRFile, filepath.Join(".codex", "szr.md")) {
+			t.Fatalf("unexpected codex path: %q", paths.CodexSZRFile)
+		}
+		if !strings.HasSuffix(paths.CursorConfig, filepath.Join(".cursor", "hooks.json")) {
+			t.Fatalf("unexpected cursor config path: %q", paths.CursorConfig)
+		}
+		if !strings.HasSuffix(paths.GeminiConfig, filepath.Join(".gemini", "settings.json")) {
+			t.Fatalf("unexpected gemini config path: %q", paths.GeminiConfig)
+		}
+		if !paths.Global {
+			t.Fatal("expected global paths to be marked global")
+		}
+	})
+
 	t.Run("rejects invalid roots", func(t *testing.T) {
 		t.Parallel()
 

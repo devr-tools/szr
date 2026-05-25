@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,7 +11,69 @@ import (
 	"github.com/devr-tools/szr/internal/config"
 	"github.com/devr-tools/szr/internal/history"
 	"github.com/devr-tools/szr/internal/selfinstall"
+	"github.com/devr-tools/szr/internal/updates"
 )
+
+type doctorArgs struct {
+	showHistory bool
+	asJSON      bool
+}
+
+type doctorJSON struct {
+	Version             string             `json:"version"`
+	Executable          string             `json:"executable,omitempty"`
+	InstallDir          string             `json:"install_dir,omitempty"`
+	InstallTarget       string             `json:"install_target,omitempty"`
+	PathPresent         bool               `json:"path_present"`
+	ShellRC             string             `json:"shell_rc,omitempty"`
+	PathFix             string             `json:"path_fix,omitempty"`
+	Config              string             `json:"config"`
+	ConfigDir           string             `json:"config_dir"`
+	DataDir             string             `json:"data_dir"`
+	History             string             `json:"history"`
+	TeeDir              string             `json:"tee_dir"`
+	ReasoningBudgetMode string             `json:"reasoning_budget_mode"`
+	Update              doctorUpdateJSON   `json:"update"`
+	Tools               []doctorToolJSON   `json:"tools"`
+	HistoryDiagnostics  *doctorHistoryJSON `json:"history_diagnostics,omitempty"`
+	ProjectRules        string             `json:"project_rules,omitempty"`
+}
+
+type doctorUpdateJSON struct {
+	Enabled          bool   `json:"enabled"`
+	Interval         string `json:"interval,omitempty"`
+	AutoUpdate       bool   `json:"auto_update"`
+	InstallMethod    string `json:"install_method"`
+	LatestVersion    string `json:"latest_version,omitempty"`
+	LatestURL        string `json:"latest_url,omitempty"`
+	CheckedAt        string `json:"checked_at,omitempty"`
+	FromCache        bool   `json:"from_cache,omitempty"`
+	UpdateAvailable  bool   `json:"update_available"`
+	UpgradeCommand   string `json:"upgrade_command,omitempty"`
+	AttemptedAt      string `json:"attempted_at,omitempty"`
+	AttemptedVersion string `json:"attempted_version,omitempty"`
+	SucceededAt      string `json:"succeeded_at,omitempty"`
+	SucceededVersion string `json:"succeeded_version,omitempty"`
+	LastError        string `json:"last_error,omitempty"`
+	Error            string `json:"error,omitempty"`
+}
+
+type doctorToolJSON struct {
+	Name     string `json:"name"`
+	Status   string `json:"status"`
+	Path     string `json:"path,omitempty"`
+	Optional bool   `json:"optional,omitempty"`
+	Reason   string `json:"reason,omitempty"`
+}
+
+type doctorHistoryJSON struct {
+	Commands        int              `json:"commands"`
+	FallbackRate    float64          `json:"fallback_rate"`
+	FailureRate     float64          `json:"failure_rate"`
+	TeeRate         float64          `json:"tee_rate"`
+	Recommendations []recommendation `json:"recommendations,omitempty"`
+	Hotspots        []hotspotStat    `json:"hotspots,omitempty"`
+}
 
 func (a *App) runSelf(ctx context.Context, flags globalFlags, args []string) int {
 	if len(args) == 0 {
@@ -21,6 +84,8 @@ func (a *App) runSelf(ctx context.Context, flags globalFlags, args []string) int
 	switch args[0] {
 	case "install":
 		return a.runSelfInstall(args[1:])
+	case "uninstall":
+		return a.runSelfUninstall(args[1:])
 	case "update":
 		return a.runSelfUpdate(ctx, args[1:])
 	case "doctor":
@@ -79,6 +144,40 @@ func (a *App) runSelfInstall(args []string) int {
 	return 0
 }
 
+func (a *App) runSelfUninstall(args []string) int {
+	printOnly, overrideDir, code := parseSelfUninstallArgs(args)
+	if code != 0 {
+		return code
+	}
+
+	plan, err := resolveSelfInstallPlan(overrideDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "szr: %v\n", err)
+		return 1
+	}
+
+	if printOnly {
+		printSelfUninstallPlan(plan)
+		return 0
+	}
+
+	result, err := selfinstall.Uninstall(plan)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "szr: failed to uninstall szr: %v\n", err)
+		return 1
+	}
+
+	if result.Removed {
+		fmt.Printf("uninstalled: %s\n", result.Plan.TargetPath)
+	} else {
+		fmt.Printf("uninstalled: already absent (%s)\n", result.Plan.TargetPath)
+	}
+	if result.ShellConfigured {
+		fmt.Printf("shell rc still references install dir: %s\n", result.Plan.ShellRCPath)
+	}
+	return 0
+}
+
 func parseSelfInstallArgs(args []string) (bool, bool, string, int) {
 	updateShell := false
 	printOnly := false
@@ -103,6 +202,29 @@ func parseSelfInstallArgs(args []string) (bool, bool, string, int) {
 		}
 	}
 	return updateShell, printOnly, overrideDir, 0
+}
+
+func parseSelfUninstallArgs(args []string) (bool, string, int) {
+	printOnly := false
+	overrideDir := ""
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--print":
+			printOnly = true
+		case "--path":
+			if i+1 >= len(args) {
+				fmt.Fprintln(os.Stderr, "szr: self uninstall requires a directory after --path")
+				return false, "", 2
+			}
+			i++
+			overrideDir = args[i]
+		default:
+			fmt.Fprintf(os.Stderr, "szr: unknown self uninstall flag %s\n", args[i])
+			return false, "", 2
+		}
+	}
+	return printOnly, overrideDir, 0
 }
 
 func resolveSelfInstallPlan(overrideDir string) (selfinstall.Plan, error) {
@@ -146,6 +268,17 @@ func printSelfInstallPlan(plan selfinstall.Plan, updateShell bool) {
 	}
 }
 
+func printSelfUninstallPlan(plan selfinstall.Plan) {
+	fmt.Println("plan: self uninstall")
+	fmt.Printf("  target: %s\n", plan.TargetPath)
+	if plan.ShellRCPath != "" {
+		fmt.Printf("  shell rc: %s\n", plan.ShellRCPath)
+	}
+	if plan.ShellSnippet != "" {
+		fmt.Printf("  path snippet: %s\n", plan.ShellSnippet)
+	}
+}
+
 func (a *App) runSelfUpdate(ctx context.Context, args []string) int {
 	if len(args) != 0 {
 		fmt.Fprintf(os.Stderr, "szr: self update does not accept arguments\n")
@@ -168,12 +301,48 @@ func (a *App) runSelfUpdate(ctx context.Context, args []string) int {
 }
 
 func (a *App) runDoctor(ctx context.Context, cfg config.Config, args []string) int {
-	showHistory, code := parseDoctorArgs(args)
+	parsed, code := parseDoctorArgs(args)
 	if code != 0 {
 		return code
 	}
 
 	executablePath, plan, planErr := doctorInstallPlan()
+	update := a.doctorUpdateReport(ctx, cfg)
+	historyDiagnostics, err := a.doctorHistoryDiagnostics(parsed.showHistory)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "szr: failed to read history: %v\n", err)
+		return 1
+	}
+
+	if parsed.asJSON {
+		payload := doctorJSON{
+			Version:             a.version,
+			Executable:          executablePath,
+			Config:              a.paths.ConfigFile,
+			ConfigDir:           a.paths.ConfigDir,
+			DataDir:             a.paths.DataDir,
+			History:             a.paths.HistoryFile,
+			TeeDir:              a.paths.TeeDir,
+			ReasoningBudgetMode: cfg.ReasoningBudgetMode,
+			Update:              doctorUpdateJSONFromReport(update),
+			Tools:               doctorToolStatusJSON(),
+			HistoryDiagnostics:  historyDiagnostics,
+		}
+		if planErr == nil {
+			payload.InstallDir = plan.InstallDir
+			payload.InstallTarget = plan.TargetPath
+			payload.PathPresent = plan.PathContains
+			payload.ShellRC = plan.ShellRCPath
+			payload.PathFix = plan.ShellSnippet
+		}
+		if a.paths.ProjectRuleFile != "" {
+			payload.ProjectRules = a.paths.ProjectRuleFile
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		_ = enc.Encode(payload)
+		return 0
+	}
 
 	fmt.Printf("version: %s\n", a.version)
 	if executablePath != "" {
@@ -186,32 +355,31 @@ func (a *App) runDoctor(ctx context.Context, cfg config.Config, args []string) i
 	fmt.Printf("history: %s\n", a.paths.HistoryFile)
 	fmt.Printf("tee dir: %s\n", a.paths.TeeDir)
 	fmt.Printf("reasoning budget mode: %s\n", cfg.ReasoningBudgetMode)
-	a.printDoctorUpdateStatus(ctx, cfg)
+	printDoctorUpdateStatus(update)
 	if a.paths.ProjectRuleFile != "" {
 		fmt.Printf("project rules: %s\n", a.paths.ProjectRuleFile)
 	}
 	printDoctorToolStatus()
-	if showHistory {
-		if err := a.printDoctorHistory(); err != nil {
-			fmt.Fprintf(os.Stderr, "szr: failed to read history: %v\n", err)
-			return 1
-		}
+	if parsed.showHistory && historyDiagnostics != nil {
+		printDoctorHistory(historyDiagnostics)
 	}
 	return 0
 }
 
-func parseDoctorArgs(args []string) (bool, int) {
-	showHistory := false
+func parseDoctorArgs(args []string) (doctorArgs, int) {
+	parsed := doctorArgs{}
 	for _, arg := range args {
 		switch arg {
 		case "--history":
-			showHistory = true
+			parsed.showHistory = true
+		case "--json":
+			parsed.asJSON = true
 		default:
 			fmt.Fprintf(os.Stderr, "szr: unknown doctor flag %s\n", arg)
-			return false, 2
+			return doctorArgs{}, 2
 		}
 	}
-	return showHistory, 0
+	return parsed, 0
 }
 
 func doctorInstallPlan() (string, selfinstall.Plan, error) {
@@ -244,18 +412,31 @@ func printDoctorInstallPlan(plan selfinstall.Plan, err error) {
 	}
 }
 
-func (a *App) printDoctorUpdateStatus(ctx context.Context, cfg config.Config) {
+func (a *App) doctorUpdateReport(ctx context.Context, cfg config.Config) updates.DoctorReport {
 	if a.updater == nil {
-		return
+		return updates.DoctorReport{}
 	}
-	report := a.updater.Doctor(ctx, a.version, cfg.UpdateCheck)
+	return a.updater.Doctor(ctx, a.version, cfg.UpdateCheck)
+}
+
+func printDoctorUpdateStatus(report updates.DoctorReport) {
 	if !report.Enabled {
 		fmt.Println("update checks: disabled")
 		fmt.Printf("install method: %s\n", report.Method)
+		if report.AutoUpdate {
+			fmt.Println("auto update: enabled")
+		} else {
+			fmt.Println("auto update: disabled")
+		}
 		return
 	}
 	fmt.Println("update checks: enabled")
 	fmt.Printf("update check interval: %s\n", report.Interval)
+	if report.AutoUpdate {
+		fmt.Println("auto update: enabled")
+	} else {
+		fmt.Println("auto update: disabled")
+	}
 	fmt.Printf("install method: %s\n", report.Method)
 	if !report.CheckedAt.IsZero() {
 		fmt.Printf("latest stable: %s\n", report.LatestVersion)
@@ -269,51 +450,123 @@ func (a *App) printDoctorUpdateStatus(ctx context.Context, cfg config.Config) {
 			fmt.Printf("upgrade command: %s\n", report.UpgradeCommand)
 		}
 	}
+	if !report.AutoUpdateState.SucceededAt.IsZero() {
+		fmt.Printf("last auto update: %s %s\n", report.AutoUpdateState.SucceededVersion, report.AutoUpdateState.SucceededAt.Format(time.RFC3339))
+	} else if !report.AutoUpdateState.AttemptedAt.IsZero() {
+		fmt.Printf("last auto update attempt: %s %s\n", report.AutoUpdateState.AttemptedVersion, report.AutoUpdateState.AttemptedAt.Format(time.RFC3339))
+	}
+	if report.AutoUpdateState.LastError != "" {
+		fmt.Printf("auto update error: %s\n", report.AutoUpdateState.LastError)
+	}
 	if report.Error != "" {
 		fmt.Printf("update check error: %s\n", report.Error)
 	}
 }
 
 func printDoctorToolStatus() {
-	for _, tool := range []string{"git", "go"} {
-		path, err := exec.LookPath(tool)
-		if err != nil {
-			fmt.Printf("%s: missing\n", tool)
-			continue
+	for _, tool := range doctorToolStatusJSON() {
+		switch {
+		case tool.Status == "ok" && tool.Optional:
+			fmt.Printf("%s: %s (optional)\n", tool.Name, tool.Path)
+		case tool.Status == "ok":
+			fmt.Printf("%s: %s\n", tool.Name, tool.Path)
+		case tool.Optional:
+			fmt.Printf("%s: missing (%s)\n", tool.Name, tool.Reason)
+		default:
+			fmt.Printf("%s: missing\n", tool.Name)
 		}
-		fmt.Printf("%s: %s\n", tool, path)
-	}
-	if path, err := exec.LookPath("rg"); err != nil {
-		fmt.Println("rg: missing (optional; only needed for `szr rg`)")
-	} else {
-		fmt.Printf("rg: %s (optional)\n", path)
 	}
 }
 
-func (a *App) printDoctorHistory() error {
+func doctorToolStatusJSON() []doctorToolJSON {
+	tools := make([]doctorToolJSON, 0, 3)
+	for _, name := range []string{"git", "go"} {
+		path, err := exec.LookPath(name)
+		if err != nil {
+			tools = append(tools, doctorToolJSON{Name: name, Status: "missing"})
+			continue
+		}
+		tools = append(tools, doctorToolJSON{Name: name, Status: "ok", Path: path})
+	}
+	path, err := exec.LookPath("rg")
+	if err != nil {
+		tools = append(tools, doctorToolJSON{
+			Name:     "rg",
+			Status:   "missing",
+			Optional: true,
+			Reason:   "optional; only needed for `szr rg`",
+		})
+		return tools
+	}
+	tools = append(tools, doctorToolJSON{Name: "rg", Status: "ok", Path: path, Optional: true})
+	return tools
+}
+
+func (a *App) doctorHistoryDiagnostics(showHistory bool) (*doctorHistoryJSON, error) {
+	if !showHistory {
+		return nil, nil
+	}
 	records, err := a.history.LoadAll()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	summary := history.Summarize(records, 5)
+	return &doctorHistoryJSON{
+		Commands:        summary.Commands,
+		FallbackRate:    summary.FallbackRate,
+		FailureRate:     summary.FailureRate,
+		TeeRate:         summary.TeeRate,
+		Recommendations: buildRecommendations(records, 3),
+		Hotspots:        buildHotspots(records, 3),
+	}, nil
+}
+
+func printDoctorHistory(diagnostics *doctorHistoryJSON) {
 	fmt.Println("history diagnostics:")
-	fmt.Printf("  commands: %d\n", summary.Commands)
-	fmt.Printf("  fallback rate: %.1f%%\n", summary.FallbackRate)
-	fmt.Printf("  failure rate: %.1f%%\n", summary.FailureRate)
-	fmt.Printf("  tee rate: %.1f%%\n", summary.TeeRate)
-	recommendations := buildRecommendations(records, 3)
-	if len(recommendations) > 0 {
+	fmt.Printf("  commands: %d\n", diagnostics.Commands)
+	fmt.Printf("  fallback rate: %.1f%%\n", diagnostics.FallbackRate)
+	fmt.Printf("  failure rate: %.1f%%\n", diagnostics.FailureRate)
+	fmt.Printf("  tee rate: %.1f%%\n", diagnostics.TeeRate)
+	if len(diagnostics.Recommendations) > 0 {
 		fmt.Println("  recommendations:")
-		for _, item := range recommendations {
+		for _, item := range diagnostics.Recommendations {
 			fmt.Printf("    - [%s] %s\n", item.Kind, item.Action)
 		}
 	}
-	hotspots := buildHotspots(records, 3)
-	if len(hotspots) > 0 {
+	if len(diagnostics.Hotspots) > 0 {
 		fmt.Println("  hotspots:")
-		for _, item := range hotspots {
+		for _, item := range diagnostics.Hotspots {
 			fmt.Printf("    - %s profile=%s avg=%.1f%% fallback=%.1f%% p95=%dms\n", item.Command, item.Profile, item.AveragePct, item.FallbackRate, item.DurationP95MS)
 		}
 	}
-	return nil
+}
+
+func doctorUpdateJSONFromReport(report updates.DoctorReport) doctorUpdateJSON {
+	payload := doctorUpdateJSON{
+		Enabled:         report.Enabled,
+		AutoUpdate:      report.AutoUpdate,
+		InstallMethod:   string(report.Method),
+		UpdateAvailable: report.UpdateAvailable,
+	}
+	if report.Interval > 0 {
+		payload.Interval = report.Interval.String()
+	}
+	if !report.CheckedAt.IsZero() {
+		payload.CheckedAt = report.CheckedAt.Format(time.RFC3339)
+	}
+	payload.LatestVersion = report.LatestVersion
+	payload.LatestURL = report.LatestURL
+	payload.FromCache = report.FromCache
+	payload.UpgradeCommand = report.UpgradeCommand
+	if !report.AutoUpdateState.AttemptedAt.IsZero() {
+		payload.AttemptedAt = report.AutoUpdateState.AttemptedAt.Format(time.RFC3339)
+	}
+	payload.AttemptedVersion = report.AutoUpdateState.AttemptedVersion
+	if !report.AutoUpdateState.SucceededAt.IsZero() {
+		payload.SucceededAt = report.AutoUpdateState.SucceededAt.Format(time.RFC3339)
+	}
+	payload.SucceededVersion = report.AutoUpdateState.SucceededVersion
+	payload.LastError = report.AutoUpdateState.LastError
+	payload.Error = report.Error
+	return payload
 }

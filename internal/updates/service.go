@@ -39,6 +39,7 @@ type Release struct {
 type DoctorReport struct {
 	Enabled         bool
 	Interval        time.Duration
+	AutoUpdate      bool
 	Method          InstallMethod
 	UpgradeCommand  string
 	LatestVersion   string
@@ -46,12 +47,30 @@ type DoctorReport struct {
 	CheckedAt       time.Time
 	FromCache       bool
 	UpdateAvailable bool
+	AutoUpdateState AutoUpdateState
 	Error           string
 }
 
 type SelfUpdateResult struct {
 	Method         InstallMethod
 	UpgradeCommand string
+}
+
+type AutoUpdateState struct {
+	AttemptedAt      time.Time
+	AttemptedVersion string
+	SucceededAt      time.Time
+	SucceededVersion string
+	LastError        string
+}
+
+type AutoUpdateResult struct {
+	Attempted bool
+	Updated   bool
+	Method    InstallMethod
+	Command   string
+	Version   string
+	Error     string
 }
 
 type Service struct {
@@ -93,14 +112,18 @@ func (s *Service) Doctor(ctx context.Context, currentVersion string, cfg config.
 	report := DoctorReport{
 		Enabled:        cfg.Enabled,
 		Interval:       time.Duration(cfg.IntervalHours) * time.Hour,
+		AutoUpdate:     cfg.AutoUpdate,
 		Method:         method,
 		UpgradeCommand: upgradeCommand,
+	}
+	cache, cacheErr := s.loadCache()
+	if cacheErr == nil {
+		report.AutoUpdateState = cache.autoUpdateState()
 	}
 	if !cfg.Enabled {
 		return report
 	}
 
-	cache, cacheErr := s.loadCache()
 	if cacheErr == nil && !cache.CheckedAt.IsZero() && s.now().Sub(cache.CheckedAt) < report.Interval {
 		report.LatestVersion = cache.LatestVersion
 		report.LatestURL = cache.LatestURL
@@ -137,6 +160,61 @@ func (s *Service) Doctor(ctx context.Context, currentVersion string, cfg config.
 	return report
 }
 
+func (s *Service) AutoUpdate(ctx context.Context, currentVersion string, cfg config.UpdateCheck, stdout, stderr io.Writer) AutoUpdateResult {
+	result := AutoUpdateResult{}
+	if !cfg.Enabled || !cfg.AutoUpdate {
+		return result
+	}
+
+	report := s.Doctor(ctx, currentVersion, cfg)
+	result.Method = report.Method
+	result.Command = report.UpgradeCommand
+	result.Version = report.LatestVersion
+	if !report.UpdateAvailable || report.UpgradeCommand == "" {
+		return result
+	}
+
+	cache, err := s.loadCache()
+	if err != nil {
+		cache = cachedRelease{
+			CheckedAt:     report.CheckedAt,
+			LatestVersion: report.LatestVersion,
+			LatestURL:     report.LatestURL,
+		}
+	}
+	if autoUpdateAttemptFresh(cache, report.LatestVersion, s.now(), report.Interval) {
+		result.Attempted = true
+		result.Error = cache.AutoUpdateError
+		return result
+	}
+
+	result.Attempted = true
+	cache.CheckedAt = report.CheckedAt
+	cache.LatestVersion = report.LatestVersion
+	cache.LatestURL = report.LatestURL
+	cache.AutoUpdateAttemptedAt = s.now().UTC()
+	cache.AutoUpdateAttemptedVersion = report.LatestVersion
+
+	updateResult, updateErr := s.SelfUpdate(ctx, stdout, stderr)
+	result.Method = updateResult.Method
+	if updateResult.UpgradeCommand != "" {
+		result.Command = updateResult.UpgradeCommand
+	}
+	if updateErr != nil {
+		result.Error = updateErr.Error()
+		cache.AutoUpdateError = result.Error
+		_ = s.saveCache(cache)
+		return result
+	}
+
+	result.Updated = true
+	cache.AutoUpdateSucceededAt = s.now().UTC()
+	cache.AutoUpdateSucceededVersion = report.LatestVersion
+	cache.AutoUpdateError = ""
+	_ = s.saveCache(cache)
+	return result
+}
+
 func (s *Service) SelfUpdate(ctx context.Context, stdout, stderr io.Writer) (SelfUpdateResult, error) {
 	method, upgradeCommand := s.detectInstallMethod()
 	result := SelfUpdateResult{
@@ -167,9 +245,24 @@ func (s *Service) SelfUpdate(ctx context.Context, stdout, stderr io.Writer) (Sel
 }
 
 type cachedRelease struct {
-	CheckedAt     time.Time `json:"checked_at"`
-	LatestVersion string    `json:"latest_version"`
-	LatestURL     string    `json:"latest_url"`
+	CheckedAt                  time.Time `json:"checked_at"`
+	LatestVersion              string    `json:"latest_version"`
+	LatestURL                  string    `json:"latest_url"`
+	AutoUpdateAttemptedAt      time.Time `json:"auto_update_attempted_at,omitempty"`
+	AutoUpdateAttemptedVersion string    `json:"auto_update_attempted_version,omitempty"`
+	AutoUpdateSucceededAt      time.Time `json:"auto_update_succeeded_at,omitempty"`
+	AutoUpdateSucceededVersion string    `json:"auto_update_succeeded_version,omitempty"`
+	AutoUpdateError            string    `json:"auto_update_error,omitempty"`
+}
+
+func (c cachedRelease) autoUpdateState() AutoUpdateState {
+	return AutoUpdateState{
+		AttemptedAt:      c.AutoUpdateAttemptedAt,
+		AttemptedVersion: c.AutoUpdateAttemptedVersion,
+		SucceededAt:      c.AutoUpdateSucceededAt,
+		SucceededVersion: c.AutoUpdateSucceededVersion,
+		LastError:        c.AutoUpdateError,
+	}
 }
 
 func (s *Service) loadCache() (cachedRelease, error) {
@@ -197,6 +290,22 @@ func (s *Service) saveCache(cache cachedRelease) error {
 
 func (s *Service) cachePath() string {
 	return filepath.Join(s.paths.DataDir, "update-check.json")
+}
+
+func autoUpdateAttemptFresh(cache cachedRelease, version string, now time.Time, interval time.Duration) bool {
+	if strings.TrimSpace(version) == "" {
+		return false
+	}
+	if cache.AutoUpdateSucceededVersion == version && !cache.AutoUpdateSucceededAt.IsZero() {
+		return true
+	}
+	if cache.AutoUpdateAttemptedVersion != version || cache.AutoUpdateAttemptedAt.IsZero() {
+		return false
+	}
+	if interval <= 0 {
+		return true
+	}
+	return now.Sub(cache.AutoUpdateAttemptedAt) < interval
 }
 
 func (s *Service) detectInstallMethod() (InstallMethod, string) {
