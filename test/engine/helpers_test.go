@@ -8,7 +8,7 @@ import (
 	"github.com/devr-tools/szr/internal/engine"
 )
 
-func TestHelpers(t *testing.T) {
+func TestCombineStreams(t *testing.T) {
 	cases := []struct {
 		stdout string
 		stderr string
@@ -24,7 +24,9 @@ func TestHelpers(t *testing.T) {
 			t.Fatalf("combine streams mismatch: got %q want %q", got, tc.want)
 		}
 	}
+}
 
+func TestSanitizeFileName(t *testing.T) {
 	if got := engine.SanitizeFileName("***"); got != "output" {
 		t.Fatalf("unexpected empty sanitize fallback: %q", got)
 	}
@@ -37,7 +39,9 @@ func TestHelpers(t *testing.T) {
 	if got := engine.SanitizeFileName(strings.Repeat("x", 60)); len(got) != 48 {
 		t.Fatalf("expected truncated sanitize result, got %d chars", len(got))
 	}
+}
 
+func TestResolveBudget(t *testing.T) {
 	budget := engine.ResolveBudget(engine.Profile{Budget: engine.OutputBudget{MaxLines: 5}}, engine.Invocation{}, 12)
 	if budget.MaxLines != 5 || budget.MaxBytes != 800 {
 		t.Fatalf("unexpected resolved budget: %#v", budget)
@@ -62,7 +66,9 @@ func TestHelpers(t *testing.T) {
 	if lowConfidenceBudget.MaxLines <= 10 {
 		t.Fatalf("expected low-confidence budget expansion, got %#v", lowConfidenceBudget)
 	}
+}
 
+func TestResolveBudgetAgentMode(t *testing.T) {
 	standardMediumBudget := engine.ResolveBudget(
 		engine.Profile{Budget: engine.OutputBudget{MaxLines: 12}, Confidence: engine.ConfidenceMedium},
 		engine.Invocation{},
@@ -76,7 +82,9 @@ func TestHelpers(t *testing.T) {
 	if agentBudget.MaxLines >= standardMediumBudget.MaxLines || agentBudget.MinFailures != 1 || agentBudget.MinAnchors != 1 || agentBudget.MinHints != 1 {
 		t.Fatalf("expected reasoning-budget agent mode to tighten and add contracts, got %#v", agentBudget)
 	}
+}
 
+func TestDecideFastPath(t *testing.T) {
 	fast := engine.DecideFastPath(engine.Profile{}, 64, 12, 2*time.Millisecond, 0)
 	if !fast.BypassCompression || fast.Reason == "" {
 		t.Fatalf("expected tiny output fast path, got %#v", fast)

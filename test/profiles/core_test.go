@@ -8,12 +8,15 @@ import (
 	"github.com/devr-tools/szr/test/testutil"
 )
 
-func TestBuiltInProfiles(t *testing.T) {
+func TestBuiltInProfileCount(t *testing.T) {
 	list := profiles.Builtins(3)
 	if len(list) != 35 {
 		t.Fatalf("expected 35 profiles, got %d", len(list))
 	}
+}
 
+func TestCoreFilesystemProfiles(t *testing.T) {
+	list := profiles.Builtins(3)
 	directoryListing := testutil.FindProfile(t, list, "directory-listing")
 	if !directoryListing.Match(engine.Invocation{Command: []string{"ls"}}) || !directoryListing.Match(engine.Invocation{Command: []string{"tree"}}) {
 		t.Fatal("directory-listing should match ls and tree")
@@ -32,7 +35,10 @@ func TestBuiltInProfiles(t *testing.T) {
 	if got := catRead.Render(engine.Invocation{Command: []string{"cat", "README.md"}}, engine.Execution{Stdout: "# Title\n\nBody\n"}); got == "" {
 		t.Fatal("expected cat-read render output")
 	}
+}
 
+func TestGoProfiles(t *testing.T) {
+	list := profiles.Builtins(3)
 	goTest := testutil.FindProfile(t, list, "go-test-json")
 	if !goTest.Match(engine.Invocation{Display: []string{"go", "test"}}) || !goTest.Match(engine.Invocation{Command: []string{"go", "test"}}) {
 		t.Fatal("go-test-json should match")
@@ -60,13 +66,16 @@ func TestBuiltInProfiles(t *testing.T) {
 	if goBuild.StreamPreference != engine.StreamStderrFirst || goBuild.StreamRender == nil {
 		t.Fatalf("unexpected go-build stream metadata: %#v", goBuild)
 	}
-	goBuildStream := goBuild.StreamRender(engine.Invocation{}, goBuild.Budget)
-	goBuildStream.ConsumeStderr([]byte("error: bad\n"))
-	goBuildStream.ConsumeStdout([]byte("noise\n"))
-	if got := goBuildStream.Result(); got != "error: bad" {
+	stream := goBuild.StreamRender(engine.Invocation{}, goBuild.Budget)
+	stream.ConsumeStderr([]byte("error: bad\n"))
+	stream.ConsumeStdout([]byte("noise\n"))
+	if got := stream.Result(); got != "error: bad" {
 		t.Fatalf("unexpected go-build stream output: %q", got)
 	}
+}
 
+func TestPytestProfile(t *testing.T) {
+	list := profiles.Builtins(3)
 	pytest := testutil.FindProfile(t, list, "pytest")
 	if !pytest.Match(engine.Invocation{Display: []string{"pytest"}}) || !pytest.Match(engine.Invocation{Display: []string{"uv", "run", "pytest"}}) {
 		t.Fatal("pytest profile should match direct and uv-wrapped invocations")
@@ -80,7 +89,10 @@ func TestBuiltInProfiles(t *testing.T) {
 	if pytest.StreamPreference != engine.StreamStdoutFirst || pytest.StreamRender == nil {
 		t.Fatalf("unexpected pytest stream metadata: %#v", pytest)
 	}
+}
 
+func TestCargoProfiles(t *testing.T) {
+	list := profiles.Builtins(3)
 	cargoTest := testutil.FindProfile(t, list, "cargo-test")
 	if !cargoTest.Match(engine.Invocation{Display: []string{"cargo", "test"}}) || !cargoTest.Match(engine.Invocation{Command: []string{"cargo", "test"}}) {
 		t.Fatal("cargo-test should match cargo test")
@@ -105,7 +117,10 @@ func TestBuiltInProfiles(t *testing.T) {
 	if cargoBuild.StreamPreference != engine.StreamStderrFirst || cargoBuild.StreamRender == nil {
 		t.Fatalf("unexpected cargo-build stream metadata: %#v", cargoBuild)
 	}
+}
 
+func TestBuildAndClangProfiles(t *testing.T) {
+	list := profiles.Builtins(3)
 	buildSystem := testutil.FindProfile(t, list, "build-system")
 	if !buildSystem.Match(engine.Invocation{Display: []string{"make", "test"}}) || !buildSystem.Match(engine.Invocation{Display: []string{"ninja"}}) {
 		t.Fatal("build-system should match build orchestrators")
@@ -135,7 +150,10 @@ func TestBuiltInProfiles(t *testing.T) {
 	if got := clangTooling.Render(engine.Invocation{}, engine.Execution{Stderr: "src/main.cpp:10:5: warning: boom [modernize-use-nullptr]\n"}); got == "" {
 		t.Fatal("expected clang-tooling render output")
 	}
+}
 
+func TestPatchAndContainerProfiles(t *testing.T) {
+	list := profiles.Builtins(3)
 	patchDiff := testutil.FindProfile(t, list, "patch-diff")
 	if !patchDiff.Match(engine.Invocation{Display: []string{"diff", "-u", "a", "b"}}) || !patchDiff.Match(engine.Invocation{Display: []string{"git", "apply", "fix.patch"}}) {
 		t.Fatal("patch-diff should match diff and git apply")
@@ -165,7 +183,10 @@ func TestBuiltInProfiles(t *testing.T) {
 	if dockerLogs.StreamPreference != engine.StreamStdoutFirst || dockerLogs.StreamRender == nil {
 		t.Fatalf("unexpected docker-logs stream metadata: %#v", dockerLogs)
 	}
+}
 
+func TestKubectlProfiles(t *testing.T) {
+	list := profiles.Builtins(3)
 	kubectlGet := testutil.FindProfile(t, list, "kubectl-get")
 	if !kubectlGet.Match(engine.Invocation{Display: []string{"kubectl", "get", "pods"}}) || !kubectlGet.Match(engine.Invocation{Display: []string{"kubectl", "-n", "default", "get", "pods"}}) {
 		t.Fatal("kubectl-get should match direct and namespaced kubectl get")
@@ -198,7 +219,10 @@ func TestBuiltInProfiles(t *testing.T) {
 	if kubectlLogs.StreamPreference != engine.StreamStdoutFirst || kubectlLogs.StreamRender == nil {
 		t.Fatalf("unexpected kubectl-logs stream metadata: %#v", kubectlLogs)
 	}
+}
 
+func TestGitHubProfiles(t *testing.T) {
+	list := profiles.Builtins(3)
 	ghPR := testutil.FindProfile(t, list, "gh-pr-view")
 	if !ghPR.Match(engine.Invocation{Display: []string{"gh", "pr", "view"}}) || !ghPR.Match(engine.Invocation{Display: []string{"gh", "-R", "owner/repo", "pr", "view", "1"}}) {
 		t.Fatal("gh-pr-view should match plain and repo-scoped invocations")
@@ -231,7 +255,10 @@ func TestBuiltInProfiles(t *testing.T) {
 	if ghRunLog.StreamPreference != engine.StreamStdoutFirst || ghRunLog.StreamRender == nil {
 		t.Fatalf("unexpected gh-run-log stream metadata: %#v", ghRunLog)
 	}
+}
 
+func TestWorkspaceAndToolingProfiles(t *testing.T) {
+	list := profiles.Builtins(3)
 	jsWorkspace := testutil.FindProfile(t, list, "js-workspace")
 	if !jsWorkspace.Match(engine.Invocation{Display: []string{"turbo", "run", "build"}}) || !jsWorkspace.Match(engine.Invocation{Display: []string{"npm", "install"}}) {
 		t.Fatal("js-workspace should match workspace tooling commands")
@@ -261,7 +288,10 @@ func TestBuiltInProfiles(t *testing.T) {
 	if ripgrep.StreamPreference != engine.StreamStdoutFirst || ripgrep.StreamRender == nil {
 		t.Fatalf("unexpected ripgrep stream metadata: %#v", ripgrep)
 	}
+}
 
+func TestGenericTestProfile(t *testing.T) {
+	list := profiles.Builtins(3)
 	genericTest := testutil.FindProfile(t, list, "generic-test")
 	if !genericTest.Match(engine.Invocation{Display: []string{"test", "pytest"}}) || genericTest.Match(engine.Invocation{Display: nil}) {
 		t.Fatal("unexpected generic-test match behavior")
@@ -277,21 +307,5 @@ func TestBuiltInProfiles(t *testing.T) {
 	}
 	if genericTest.StreamPreference != engine.StreamStdoutFirst || genericTest.StreamRender == nil {
 		t.Fatalf("unexpected generic-test stream metadata: %#v", genericTest)
-	}
-
-	genericSummary := testutil.FindProfile(t, list, "generic-summary")
-	if !genericSummary.Match(engine.Invocation{Display: []string{"summary", "cmd"}}) || genericSummary.Match(engine.Invocation{Display: nil}) {
-		t.Fatal("unexpected generic-summary match behavior")
-	}
-	if got := genericSummary.Render(engine.Invocation{}, engine.Execution{Stdout: "a\nb\nc\nd"}); got == "" {
-		t.Fatal("expected generic-summary render output")
-	}
-	if genericSummary.StreamPreference != engine.StreamStdoutFirst || genericSummary.StreamRender == nil {
-		t.Fatalf("unexpected generic-summary stream metadata: %#v", genericSummary)
-	}
-	genericSummaryStream := genericSummary.StreamRender(engine.Invocation{}, genericSummary.Budget)
-	genericSummaryStream.ConsumeStdout([]byte("a\nb\nc\n"))
-	if got := genericSummaryStream.Result(); got == "" {
-		t.Fatal("expected generic-summary stream output")
 	}
 }

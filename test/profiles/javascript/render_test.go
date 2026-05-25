@@ -41,9 +41,8 @@ func TestJSProfilesRender(t *testing.T) {
 	}
 }
 
-func TestJSProfilesCoverageEdges(t *testing.T) {
+func TestJSPackageTestProfileCoverage(t *testing.T) {
 	list := profiles.Builtins(4)
-
 	pm := testutil.FindProfile(t, list, "js-package-test")
 	if pm.Match(engine.Invocation{Display: []string{"npm"}}) {
 		t.Fatal("did not expect short npm args to match")
@@ -66,7 +65,10 @@ func TestJSProfilesCoverageEdges(t *testing.T) {
 	if got := pm.Prepare(engine.Invocation{Cwd: root}); got != nil {
 		t.Fatalf("expected nil prepare for empty package manager command, got %#v", got)
 	}
+}
 
+func TestJSStructuredRendererCoverage(t *testing.T) {
+	list := profiles.Builtins(4)
 	vitest := testutil.FindProfile(t, list, "vitest-json")
 	if rendered := vitest.Render(engine.Invocation{}, engine.Execution{Stdout: "FAIL src/a.test.ts\nExpected: 1"}); !strings.Contains(rendered, "FAIL src/a.test.ts") {
 		t.Fatalf("unexpected vitest render output: %q", rendered)
@@ -82,7 +84,10 @@ func TestJSProfilesCoverageEdges(t *testing.T) {
 	if jest.StreamPreference != engine.StreamStdoutFirst || jest.StreamRender == nil {
 		t.Fatalf("unexpected jest stream metadata: %#v", jest)
 	}
+}
 
+func TestJSWorkspaceRendererCoverage(t *testing.T) {
+	list := profiles.Builtins(4)
 	workspace := testutil.FindProfile(t, list, "js-workspace")
 	rendered := workspace.Render(engine.Invocation{}, engine.Execution{
 		Stderr: strings.Join([]string{

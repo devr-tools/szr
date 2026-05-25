@@ -34,58 +34,78 @@ func TestFixturesAndHarness(t *testing.T) {
 	harness := bench.NewHarness(12)
 	for _, fixture := range fixtures {
 		t.Run(fixture.Name, func(t *testing.T) {
-			if fixture.RawCombined() == "" {
-				t.Fatal("expected non-empty raw output")
-			}
-
-			rendered, err := harness.Render(fixture)
-			if err != nil {
-				t.Fatalf("render: %v", err)
-			}
-			if strings.TrimSpace(rendered) == "" {
-				t.Fatal("expected rendered output")
-			}
-
-			measurement, err := harness.Measure(fixture)
-			if err != nil {
-				t.Fatalf("measure: %v", err)
-			}
-			if measurement.Duration < 0 {
-				t.Fatalf("unexpected negative duration: %v", measurement.Duration)
-			}
-			if measurement.Durations.Samples != 9 {
-				t.Fatalf("expected 9 timing samples, got %#v", measurement.Durations)
-			}
-			if measurement.Durations.Min > measurement.Durations.P50 || measurement.Durations.P50 > measurement.Durations.P95 || measurement.Durations.P95 > measurement.Durations.Max {
-				t.Fatalf("unexpected duration ordering: %#v", measurement.Durations)
-			}
-			if measurement.ProfileName != fixture.ProfileName || measurement.FixtureName != fixture.Name {
-				t.Fatalf("unexpected measurement identity: %#v", measurement)
-			}
-			if measurement.RawBytes <= 0 || measurement.RawTokens <= 0 || measurement.ParsedBytes <= 0 {
-				t.Fatalf("expected positive raw metrics: %#v", measurement)
-			}
-			if measurement.FilteredBytes <= 0 || measurement.FilteredTokens <= 0 || measurement.EmittedBytes <= 0 {
-				t.Fatalf("expected positive filtered metrics: %#v", measurement)
-			}
-			if measurement.TokenSavingsPct <= 0 {
-				t.Fatalf("expected token savings for %s, got %#v", fixture.Name, measurement)
-			}
-			if measurement.CommandFingerprint == "" {
-				t.Fatalf("expected command fingerprint: %#v", measurement)
-			}
-			if measurement.Quality.Score < fixture.MinQualityScore {
-				t.Fatalf("expected quality score >= %d for %s, got %#v", fixture.MinQualityScore, fixture.Name, measurement.Quality)
-			}
-			if !measurement.Expectation.OK {
-				t.Fatalf("expected measurement expectation to pass for %s, got %#v", fixture.Name, measurement.Expectation)
-			}
-			for _, fragment := range fixture.ExpectedContains {
-				if !strings.Contains(measurement.Rendered, fragment) {
-					t.Fatalf("expected fragment %q in rendered output %q", fragment, measurement.Rendered)
-				}
-			}
+			assertHarnessFixture(t, harness, fixture)
 		})
+	}
+}
+
+func assertHarnessFixture(t *testing.T, harness *bench.Harness, fixture bench.Fixture) {
+	t.Helper()
+	if fixture.RawCombined() == "" {
+		t.Fatal("expected non-empty raw output")
+	}
+
+	rendered, err := harness.Render(fixture)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if strings.TrimSpace(rendered) == "" {
+		t.Fatal("expected rendered output")
+	}
+
+	measurement, err := harness.Measure(fixture)
+	if err != nil {
+		t.Fatalf("measure: %v", err)
+	}
+	assertHarnessMeasurementCore(t, fixture, measurement)
+	assertHarnessMeasurementMetrics(t, fixture, measurement)
+	assertHarnessMeasurementQuality(t, fixture, measurement)
+}
+
+func assertHarnessMeasurementCore(t *testing.T, fixture bench.Fixture, measurement bench.Measurement) {
+	t.Helper()
+	if measurement.Duration < 0 {
+		t.Fatalf("unexpected negative duration: %v", measurement.Duration)
+	}
+	if measurement.Durations.Samples != 9 {
+		t.Fatalf("expected 9 timing samples, got %#v", measurement.Durations)
+	}
+	if measurement.Durations.Min > measurement.Durations.P50 || measurement.Durations.P50 > measurement.Durations.P95 || measurement.Durations.P95 > measurement.Durations.Max {
+		t.Fatalf("unexpected duration ordering: %#v", measurement.Durations)
+	}
+	if measurement.ProfileName != fixture.ProfileName || measurement.FixtureName != fixture.Name {
+		t.Fatalf("unexpected measurement identity: %#v", measurement)
+	}
+}
+
+func assertHarnessMeasurementMetrics(t *testing.T, fixture bench.Fixture, measurement bench.Measurement) {
+	t.Helper()
+	if measurement.RawBytes <= 0 || measurement.RawTokens <= 0 || measurement.ParsedBytes <= 0 {
+		t.Fatalf("expected positive raw metrics: %#v", measurement)
+	}
+	if measurement.FilteredBytes <= 0 || measurement.FilteredTokens <= 0 || measurement.EmittedBytes <= 0 {
+		t.Fatalf("expected positive filtered metrics: %#v", measurement)
+	}
+	if measurement.TokenSavingsPct <= 0 {
+		t.Fatalf("expected token savings for %s, got %#v", fixture.Name, measurement)
+	}
+	if measurement.CommandFingerprint == "" {
+		t.Fatalf("expected command fingerprint: %#v", measurement)
+	}
+}
+
+func assertHarnessMeasurementQuality(t *testing.T, fixture bench.Fixture, measurement bench.Measurement) {
+	t.Helper()
+	if measurement.Quality.Score < fixture.MinQualityScore {
+		t.Fatalf("expected quality score >= %d for %s, got %#v", fixture.MinQualityScore, fixture.Name, measurement.Quality)
+	}
+	if !measurement.Expectation.OK {
+		t.Fatalf("expected measurement expectation to pass for %s, got %#v", fixture.Name, measurement.Expectation)
+	}
+	for _, fragment := range fixture.ExpectedContains {
+		if !strings.Contains(measurement.Rendered, fragment) {
+			t.Fatalf("expected fragment %q in rendered output %q", fragment, measurement.Rendered)
+		}
 	}
 }
 

@@ -107,28 +107,14 @@ func TestBenchMismatchOutput(t *testing.T) {
 	}
 }
 
-func TestInstallCommands(t *testing.T) {
-	app := testutil.NewTestApp(t)
-	repo := t.TempDir()
-	testutil.MustWriteFile(t, filepath.Join(repo, "go.mod"), "module example.com/demo\n")
-	testutil.MustWriteFile(t, filepath.Join(repo, "cmd", "szr", "main.go"), "package main\n")
-
-	restore := testutil.Chdir(t, repo)
+func TestInstallListAndPrint(t *testing.T) {
+	app, repo, restore := newInstallCommandsFixture(t)
 	defer restore()
-
 	code, stdout, stderr := testutil.RunApp(t, app, "install")
 	if code != 0 || stderr != "" {
 		t.Fatalf("unexpected install list stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
-	for _, want := range []string{
-		"available install targets:",
-		"codex",
-		"claude-code",
-		"cursor",
-		"gemini",
-		"shell",
-		"szr install --all",
-	} {
+	for _, want := range []string{"available install targets:", "codex", "claude-code", "cursor", "gemini", "shell", "szr install --all"} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("expected install list stdout to contain %q, got %q", want, stdout)
 		}
@@ -146,8 +132,12 @@ func TestInstallCommands(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(repo, ".cursor", "rules", "szr.mdc")); !os.IsNotExist(err) {
 		t.Fatalf("expected print mode not to write cursor rule, got err=%v", err)
 	}
+}
 
-	code, stdout, stderr = testutil.RunApp(t, app, "install", "codex")
+func TestInstallApplyAndAllPlans(t *testing.T) {
+	app, repo, restore := newInstallCommandsFixture(t)
+	defer restore()
+	code, stdout, stderr := testutil.RunApp(t, app, "install", "codex")
 	if code != 0 || stderr != "" {
 		t.Fatalf("unexpected install apply stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
@@ -175,20 +165,18 @@ func TestInstallCommands(t *testing.T) {
 			t.Fatalf("expected install all stdout to contain %q, got %q", want, stdout)
 		}
 	}
+}
 
-	code, stdout, stderr = testutil.RunApp(t, app, "uninstall")
+func TestUninstallListAndPrint(t *testing.T) {
+	app, repo, restore := newInstallCommandsFixture(t)
+	defer restore()
+	_, _, _ = testutil.RunApp(t, app, "install", "codex")
+
+	code, stdout, stderr := testutil.RunApp(t, app, "uninstall")
 	if code != 0 || stderr != "" {
 		t.Fatalf("unexpected uninstall list stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
-	for _, want := range []string{
-		"available uninstall targets:",
-		"codex",
-		"claude-code",
-		"cursor",
-		"gemini",
-		"shell",
-		"szr uninstall --all",
-	} {
+	for _, want := range []string{"available uninstall targets:", "codex", "claude-code", "cursor", "gemini", "shell", "szr uninstall --all"} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("expected uninstall list stdout to contain %q, got %q", want, stdout)
 		}
@@ -203,8 +191,14 @@ func TestInstallCommands(t *testing.T) {
 			t.Fatalf("expected uninstall print stdout to contain %q, got %q", want, stdout)
 		}
 	}
+	_ = repo
+}
 
-	code, stdout, stderr = testutil.RunApp(t, app, "uninstall", "codex")
+func TestUninstallApplyRemovesFiles(t *testing.T) {
+	app, repo, restore := newInstallCommandsFixture(t)
+	defer restore()
+	_, _, _ = testutil.RunApp(t, app, "install", "codex")
+	code, stdout, stderr := testutil.RunApp(t, app, "uninstall", "codex")
 	if code != 0 || stderr != "" {
 		t.Fatalf("unexpected uninstall apply stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
@@ -229,8 +223,12 @@ func TestInstallCommands(t *testing.T) {
 	} else if !os.IsNotExist(err) {
 		t.Fatalf("read %s: %v", agentsPath, err)
 	}
+}
 
-	code, stdout, stderr = testutil.RunApp(t, app, "install", "--all")
+func TestInstallAllAndUninstallAllPrint(t *testing.T) {
+	app, _, restore := newInstallCommandsFixture(t)
+	defer restore()
+	code, stdout, stderr := testutil.RunApp(t, app, "install", "--all")
 	if code != 0 || stderr != "" {
 		t.Fatalf("unexpected install all apply stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
@@ -244,6 +242,16 @@ func TestInstallCommands(t *testing.T) {
 			t.Fatalf("expected uninstall all stdout to contain %q, got %q", want, stdout)
 		}
 	}
+}
+
+func newInstallCommandsFixture(t *testing.T) (*cli.App, string, func()) {
+	t.Helper()
+	app := testutil.NewTestApp(t)
+	repo := t.TempDir()
+	testutil.MustWriteFile(t, filepath.Join(repo, "go.mod"), "module example.com/demo\n")
+	testutil.MustWriteFile(t, filepath.Join(repo, "cmd", "szr", "main.go"), "package main\n")
+	restore := testutil.Chdir(t, repo)
+	return app, repo, restore
 }
 
 func TestSelfInstallCommands(t *testing.T) {
