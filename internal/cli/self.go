@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"time"
 
+	workflowcmd "github.com/devr-tools/szr/internal/cli/workflows"
 	"github.com/devr-tools/szr/internal/config"
 	"github.com/devr-tools/szr/internal/history"
 	"github.com/devr-tools/szr/internal/selfinstall"
@@ -67,12 +68,12 @@ type doctorToolJSON struct {
 }
 
 type doctorHistoryJSON struct {
-	Commands        int              `json:"commands"`
-	FallbackRate    float64          `json:"fallback_rate"`
-	FailureRate     float64          `json:"failure_rate"`
-	TeeRate         float64          `json:"tee_rate"`
-	Recommendations []recommendation `json:"recommendations,omitempty"`
-	Hotspots        []hotspotStat    `json:"hotspots,omitempty"`
+	Commands        int                          `json:"commands"`
+	FallbackRate    float64                      `json:"fallback_rate"`
+	FailureRate     float64                      `json:"failure_rate"`
+	TeeRate         float64                      `json:"tee_rate"`
+	Recommendations []workflowcmd.Recommendation `json:"recommendations,omitempty"`
+	Hotspots        []workflowcmd.HotspotStat    `json:"hotspots,omitempty"`
 }
 
 func (a *App) runSelf(ctx context.Context, flags globalFlags, args []string) int {
@@ -516,8 +517,8 @@ func (a *App) doctorHistoryDiagnostics(showHistory bool) (*doctorHistoryJSON, er
 		FallbackRate:    summary.FallbackRate,
 		FailureRate:     summary.FailureRate,
 		TeeRate:         summary.TeeRate,
-		Recommendations: buildRecommendations(records, 3),
-		Hotspots:        buildHotspots(records, 3),
+		Recommendations: workflowcmd.BuildRecommendations(records, 3),
+		Hotspots:        workflowcmd.BuildHotspots(records, 3),
 	}, nil
 }
 

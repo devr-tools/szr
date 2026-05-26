@@ -36,9 +36,9 @@ func TestColorizeTextByRateUsesSemanticColors(t *testing.T) {
 }
 
 func TestColorizeEmbeddedBarColorsSavingsBars(t *testing.T) {
-	cell := "  -77.8% [------------] "
+	cell := "  -77.8% ▕░░░░░░░░░░░▏ "
 	got := colorizeEmbeddedBar(cell, true)
-	want := "  -77.8% " + ansiRed + "[------------]" + ansiReset + " "
+	want := "  -77.8% " + ansiRed + "▕░░░░░░░░░░░▏" + ansiReset + " "
 	if got != want {
 		t.Fatalf("unexpected colored cell: %q", got)
 	}
