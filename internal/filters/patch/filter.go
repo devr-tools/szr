@@ -8,6 +8,23 @@ import (
 )
 
 func SummarizePatchDiff(input string, maxLines int) string {
+	return summarizePatchDiffResult(input, maxLines).Text
+}
+
+func PatchDiffRecoveryInfo(input string, maxLines int) (string, string, bool) {
+	result := summarizePatchDiffResult(input, maxLines)
+	if result.OmittedCount <= 0 {
+		return shared.NoRecovery()
+	}
+	return shared.FullOutputRecovery(fmt.Sprintf("omitted %d additional lines", result.OmittedCount))
+}
+
+type patchDiffSummaryResult struct {
+	Text         string
+	OmittedCount int
+}
+
+func summarizePatchDiffResult(input string, maxLines int) patchDiffSummaryResult {
 	if maxLines <= 0 {
 		maxLines = 10
 	}
@@ -45,11 +62,19 @@ func SummarizePatchDiff(input string, maxLines int) string {
 	lines = shared.UniqueStrings(lines)
 	header := fmt.Sprintf("files=%d hunks=%d", len(files), hunks)
 	if len(files) == 0 && hunks == 0 && len(lines) == 0 {
-		return shared.SummarizeGenericFailure(clean, maxLines)
+		return patchDiffSummaryResult{
+			Text: shared.SummarizeGenericFailure(clean, maxLines),
+		}
 	}
 
 	out := []string{header}
 	out = append(out, files...)
 	out = append(out, lines...)
-	return shared.JoinLimitedLines(out, maxLines)
+	result := patchDiffSummaryResult{
+		Text: shared.JoinLimitedLines(out, maxLines),
+	}
+	if len(out) > maxLines {
+		result.OmittedCount = len(out) - maxLines
+	}
+	return result
 }

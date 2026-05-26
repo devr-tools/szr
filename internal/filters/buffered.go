@@ -6,16 +6,26 @@ type BufferedTextReducer struct {
 	stdoutEnabled bool
 	stderrEnabled bool
 	render        func(string) string
+	recovery      func(string) (string, string, bool)
 	bytesParsed   int
 	stdout        textBuffer
 	stderr        textBuffer
 }
 
 func NewBufferedTextReducer(stdoutEnabled, stderrEnabled bool, render func(string) string) *BufferedTextReducer {
+	return NewBufferedTextReducerWithRecovery(stdoutEnabled, stderrEnabled, render, nil)
+}
+
+func NewBufferedTextReducerWithRecovery(
+	stdoutEnabled, stderrEnabled bool,
+	render func(string) string,
+	recovery func(string) (string, string, bool),
+) *BufferedTextReducer {
 	return &BufferedTextReducer{
 		stdoutEnabled: stdoutEnabled,
 		stderrEnabled: stderrEnabled,
 		render:        render,
+		recovery:      recovery,
 	}
 }
 
@@ -36,7 +46,7 @@ func (r *BufferedTextReducer) ConsumeStderr(chunk []byte) {
 }
 
 func (r *BufferedTextReducer) Result() string {
-	return r.render(strings.TrimSpace(r.stdout.String() + joinReducerStreams(r.stdout.String(), r.stderr.String())))
+	return r.render(r.input())
 }
 
 func (r *BufferedTextReducer) BytesParsed() int {
@@ -45,6 +55,19 @@ func (r *BufferedTextReducer) BytesParsed() int {
 
 func (r *BufferedTextReducer) FallbackUsed() bool {
 	return false
+}
+
+func (r *BufferedTextReducer) RecoveryInfo() (string, string, bool) {
+	if r.recovery == nil {
+		return NoRecovery()
+	}
+	return r.recovery(r.input())
+}
+
+func (r *BufferedTextReducer) input() string {
+	stdout := r.stdout.String()
+	stderr := r.stderr.String()
+	return strings.TrimSpace(stdout + joinReducerStreams(stdout, stderr))
 }
 
 func joinReducerStreams(stdout, stderr string) string {

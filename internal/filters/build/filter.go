@@ -1,12 +1,30 @@
 package build
 
 import (
+	"fmt"
 	"strings"
 
 	shared "github.com/devr-tools/szr/internal/filters"
 )
 
 func SummarizeBuildSystem(input string, maxLines int) string {
+	return summarizeBuildSystemResult(input, maxLines).Text
+}
+
+func BuildSystemRecoveryInfo(input string, maxLines int) (string, string, bool) {
+	result := summarizeBuildSystemResult(input, maxLines)
+	if result.OmittedCount <= 0 {
+		return shared.NoRecovery()
+	}
+	return shared.FullOutputRecovery(fmt.Sprintf("omitted %d additional lines", result.OmittedCount))
+}
+
+type buildSystemSummaryResult struct {
+	Text         string
+	OmittedCount int
+}
+
+func summarizeBuildSystemResult(input string, maxLines int) buildSystemSummaryResult {
 	if maxLines <= 0 {
 		maxLines = 12
 	}
@@ -58,7 +76,9 @@ func SummarizeBuildSystem(input string, maxLines int) string {
 	lines = shared.UniqueStrings(shared.FoldConsecutiveLines(lines))
 	summaries = shared.UniqueStrings(shared.FoldConsecutiveLines(summaries))
 	if len(lines) == 0 && len(summaries) == 0 {
-		return shared.SummarizeGenericFailure(clean, maxLines)
+		return buildSystemSummaryResult{
+			Text: shared.SummarizeGenericFailure(clean, maxLines),
+		}
 	}
 
 	anchors := []string{}
@@ -74,5 +94,11 @@ func SummarizeBuildSystem(input string, maxLines int) string {
 	out := append([]string{}, other...)
 	out = append(out, shared.SelectUniqueAnchoredLines(anchors, maxLines/3+1)...)
 	out = append(out, summaries...)
-	return shared.JoinLimitedLines(out, maxLines)
+	result := buildSystemSummaryResult{
+		Text: shared.JoinLimitedLines(out, maxLines),
+	}
+	if len(out) > maxLines {
+		result.OmittedCount = len(out) - maxLines
+	}
+	return result
 }

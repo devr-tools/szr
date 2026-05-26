@@ -161,3 +161,11 @@ func TestSummarizeCloudListHerokuApp(t *testing.T) {
 		}
 	}
 }
+
+func TestCloudListRecoveryInfo(t *testing.T) {
+	input := `[{"name":"api-prod","zone":"https://www.googleapis.com/compute/v1/projects/demo/zones/us-central1-a","status":"RUNNING","project":"demo-project"},{"name":"jobs-prod","zone":"https://www.googleapis.com/compute/v1/projects/demo/zones/us-central1-b","status":"TERMINATED","project":"demo-project"},{"name":"cron-prod","zone":"https://www.googleapis.com/compute/v1/projects/demo/zones/us-central1-c","status":"RUNNING","project":"demo-project"}]`
+
+	if kind, summary, requireRawCapture := cloudfilter.CloudListRecoveryInfo(input, 3); kind != "full-output" || summary != "omitted 1 additional resources" || !requireRawCapture {
+		t.Fatalf("unexpected cloud list recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+}

@@ -2,49 +2,52 @@ package javascript
 
 import (
 	"github.com/devr-tools/szr/internal/engine"
-	shared "github.com/devr-tools/szr/internal/filters"
 	jsfilter "github.com/devr-tools/szr/internal/filters/javascript"
 	"github.com/devr-tools/szr/internal/profilekit"
 )
 
 func Profiles(maxLines int) []engine.Profile {
+	testSummary := profilekit.CombinedBufferedSummary(maxLines, 12, 35, engine.StreamStdoutFirst, jsfilter.SummarizeJSTest)
+	toolingSummary := profilekit.CombinedBufferedSummary(maxLines, 10, 30, engine.StreamStdoutFirst, jsfilter.SummarizeJSTooling)
+
 	return []engine.Profile{
-		{
-			Name:             "bun-test",
-			Description:      "Summarizes `bun test` output around failed suites and assertions.",
-			Confidence:       engine.ConfidenceMedium,
-			StreamPreference: engine.StreamStdoutFirst,
-			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 12)),
-			LatencyBudget:    profilekit.LatencyBudget(35),
+		profilekit.WithSummary(engine.Profile{
+			Name:        "bun-test",
+			Description: "Summarizes `bun test` output around failed suites and assertions.",
+			Confidence:  engine.ConfidenceMedium,
+			Capabilities: engine.ProfileCapabilities{
+				StructuredMode:            engine.StructuredModePreferred,
+				InjectsPrepareArgs:        true,
+				SupportsAggressivePrepare: true,
+				FastPathBypass:            engine.FastPathBypassSmallOutput,
+				AllowFailureEscape:        true,
+				RequireFullCapture:        true,
+			},
 			Match: func(inv engine.Invocation) bool {
-				return profilekit.HasCommand(inv.Command, "bun", "test") || profilekit.HasCommand(inv.Display, "bun", "test")
+				return isBunTestClassification(inv.Classification.Command) || isBunTestClassification(inv.Classification.Display)
 			},
 			Prepare: func(inv engine.Invocation) []string {
 				return prepareBunTestCommand(inv.Command, inv.Advanced.AggressivePrepareRewrites)
 			},
-			Render: func(_ engine.Invocation, exec engine.Execution) string {
-				return jsfilter.SummarizeJSTest(exec.Stdout+"\n"+exec.Stderr, maxLines)
-			},
-			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return shared.NewBufferedTextReducer(true, true, func(input string) string {
-					return jsfilter.SummarizeJSTest(input, budget.MaxLines)
-				})
-			},
-			ParseBytes: profilekit.ParseCombined,
 			Explain: []string{
 				"Matches direct `bun test` runs and reuses the JS test reducer family.",
 				"Keeps failing suites, assertions, and file anchors while collapsing pass noise.",
 			},
-		},
-		{
-			Name:             "js-package-test",
-			Description:      "Detects Jest and Vitest behind package-manager test scripts and forwards structured reporter flags.",
-			Confidence:       engine.ConfidenceMedium,
-			StreamPreference: engine.StreamStdoutFirst,
-			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 12)),
-			LatencyBudget:    profilekit.LatencyBudget(35),
+		}, testSummary),
+		profilekit.WithSummary(engine.Profile{
+			Name:        "js-package-test",
+			Description: "Detects Jest and Vitest behind package-manager test scripts and forwards structured reporter flags.",
+			Confidence:  engine.ConfidenceMedium,
+			Capabilities: engine.ProfileCapabilities{
+				StructuredMode:            engine.StructuredModePreferred,
+				InjectsPrepareArgs:        true,
+				SupportsAggressivePrepare: true,
+				FastPathBypass:            engine.FastPathBypassSmallOutput,
+				AllowFailureEscape:        true,
+				RequireFullCapture:        true,
+			},
 			Match: func(inv engine.Invocation) bool {
-				return isPackageManagerTest(inv.Command) || isPackageManagerTest(inv.Display)
+				return inv.Classification.Command.JavaScript.IsPackageManagerTest || inv.Classification.Display.JavaScript.IsPackageManagerTest
 			},
 			Prepare: func(inv engine.Invocation) []string {
 				if len(inv.Command) == 0 {
@@ -60,108 +63,86 @@ func Profiles(maxLines int) []engine.Profile {
 				}
 				return prepareJSRunnerCommand(command, runner, inv.Advanced.AggressivePrepareRewrites)
 			},
-			Render: func(_ engine.Invocation, exec engine.Execution) string {
-				return jsfilter.SummarizeJSTest(exec.Stdout+"\n"+exec.Stderr, maxLines)
-			},
-			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return shared.NewBufferedTextReducer(true, true, func(input string) string {
-					return jsfilter.SummarizeJSTest(input, budget.MaxLines)
-				})
-			},
-			ParseBytes: profilekit.ParseCombined,
 			Explain: []string{
 				"Inspects the local `package.json` test script to detect `vitest` or `jest` behind `npm`, `pnpm`, and `yarn` wrappers.",
 				"Uses package-manager-specific argument forwarding so structured runner output is requested without changing the user-facing command family.",
 			},
-		},
-		{
-			Name:             "js-workspace",
-			Description:      "Summarizes JavaScript package-manager, workspace, and Vite output around failed tasks and actionable file errors.",
-			Confidence:       engine.ConfidenceMedium,
-			StreamPreference: engine.StreamStdoutFirst,
-			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 10)),
-			LatencyBudget:    profilekit.LatencyBudget(30),
+		}, testSummary),
+		profilekit.WithSummary(engine.Profile{
+			Name:        "js-workspace",
+			Description: "Summarizes JavaScript package-manager, workspace, and Vite output around failed tasks and actionable file errors.",
+			Confidence:  engine.ConfidenceMedium,
+			Capabilities: engine.ProfileCapabilities{
+				InjectsPrepareArgs:        true,
+				SupportsAggressivePrepare: true,
+				FastPathBypass:            engine.FastPathBypassSmallOutput,
+				AllowFailureEscape:        true,
+				RequireFullCapture:        true,
+			},
 			Match: func(inv engine.Invocation) bool {
-				return isJSWorkspaceCommand(inv.Display)
+				return inv.Classification.Display.JavaScript.IsWorkspaceCommand
 			},
 			Prepare: func(inv engine.Invocation) []string {
 				return prepareJSPackageManagerCommand(inv.Command, inv.Advanced.AggressivePrepareRewrites)
 			},
-			Render: func(_ engine.Invocation, exec engine.Execution) string {
-				return jsfilter.SummarizeJSTooling(exec.Stdout+"\n"+exec.Stderr, maxLines)
-			},
-			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return shared.NewBufferedTextReducer(true, true, func(input string) string {
-					return jsfilter.SummarizeJSTooling(input, budget.MaxLines)
-				})
-			},
-			ParseBytes: profilekit.ParseCombined,
 			Explain: []string{
 				"Matches general JavaScript package-manager and workspace-tool commands outside the dedicated test-runner profiles.",
 				"Surfaces failed tasks, Vite build errors, package-manager failures, and file anchors instead of long install or build chatter.",
 			},
-		},
-		{
-			Name:             "vitest-json",
-			Description:      "Requests the Vitest JSON reporter and preserves failing suite details.",
-			Confidence:       engine.ConfidenceHigh,
-			StreamPreference: engine.StreamStdoutFirst,
-			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 12)),
-			LatencyBudget:    profilekit.LatencyBudget(35),
+		}, toolingSummary),
+		profilekit.WithSummary(engine.Profile{
+			Name:        "vitest-json",
+			Description: "Requests the Vitest JSON reporter and preserves failing suite details.",
+			Confidence:  engine.ConfidenceHigh,
+			Capabilities: engine.ProfileCapabilities{
+				StructuredMode:            engine.StructuredModeStdoutRequired,
+				InjectsPrepareArgs:        true,
+				SupportsAggressivePrepare: true,
+				RequireFullCapture:        true,
+			},
 			Match: func(inv engine.Invocation) bool {
-				return len(inv.Command) > 0 && inv.Command[0] == "vitest" || len(inv.Display) > 0 && inv.Display[0] == "vitest"
+				return inv.Classification.Command.Head == "vitest" || inv.Classification.Display.Head == "vitest"
 			},
 			Prepare: func(inv engine.Invocation) []string {
-				if hasStructuredJSArgs(inv.Command, "vitest") {
+				if inv.Classification.Command.JavaScript.Runner == "vitest" && inv.Classification.Command.JavaScript.StructuredMode {
 					return prepareVitestCommand(inv.Command, inv.Advanced.AggressivePrepareRewrites)
 				}
 				return prepareVitestCommand(append(inv.Command, runnerArgs("vitest")...), inv.Advanced.AggressivePrepareRewrites)
 			},
-			Render: func(_ engine.Invocation, exec engine.Execution) string {
-				return jsfilter.SummarizeJSTest(exec.Stdout+"\n"+exec.Stderr, maxLines)
-			},
-			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return shared.NewBufferedTextReducer(true, true, func(input string) string {
-					return jsfilter.SummarizeJSTest(input, budget.MaxLines)
-				})
-			},
-			ParseBytes: profilekit.ParseCombined,
 			Explain: []string{
 				"Prefers Vitest's JSON reporter when the command did not already request another structured mode.",
 				"Condenses passing noise and keeps failed suites, test names, assertion lines, and file paths.",
 			},
-		},
-		{
-			Name:             "jest-json",
-			Description:      "Requests Jest JSON output and condenses the report into failing suite signal.",
-			Confidence:       engine.ConfidenceHigh,
-			StreamPreference: engine.StreamStdoutFirst,
-			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 12)),
-			LatencyBudget:    profilekit.LatencyBudget(35),
+		}, testSummary),
+		profilekit.WithSummary(engine.Profile{
+			Name:        "jest-json",
+			Description: "Requests Jest JSON output and condenses the report into failing suite signal.",
+			Confidence:  engine.ConfidenceHigh,
+			Capabilities: engine.ProfileCapabilities{
+				StructuredMode:            engine.StructuredModeStdoutRequired,
+				InjectsPrepareArgs:        true,
+				SupportsAggressivePrepare: true,
+				RequireFullCapture:        true,
+			},
 			Match: func(inv engine.Invocation) bool {
-				return len(inv.Command) > 0 && inv.Command[0] == "jest" || len(inv.Display) > 0 && inv.Display[0] == "jest"
+				return inv.Classification.Command.Head == "jest" || inv.Classification.Display.Head == "jest"
 			},
 			Prepare: func(inv engine.Invocation) []string {
-				if hasStructuredJSArgs(inv.Command, "jest") {
+				if inv.Classification.Command.JavaScript.Runner == "jest" && inv.Classification.Command.JavaScript.StructuredMode {
 					return prepareJestCommand(inv.Command, inv.Advanced.AggressivePrepareRewrites)
 				}
 				return prepareJestCommand(append(inv.Command, runnerArgs("jest")...), inv.Advanced.AggressivePrepareRewrites)
 			},
-			Render: func(_ engine.Invocation, exec engine.Execution) string {
-				return jsfilter.SummarizeJSTest(exec.Stdout+"\n"+exec.Stderr, maxLines)
-			},
-			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return shared.NewBufferedTextReducer(true, true, func(input string) string {
-					return jsfilter.SummarizeJSTest(input, budget.MaxLines)
-				})
-			},
-			ParseBytes: profilekit.ParseCombined,
 			Explain: []string{
 				"Adds Jest's `--json` mode unless the user already asked for JSON or an alternate reporter.",
 				"Summarizes failed suites and assertions while collapsing passing chatter.",
 			},
-		},
+		}, testSummary),
 	}
+}
+
+func isBunTestClassification(command engine.ClassifiedCommand) bool {
+	return command.Head == "bun" && command.Subcommand == "test"
 }
 
 func prepareBunTestCommand(command []string, aggressive bool) []string {

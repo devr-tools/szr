@@ -11,6 +11,7 @@ type renderResult struct {
 	text         string
 	bytesParsed  int
 	fallbackUsed bool
+	recoveryPlan RecoveryPlan
 }
 
 type RenderedExecution struct {
@@ -45,6 +46,7 @@ func renderProfile(profile Profile, inv Invocation, exec Execution, fallbackLine
 				text:         text,
 				bytesParsed:  maxInt(reducer.BytesParsed(), 0),
 				fallbackUsed: reducer.FallbackUsed() || profile.Name == "passthrough",
+				recoveryPlan: reducerRecoveryPlan(reducer),
 			}
 		}
 	}
@@ -74,14 +76,18 @@ func renderProfile(profile Profile, inv Invocation, exec Execution, fallbackLine
 
 func RenderExecution(profile Profile, inv Invocation, exec Execution, fallbackLines int, passthrough bool) RenderedExecution {
 	rawCombined := combineStreams(exec.Stdout, exec.Stderr)
+	budget := ResolveBudget(profile, inv, fallbackLines)
 	rendered := renderProfile(profile, inv, exec, fallbackLines, passthrough)
 	text := rendered.text
 	if shouldUseFailureEscape(profile, exec.ExitCode, passthrough, rendered.fallbackUsed) && rawCombined != "" {
-		budget := ResolveBudget(profile, inv, fallbackLines)
 		escapeBudget := ExpandBudgetForFailureEscape(budget, inv)
 		if escaped := filters.CompactLines(rawCombined, escapeBudget.MaxLines); strings.TrimSpace(escaped) != "" {
 			text = escaped
 		}
+	}
+	text, _, _ = enforceCompressionContract(text, rawCombined, budget, rendered.recoveryPlan, passthrough, inv.Advanced.CompressionContract)
+	if shouldGuardSmallOutput(profile, passthrough) {
+		text = preferRawSmallOutput(text, rawCombined)
 	}
 	return RenderedExecution{
 		Text:           text,

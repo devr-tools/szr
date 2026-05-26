@@ -38,7 +38,7 @@ func TestJSProfilesPrepare(t *testing.T) {
 			{engine.Invocation{Display: []string{"yarn", "run", "test"}}, true},
 			{engine.Invocation{Display: []string{"npm", "install"}}, false},
 		} {
-			if got := pm.Match(tc.inv); got != tc.want {
+			if got := pm.Match(engine.Classify(tc.inv)); got != tc.want {
 				t.Fatalf("unexpected match result for %#v: got %t want %t", tc.inv, got, tc.want)
 			}
 		}
@@ -147,7 +147,7 @@ func TestJSProfilesPrepare(t *testing.T) {
 			},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
-				if got := pm.Prepare(tc.inv); !reflect.DeepEqual(got, tc.want) {
+				if got := pm.Prepare(engine.Classify(tc.inv)); !reflect.DeepEqual(got, tc.want) {
 					t.Fatalf("unexpected prepare result: got %#v want %#v", got, tc.want)
 				}
 			})

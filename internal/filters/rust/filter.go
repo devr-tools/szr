@@ -1,19 +1,37 @@
 package rust
 
 import (
+	"strconv"
 	"strings"
 
 	shared "github.com/devr-tools/szr/internal/filters"
 )
 
 func SummarizeCargoTest(input string, maxLines int) string {
+	return summarizeCargoTestResult(input, maxLines).Text
+}
+
+func CargoTestRecoveryInfo(input string, maxLines int) (string, string, bool) {
+	result := summarizeCargoTestResult(input, maxLines)
+	if result.OmittedCount <= 0 {
+		return shared.NoRecovery()
+	}
+	return shared.FullOutputRecovery("omitted " + strconv.Itoa(result.OmittedCount) + " additional lines")
+}
+
+type rustSummaryResult struct {
+	Text         string
+	OmittedCount int
+}
+
+func summarizeCargoTestResult(input string, maxLines int) rustSummaryResult {
 	if maxLines <= 0 {
 		maxLines = 12
 	}
 
 	lines := nonEmptyLines(StripANSI(input))
 	if len(lines) == 0 {
-		return "ok"
+		return rustSummaryResult{Text: "ok"}
 	}
 
 	summaries := []string{}
@@ -87,7 +105,7 @@ func renderCargoTestSummary(
 	resultLine string,
 	rerunLine string,
 	maxLines int,
-) string {
+) rustSummaryResult {
 	if len(failures) == 0 && len(details) == 0 {
 		return fallbackCargoTestSummary(input, summaries, resultLine, rerunLine, maxLines)
 	}
@@ -104,20 +122,20 @@ func renderCargoTestSummary(
 		out = append(out, rerunLine)
 	}
 	out = append(out, hints...)
-	return joinLimitedLines(out, maxLines)
+	return summarizeRustLines(out, maxLines)
 }
 
-func fallbackCargoTestSummary(input string, summaries []string, resultLine string, rerunLine string, maxLines int) string {
+func fallbackCargoTestSummary(input string, summaries []string, resultLine string, rerunLine string, maxLines int) rustSummaryResult {
 	if resultLine != "" {
-		return resultLine
+		return rustSummaryResult{Text: resultLine}
 	}
 	if rerunLine != "" {
-		return rerunLine
+		return rustSummaryResult{Text: rerunLine}
 	}
 	if len(summaries) > 0 {
-		return joinLimitedLines(summaries, maxLines)
+		return summarizeRustLines(summaries, maxLines)
 	}
-	return shared.CompactLines(input, maxLines)
+	return rustSummaryResult{Text: shared.CompactLines(input, maxLines)}
 }
 
 func splitCargoDetails(details []string) ([]string, []string, []string) {
@@ -140,13 +158,25 @@ func splitCargoDetails(details []string) ([]string, []string, []string) {
 }
 
 func SummarizeCargoBuild(input string, maxLines int) string {
+	return summarizeCargoBuildResult(input, maxLines).Text
+}
+
+func CargoBuildRecoveryInfo(input string, maxLines int) (string, string, bool) {
+	result := summarizeCargoBuildResult(input, maxLines)
+	if result.OmittedCount <= 0 {
+		return shared.NoRecovery()
+	}
+	return shared.FullOutputRecovery("omitted " + strconv.Itoa(result.OmittedCount) + " additional lines")
+}
+
+func summarizeCargoBuildResult(input string, maxLines int) rustSummaryResult {
 	if maxLines <= 0 {
 		maxLines = 12
 	}
 
 	lines := nonEmptyLines(StripANSI(input))
 	if len(lines) == 0 {
-		return "ok"
+		return rustSummaryResult{Text: "ok"}
 	}
 
 	summaries := []string{}
@@ -173,9 +203,9 @@ func SummarizeCargoBuild(input string, maxLines int) string {
 
 	if len(diagnostics) == 0 && len(details) == 0 {
 		if len(summaries) > 0 {
-			return joinLimitedLines(summaries, maxLines)
+			return summarizeRustLines(summaries, maxLines)
 		}
-		return shared.CompactLines(input, maxLines)
+		return rustSummaryResult{Text: shared.CompactLines(input, maxLines)}
 	}
 
 	stackDetails := []string{}
@@ -197,7 +227,7 @@ func SummarizeCargoBuild(input string, maxLines int) string {
 	out = append(out, shared.SelectUniqueAnchoredLines(stackDetails, maxLines/3+1)...)
 	out = append(out, hints...)
 	out = append(out, summaries...)
-	return joinLimitedLines(out, maxLines)
+	return summarizeRustLines(out, maxLines)
 }
 
 func isCargoDiagnosticHeader(line string) bool {
@@ -267,6 +297,14 @@ func nonEmptyLines(input string) []string {
 
 func joinLimitedLines(lines []string, maxLines int) string {
 	return shared.JoinLimitedLines(lines, maxLines)
+}
+
+func summarizeRustLines(lines []string, maxLines int) rustSummaryResult {
+	result := rustSummaryResult{Text: shared.JoinLimitedLines(lines, maxLines)}
+	if len(lines) > maxLines {
+		result.OmittedCount = len(lines) - maxLines
+	}
+	return result
 }
 
 func isDividerLine(line string) bool {

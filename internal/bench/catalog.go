@@ -149,9 +149,8 @@ var builtinSpecs = []Spec{
 		Display:     []string{"find", ".", "-name", "*.go"},
 		StdoutFile:  "testdata/find_noisy_paths.txt",
 		ExpectedContains: []string{
-			"6 matches",
+			"6 matches | ext: .go (6)",
 			"cmd/szr/main.go",
-			"internal/engine/run.go",
 			"suppressed noisy paths:",
 		},
 		MinTokenSavings: 20,
@@ -230,8 +229,7 @@ var builtinSpecs = []Spec{
 		Display:     []string{"summary", "tail", "-n", "200", "var/log/build.log"},
 		StdoutFile:  "testdata/repeated_logs.txt",
 		ExpectedContains: []string{
-			"2026-05-20T21:00:00Z INFO worker.1 step=compile status=running",
-			"... +8 more lines",
+			"2026-05-20T21:00:00Z INFO worker.1 step=compile status=running (x20)",
 		},
 		MinTokenSavings: 30,
 		MinQualityScore: 70,

@@ -15,118 +15,116 @@ func TestLoadVariants(t *testing.T) {
 	root := t.TempDir()
 	paths := testutil.Paths(root)
 
-	cfg, gotPaths, err := config.LoadWith(
-		func() (config.Paths, error) { return paths, nil },
-		func(config.Paths) error { return nil },
-		func() (string, error) { return root, nil },
-		func(string) (os.FileInfo, error) { return nil, os.ErrNotExist },
-		func(string) ([]byte, error) { return nil, os.ErrNotExist },
-	)
+	assertLoadVariantSuccesses(t, paths, root)
+	assertLoadVariantErrors(t, paths, root)
+}
+
+func assertLoadVariantSuccesses(t *testing.T, paths config.Paths, root string) {
+	t.Helper()
+	assertLoadDefaultConfig(t, paths, root)
+	assertLoadCustomConfig(t, paths, root)
+	assertLoadAggressiveConfig(t, paths, root)
+	assertLoadNormalizedUpdateCheck(t, paths, root)
+}
+
+func assertLoadDefaultConfig(t *testing.T, paths config.Paths, root string) {
+	t.Helper()
+	cfg, gotPaths, err := loadConfigFixture(t, paths, root, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("load default: %v", err)
 	}
 	if gotPaths.ConfigFile != paths.ConfigFile || !cfg.TeeOnFailure {
 		t.Fatalf("unexpected load default result: %#v %#v", cfg, gotPaths)
 	}
+}
 
-	cfg, _, err = config.LoadWith(
-		func() (config.Paths, error) { return paths, nil },
-		func(config.Paths) error { return nil },
-		func() (string, error) { return root, nil },
-		func(string) (os.FileInfo, error) { return nil, os.ErrNotExist },
-		func(string) ([]byte, error) {
-			return []byte(`{"tee_on_failure":false,"max_preview_lines":7,"max_match_groups":4,"reasoning_budget":"agent","advanced":{"adaptive_budgets":true,"early_capture_stop":false},"update_check":{"enabled":true,"interval_hours":12,"auto_update":true}}`), nil
-		},
-	)
+func assertLoadCustomConfig(t *testing.T, paths config.Paths, root string) {
+	t.Helper()
+	cfg, _, err := loadConfigFixture(t, paths, root, nil, nil, []byte(`{"tee_on_failure":false,"max_preview_lines":7,"max_match_groups":4,"reasoning_budget":"agent","advanced":{"adaptive_budgets":true,"early_capture_stop":false},"update_check":{"enabled":true,"interval_hours":12,"auto_update":true}}`))
 	if err != nil || cfg.TeeOnFailure || cfg.MaxPreviewLines != 7 || cfg.MaxMatchGroups != 4 || cfg.ReasoningBudgetMode != config.ReasoningBudgetAgent || !cfg.UpdateCheck.Enabled || cfg.UpdateCheck.IntervalHours != 12 || !cfg.UpdateCheck.AutoUpdate {
 		t.Fatalf("unexpected loaded config: %#v err=%v", cfg, err)
 	}
-	if !cfg.Advanced.AggressivePrepareRewrites || !cfg.Advanced.NoisePrefiltering || !cfg.Advanced.AdaptiveBudgets || cfg.Advanced.EarlyCaptureStop || !cfg.Advanced.SemanticCompaction {
+	if !cfg.Advanced.AggressivePrepareRewrites || !cfg.Advanced.NoisePrefiltering || !cfg.Advanced.AdaptiveBudgets || cfg.Advanced.EarlyCaptureStop || !cfg.Advanced.SemanticCompaction || !cfg.Advanced.CompressionContract || !cfg.Advanced.CompactArtifactRefs {
 		t.Fatalf("unexpected advanced config: %#v", cfg.Advanced)
 	}
+}
 
-	cfg, _, err = config.LoadWith(
-		func() (config.Paths, error) { return paths, nil },
-		func(config.Paths) error { return nil },
-		func() (string, error) { return root, nil },
-		func(string) (os.FileInfo, error) { return nil, os.ErrNotExist },
-		func(string) ([]byte, error) {
-			return []byte(`{"reasoning_budget":"aggressive"}`), nil
-		},
-	)
+func assertLoadAggressiveConfig(t *testing.T, paths config.Paths, root string) {
+	t.Helper()
+	cfg, _, err := loadConfigFixture(t, paths, root, nil, nil, []byte(`{"reasoning_budget":"aggressive"}`))
 	if err != nil || cfg.ReasoningBudgetMode != config.ReasoningBudgetAggressive {
 		t.Fatalf("unexpected aggressive loaded config: %#v err=%v", cfg, err)
 	}
+}
 
-	_, _, err = config.LoadWith(
-		func() (config.Paths, error) { return config.Paths{}, errors.New("resolve fail") },
-		func(config.Paths) error { return nil },
-		func() (string, error) { return root, nil },
-		func(string) (os.FileInfo, error) { return nil, os.ErrNotExist },
-		func(string) ([]byte, error) { return nil, nil },
-	)
-	if err == nil {
-		t.Fatal("expected resolve error")
-	}
-
-	_, _, err = config.LoadWith(
-		func() (config.Paths, error) { return paths, nil },
-		func(config.Paths) error { return errors.New("ensure fail") },
-		func() (string, error) { return root, nil },
-		func(string) (os.FileInfo, error) { return nil, os.ErrNotExist },
-		func(string) ([]byte, error) { return nil, nil },
-	)
-	if err == nil {
-		t.Fatal("expected ensure error")
-	}
-
-	_, _, err = config.LoadWith(
-		func() (config.Paths, error) { return paths, nil },
-		func(config.Paths) error { return nil },
-		func() (string, error) { return root, nil },
-		func(string) (os.FileInfo, error) { return nil, os.ErrNotExist },
-		func(string) ([]byte, error) { return nil, errors.New("read fail") },
-	)
-	if err == nil {
-		t.Fatal("expected read error")
-	}
-
-	_, _, err = config.LoadWith(
-		func() (config.Paths, error) { return paths, nil },
-		func(config.Paths) error { return nil },
-		func() (string, error) { return root, nil },
-		func(string) (os.FileInfo, error) { return nil, os.ErrNotExist },
-		func(string) ([]byte, error) { return []byte("{bad"), nil },
-	)
-	if err == nil {
-		t.Fatal("expected json error")
-	}
-
-	_, _, err = config.LoadWith(
-		func() (config.Paths, error) { return paths, nil },
-		func(config.Paths) error { return nil },
-		func() (string, error) { return root, nil },
-		func(string) (os.FileInfo, error) { return nil, os.ErrNotExist },
-		func(string) ([]byte, error) {
-			return []byte(`{"reasoning_budget":"agent","reasoning_budget_mode":"standard"}`), nil
-		},
-	)
-	if err == nil || !strings.Contains(err.Error(), "reasoning_budget and reasoning_budget_mode disagree") {
-		t.Fatalf("expected reasoning budget conflict error, got %v", err)
-	}
-
-	cfg, _, err = config.LoadWith(
-		func() (config.Paths, error) { return paths, nil },
-		func(config.Paths) error { return nil },
-		func() (string, error) { return root, nil },
-		func(string) (os.FileInfo, error) { return nil, os.ErrNotExist },
-		func(string) ([]byte, error) {
-			return []byte(`{"update_check":{"enabled":true,"interval_hours":0}}`), nil
-		},
-	)
+func assertLoadNormalizedUpdateCheck(t *testing.T, paths config.Paths, root string) {
+	t.Helper()
+	cfg, _, err := loadConfigFixture(t, paths, root, nil, nil, []byte(`{"update_check":{"enabled":true,"interval_hours":0}}`))
 	if err != nil || !cfg.UpdateCheck.Enabled || cfg.UpdateCheck.IntervalHours != 24 {
 		t.Fatalf("expected normalized update check config, got %#v err=%v", cfg.UpdateCheck, err)
 	}
+}
+
+func assertLoadVariantErrors(t *testing.T, paths config.Paths, root string) {
+	t.Helper()
+	for _, tc := range []struct {
+		name        string
+		resolveErr  error
+		ensureErr   error
+		readErr     error
+		data        []byte
+		errContains string
+	}{
+		{name: "resolve error", resolveErr: errors.New("resolve fail")},
+		{name: "ensure error", ensureErr: errors.New("ensure fail")},
+		{name: "read error", readErr: errors.New("read fail")},
+		{name: "json error", data: []byte("{bad")},
+		{name: "reasoning budget conflict", data: []byte(`{"reasoning_budget":"agent","reasoning_budget_mode":"standard"}`), errContains: "reasoning_budget and reasoning_budget_mode disagree"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, err := loadConfigFixture(t, paths, root, tc.resolveErr, tc.ensureErr, tc.data, tc.readErr)
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			if tc.errContains != "" && !strings.Contains(err.Error(), tc.errContains) {
+				t.Fatalf("expected error containing %q, got %v", tc.errContains, err)
+			}
+		})
+	}
+}
+
+func loadConfigFixture(t *testing.T, paths config.Paths, root string, resolveErr, ensureErr error, args ...any) (config.Config, config.Paths, error) {
+	t.Helper()
+	var data []byte
+	var readErr error
+	for _, arg := range args {
+		switch v := arg.(type) {
+		case []byte:
+			data = v
+		case error:
+			readErr = v
+		}
+	}
+	return config.LoadWith(
+		func() (config.Paths, error) {
+			if resolveErr != nil {
+				return config.Paths{}, resolveErr
+			}
+			return paths, nil
+		},
+		func(config.Paths) error { return ensureErr },
+		func() (string, error) { return root, nil },
+		func(string) (os.FileInfo, error) { return nil, os.ErrNotExist },
+		func(string) ([]byte, error) {
+			if readErr != nil {
+				return nil, readErr
+			}
+			if data != nil {
+				return data, nil
+			}
+			return nil, os.ErrNotExist
+		},
+	)
 }
 
 func TestLoadEdgeErrors(t *testing.T) {

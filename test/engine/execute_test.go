@@ -60,6 +60,54 @@ func TestExecuteBlankRenderFallsBackToRaw(t *testing.T) {
 	}
 }
 
+func TestExecuteFallbackProfileUsesDeclarativeCompactLines(t *testing.T) {
+	t.Parallel()
+	e, _, _, _, _, _ := newExecuteTestEngine(t)
+	display := strings.Join([]string{
+		"line-1",
+		"line-2",
+		"line-3",
+		"line-4",
+		"line-5",
+		"line-6",
+		"line-7",
+		"line-8",
+		"line-9",
+		"line-10",
+		"line-11",
+		"line-12",
+		"line-13",
+	}, "\n")
+
+	rendered := e.Explain(engine.Invocation{
+		Command: []string{"other"},
+		Display: []string{"other"},
+	}).Render(engine.Invocation{}, engine.Execution{Stdout: display})
+
+	if !strings.Contains(rendered, "line-1") || !strings.Contains(rendered, "... +1 more lines") {
+		t.Fatalf("expected declarative compact fallback, got %q", rendered)
+	}
+	if strings.Contains(rendered, "line-13") {
+		t.Fatalf("expected fallback compaction to truncate, got %q", rendered)
+	}
+}
+
+func TestExecuteFallbackProfilePrefersInterestingErrorLinesOnFailure(t *testing.T) {
+	t.Parallel()
+	e, _, _, _, _, _ := newExecuteTestEngine(t)
+	rendered := e.Explain(engine.Invocation{
+		Command: []string{"other"},
+		Display: []string{"other"},
+	}).Render(engine.Invocation{}, engine.Execution{
+		Stdout:   "progress line\nwarning: retrying\nplain line\nerror: failed to connect\n",
+		ExitCode: 2,
+	})
+
+	if rendered != "warning: retrying\nerror: failed to connect" {
+		t.Fatalf("expected declarative interesting-error fallback, got %q", rendered)
+	}
+}
+
 func TestExecutePassthroughMode(t *testing.T) {
 	t.Parallel()
 	e, root, _, succeedPath, _, _ := newExecuteTestEngine(t)
@@ -81,7 +129,7 @@ func TestExecuteTeeOnFailure(t *testing.T) {
 		Display: []string{"failcmd", strings.Repeat("x", 60)},
 		Cwd:     root,
 	}, false)
-	if err != nil || failResult.ExitCode != 3 || failResult.TeePath == "" || !strings.Contains(failResult.Display, "[full output:") {
+	if err != nil || failResult.ExitCode != 3 || failResult.TeePath == "" || !strings.Contains(failResult.Display, "[tee: ") {
 		t.Fatalf("unexpected failing result: %#v err=%v", failResult, err)
 	}
 	if _, statErr := os.Stat(failResult.TeePath); statErr != nil {

@@ -32,3 +32,11 @@ func TestSummarizeQueryOutput(t *testing.T) {
 		t.Fatalf("expected stderr fallback, got:\n%s", fallback)
 	}
 }
+
+func TestQueryOutputRecoveryInfo(t *testing.T) {
+	input := `{"user":{"id":7,"name":"alex","team":{"id":"t_1","name":"platform"}},"items":[1,2,3],"meta":{"page":1,"total":10}}`
+
+	if kind, summary, requireRawCapture := jsonquery.QueryOutputRecoveryInfo(input, "", 4); kind != "full-output" || summary != "omitted 7 additional lines" || !requireRawCapture {
+		t.Fatalf("unexpected json query recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+}

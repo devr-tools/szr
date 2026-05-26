@@ -167,6 +167,15 @@ func (r *GenericFailureReducer) Preview() string {
 	return ""
 }
 
+func (r *GenericFailureReducer) RecoveryInfo() (string, string, bool) {
+	r.scanner.Finish(r.ingestLine)
+	r.flushPending()
+	if summary := r.recoverySummary(); summary != "" {
+		return FullOutputRecovery(summary)
+	}
+	return NoRecovery()
+}
+
 func (r *GenericFailureReducer) consume(chunk []byte) {
 	r.bytesParsed += len(chunk)
 	r.scanner.Consume(chunk, r.ingestLine)
@@ -303,16 +312,34 @@ func (r *GenericFailureReducer) omissionSummary(used int) string {
 	if r.extra > 0 {
 		parts = append(parts, fmt.Sprintf("%d more lines", r.extra))
 	}
+	parts = append(parts, r.droppedNoiseSummaryParts()...)
+	if len(parts) == 0 || used >= r.maxLines {
+		return ""
+	}
+	return "... omitted " + strings.Join(parts, ", ")
+}
+
+func (r *GenericFailureReducer) recoverySummary() string {
+	parts := []string{}
+	if r.extra > 0 {
+		parts = append(parts, fmt.Sprintf("%d additional lines", r.extra))
+	}
+	parts = append(parts, r.droppedNoiseSummaryParts()...)
+	if len(parts) == 0 {
+		return ""
+	}
+	return "omitted " + strings.Join(parts, ", ")
+}
+
+func (r *GenericFailureReducer) droppedNoiseSummaryParts() []string {
+	parts := []string{}
 	if count := r.droppedNoise["progress"]; count > 0 {
 		parts = append(parts, fmt.Sprintf("%d progress lines", count))
 	}
 	if count := r.droppedNoise["install"]; count > 0 {
 		parts = append(parts, fmt.Sprintf("%d install lines", count))
 	}
-	if len(parts) == 0 || used >= r.maxLines {
-		return ""
-	}
-	return "... omitted " + strings.Join(parts, ", ")
+	return parts
 }
 
 func renderFailureItem(item failureItem, label string) string {
@@ -358,6 +385,9 @@ func analyzeFailureLine(raw string, noisePrefiltering bool, semanticCompaction b
 }
 
 func failureSemanticKey(raw string, display string, kind string) string {
+	if key := failureTestCaseKey(raw); key != "" && (kind == "root" || kind == "warning") {
+		return strings.ToLower(key)
+	}
 	switch kind {
 	case "stack":
 		if key := stackKey(raw); key != "" {
@@ -371,9 +401,28 @@ func failureSemanticKey(raw string, display string, kind string) string {
 	return strings.ToLower(strings.TrimSpace(display))
 }
 
+func failureTestCaseKey(line string) string {
+	normalized := strings.ReplaceAll(strings.TrimSpace(line), "›", ">")
+	lower := strings.ToLower(normalized)
+	for _, marker := range []string{"tests/", "test/", ".spec.", ".test."} {
+		idx := strings.Index(lower, marker)
+		if idx < 0 {
+			continue
+		}
+		candidate := strings.TrimSpace(normalized[idx:])
+		if end := strings.Index(candidate, "("); end > 0 {
+			candidate = strings.TrimSpace(candidate[:end])
+		}
+		return candidate
+	}
+	return ""
+}
+
 func failureNoiseClass(line string) string {
 	lower := strings.ToLower(strings.TrimSpace(line))
 	switch {
+	case looksLikePassingTestLine(lower):
+		return "pass"
 	case looksLikeProgressLine(lower):
 		return "progress"
 	case looksLikeInstallNoise(lower):
@@ -429,6 +478,18 @@ func looksLikeInstallNoise(lower string) bool {
 	}
 }
 
+func looksLikePassingTestLine(lower string) bool {
+	switch {
+	case strings.HasPrefix(lower, "ok  "),
+		strings.HasPrefix(lower, "ok "),
+		strings.Contains(lower, " passed"),
+		strings.HasSuffix(lower, " passed"):
+		return true
+	default:
+		return false
+	}
+}
+
 func compactFailureDisplay(line string) string {
 	if anchor := failureAnchor(line); anchor != "" {
 		return strings.Replace(line, anchor, shortenFailurePath(anchor), 1)
@@ -456,6 +517,10 @@ func shortenFailurePath(anchor string) string {
 func classifyFailureLine(line string) string {
 	lower := strings.ToLower(strings.TrimSpace(line))
 	switch {
+	case strings.HasPrefix(lower, "x "),
+		strings.HasPrefix(lower, "x   "),
+		strings.HasPrefix(lower, "stderr | "):
+		return "root"
 	case strings.HasPrefix(lower, "help:"),
 		strings.HasPrefix(lower, "hint:"),
 		strings.HasPrefix(lower, "note:"),
@@ -542,6 +607,23 @@ type goTestPackageState struct {
 }
 
 func SummarizeGoTestJSON(input string) string {
+	return summarizeGoTestJSONResult(input).Text
+}
+
+func GoTestJSONRecoveryInfo(input string) (string, string, bool) {
+	result := summarizeGoTestJSONResult(input)
+	if result.OmittedCount <= 0 {
+		return NoRecovery()
+	}
+	return FullOutputRecovery(fmt.Sprintf("omitted %d additional test lines", result.OmittedCount))
+}
+
+type goTestSummaryResult struct {
+	Text         string
+	OmittedCount int
+}
+
+func summarizeGoTestJSONResult(input string) goTestSummaryResult {
 	failures := map[string][]string{}
 	packages := map[string]*goTestPackageState{}
 	scanner := bufio.NewScanner(strings.NewReader(input))
@@ -554,7 +636,7 @@ func SummarizeGoTestJSON(input string) string {
 	}
 
 	if len(packages) == 0 {
-		return CompactLines(input, 12)
+		return goTestSummaryResult{Text: CompactLines(input, 12)}
 	}
 
 	passed, failed := countGoTestPackages(packages)
@@ -604,12 +686,12 @@ func countGoTestPackages(packages map[string]*goTestPackageState) (int, int) {
 	return passed, failed
 }
 
-func renderGoTestSummary(passed, failed int, failures map[string][]string) string {
+func renderGoTestSummary(passed, failed int, failures map[string][]string) goTestSummaryResult {
 	var out []string
 	out = append(out, fmt.Sprintf("packages: pass=%d fail=%d", passed, failed))
 	if len(failures) == 0 {
 		out = append(out, "all tests passed")
-		return strings.Join(out, "\n")
+		return goTestSummaryResult{Text: strings.Join(out, "\n")}
 	}
 
 	keys := make([]string, 0, len(failures))
@@ -628,5 +710,12 @@ func renderGoTestSummary(passed, failed int, failures map[string][]string) strin
 			out = append(out, "  "+testName)
 		}
 	}
-	return strings.Join(out, "\n")
+	result := goTestSummaryResult{Text: strings.Join(out, "\n")}
+	for _, values := range failures {
+		unique := uniqueStrings(values)
+		if len(unique) > 4 {
+			result.OmittedCount += len(unique) - 4
+		}
+	}
+	return result
 }

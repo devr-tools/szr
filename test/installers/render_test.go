@@ -67,34 +67,13 @@ func TestRenderClaudeTarget(t *testing.T) {
 		t.Fatalf("unexpected claude file count: %d", len(plan.Files))
 	}
 
-	var sawHook, sawInstallDoc, sawSZRDoc, sawClaudeMD, sawSettings bool
+	saw := map[string]bool{}
 	for _, file := range plan.Files {
-		switch {
-		case strings.HasSuffix(file.Path, filepath.Join(".claude", "hooks", "szr-rewrite.sh")):
-			sawHook = true
-			if file.Strategy != installers.StrategyWrite || !strings.Contains(file.Content, "rewrite --binary") || !strings.Contains(file.Content, "--hook claude") {
-				t.Fatalf("unexpected global hook file: %#v", file)
-			}
-		case strings.HasSuffix(file.Path, filepath.Join(".claude", ".szr", "install", "claude-code.md")):
-			sawInstallDoc = true
-		case strings.HasSuffix(file.Path, filepath.Join(".claude", "szr.md")):
-			sawSZRDoc = true
-			if file.Strategy != installers.StrategyWrite || !strings.Contains(file.Content, "## szr for Claude Code") {
-				t.Fatalf("unexpected global szr.md file: %#v", file)
-			}
-		case strings.HasSuffix(file.Path, filepath.Join(".claude", "CLAUDE.md")):
-			sawClaudeMD = true
-			if file.Strategy != installers.StrategyMerge || file.Marker != "szr-claude-code-global" {
-				t.Fatalf("unexpected global CLAUDE.md file: %#v", file)
-			}
-		case strings.HasSuffix(file.Path, filepath.Join(".claude", "settings.json")):
-			sawSettings = true
-			if file.Strategy != installers.StrategyClaudeSettingsMerge {
-				t.Fatalf("unexpected global settings file: %#v", file)
-			}
-		}
+		key := classifyClaudeInstallFile(file.Path)
+		saw[key] = true
+		assertClaudeInstallFile(t, key, file)
 	}
-	if !sawHook || !sawInstallDoc || !sawSZRDoc || !sawClaudeMD || !sawSettings {
+	if !saw["hook"] || !saw["install-doc"] || !saw["szr"] || !saw["claude-md"] || !saw["settings"] {
 		t.Fatalf("missing generated files for claude plan: %#v", plan.Files)
 	}
 }
@@ -117,18 +96,11 @@ func assertInstallRenderPlan(t *testing.T, target installers.Target, plan instal
 
 	var sawHook, sawInstallDoc, sawInstruction bool
 	for _, file := range plan.Files {
-		switch {
-		case strings.HasSuffix(file.Path, filepath.Join(".szr", "hooks", "pre-command.sh")) ||
-			strings.HasSuffix(file.Path, filepath.Join(".claude", "hooks", "szr-rewrite.sh")) ||
-			strings.HasSuffix(file.Path, filepath.Join(".cursor", "hooks", "szr-rewrite.sh")) ||
-			strings.HasSuffix(file.Path, filepath.Join(".gemini", "hooks", "szr-rewrite.sh")):
+		switch classifyInstallPlanFile(target, file.Path) {
+		case "hook":
 			sawHook = true
 			assertInstallHookFile(t, file)
-		case strings.HasSuffix(file.Path, filepath.Join(".szr", "install", string(target)+".md")) ||
-			strings.HasSuffix(file.Path, filepath.Join(".claude", ".szr", "install", string(target)+".md")) ||
-			strings.HasSuffix(file.Path, filepath.Join(".codex", ".szr", "install", string(target)+".md")) ||
-			strings.HasSuffix(file.Path, filepath.Join(".cursor", ".szr", "install", string(target)+".md")) ||
-			strings.HasSuffix(file.Path, filepath.Join(".gemini", ".szr", "install", string(target)+".md")):
+		case "install-doc":
 			sawInstallDoc = true
 			assertInstallDocFile(t, file, target)
 		default:
@@ -147,21 +119,18 @@ func assertInstallHookFile(t *testing.T, file installers.File) {
 	if file.Strategy != installers.StrategyWrite || file.Mode != 0o755 {
 		t.Fatalf("unexpected hook file metadata: %#v", file)
 	}
-	if strings.HasSuffix(file.Path, filepath.Join(".claude", "hooks", "szr-rewrite.sh")) {
-		if !strings.Contains(file.Content, "rewrite --binary") || !strings.Contains(file.Content, "--hook claude") {
-			t.Fatalf("unexpected global hook content: %q", file.Content)
-		}
-		return
+	wantHook := ""
+	switch {
+	case strings.HasSuffix(file.Path, filepath.Join(".claude", "hooks", "szr-rewrite.sh")):
+		wantHook = "--hook claude"
+	case strings.HasSuffix(file.Path, filepath.Join(".cursor", "hooks", "szr-rewrite.sh")):
+		wantHook = "--hook cursor"
+	case strings.HasSuffix(file.Path, filepath.Join(".gemini", "hooks", "szr-rewrite.sh")):
+		wantHook = "--hook gemini"
 	}
-	if strings.HasSuffix(file.Path, filepath.Join(".cursor", "hooks", "szr-rewrite.sh")) {
-		if !strings.Contains(file.Content, "rewrite --binary") || !strings.Contains(file.Content, "--hook cursor") {
-			t.Fatalf("unexpected cursor hook content: %q", file.Content)
-		}
-		return
-	}
-	if strings.HasSuffix(file.Path, filepath.Join(".gemini", "hooks", "szr-rewrite.sh")) {
-		if !strings.Contains(file.Content, "rewrite --binary") || !strings.Contains(file.Content, "--hook gemini") {
-			t.Fatalf("unexpected gemini hook content: %q", file.Content)
+	if wantHook != "" {
+		if !strings.Contains(file.Content, "rewrite --binary") || !strings.Contains(file.Content, wantHook) {
+			t.Fatalf("unexpected hook content: %q", file.Content)
 		}
 		return
 	}
@@ -211,66 +180,17 @@ func assertInstallInstructionFile(t *testing.T, target installers.Target, file i
 	t.Helper()
 	switch target {
 	case installers.TargetCodex:
-		if strings.HasSuffix(file.Path, filepath.Join(".codex", "szr.md")) {
-			if file.Strategy != installers.StrategyWrite || !strings.Contains(file.Content, "## szr for Codex") || !strings.Contains(file.Content, "Codex does not install a Bash rewrite hook today") || !strings.Contains(file.Content, "szr grep <pattern> <path>") {
-				t.Fatalf("unexpected Codex shared file: %#v", file)
-			}
-			return
-		}
-		if strings.HasSuffix(file.Path, "AGENTS.md") {
-			if file.Strategy != installers.StrategyMerge || file.Marker != "szr-codex" || !strings.Contains(file.Content, "@") {
-				t.Fatalf("unexpected Codex AGENTS.md file: %#v", file)
-			}
-			return
-		}
-		t.Fatalf("unexpected Codex instruction file: %#v", file)
+		assertInstallCodexInstruction(t, file)
 	case installers.TargetClaude:
-		if strings.HasSuffix(file.Path, filepath.Join(".claude", "szr.md")) {
-			if file.Strategy != installers.StrategyWrite || !strings.Contains(file.Content, "## szr for Claude Code") {
-				t.Fatalf("unexpected Claude shared file: %#v", file)
-			}
-			return
-		}
-		if strings.HasSuffix(file.Path, filepath.Join(".claude", "CLAUDE.md")) {
-			if file.Strategy != installers.StrategyMerge || file.Marker != "szr-claude-code-global" {
-				t.Fatalf("unexpected Claude CLAUDE.md file: %#v", file)
-			}
-			return
-		}
-		if strings.HasSuffix(file.Path, filepath.Join(".claude", "settings.json")) {
-			if file.Strategy != installers.StrategyClaudeSettingsMerge {
-				t.Fatalf("unexpected Claude settings file: %#v", file)
-			}
-			return
-		}
-		t.Fatalf("unexpected Claude instruction file: %#v", file)
+		assertInstallClaudeInstruction(t, file)
 	case installers.TargetCursor:
-		if strings.HasSuffix(file.Path, filepath.Join(".cursor", "hooks.json")) {
-			if file.Strategy != installers.StrategyCursorHooksMerge {
-				t.Fatalf("unexpected cursor file: %#v", file)
-			}
-			return
-		}
-		t.Fatalf("unexpected cursor file: %#v", file)
+		assertExactStrategySuffix(t, file, filepath.Join(".cursor", "hooks.json"), installers.StrategyCursorHooksMerge, "cursor")
 	case installers.TargetGemini:
-		if strings.HasSuffix(file.Path, filepath.Join(".gemini", "settings.json")) {
-			if file.Strategy != installers.StrategyGeminiSettingsMerge {
-				t.Fatalf("unexpected gemini file: %#v", file)
-			}
-			return
-		}
-		t.Fatalf("unexpected gemini file: %#v", file)
+		assertExactStrategySuffix(t, file, filepath.Join(".gemini", "settings.json"), installers.StrategyGeminiSettingsMerge, "gemini")
 	case installers.TargetShell:
-		if file.Strategy != installers.StrategyWrite || !strings.Contains(file.Content, "szr_explain()") || !strings.Contains(file.Content, "szr_proxy()") {
-			t.Fatalf("unexpected shell file: %#v", file)
-		}
+		assertInstallShellInstruction(t, file)
 	default:
-		if file.Strategy != installers.StrategyMerge || file.Marker == "" {
-			t.Fatalf("unexpected merge file: %#v", file)
-		}
-		if !strings.Contains(file.Content, "explain <cmd...>") || !strings.Contains(file.Content, "proxy <cmd...>") || !strings.Contains(file.Content, "wrap the noisy producer instead of the whole pipeline") || !strings.Contains(file.Content, "szr find <path> --name \"*.py\"") || !strings.Contains(file.Content, "szr run /usr/bin/grep ...") {
-			t.Fatalf("unexpected instruction body: %q", file.Content)
-		}
+		assertInstallDefaultInstruction(t, file)
 	}
 }
 
@@ -328,34 +248,13 @@ func TestRenderClaudeUninstallTarget(t *testing.T) {
 		t.Fatalf("expected global uninstall plan metadata: %#v", plan.Paths)
 	}
 
-	var sawHook, sawInstallDoc, sawSZRDoc, sawClaudeMD, sawSettings bool
+	saw := map[string]bool{}
 	for _, file := range plan.Files {
-		switch {
-		case strings.HasSuffix(file.Path, filepath.Join(".claude", ".szr", "install", "claude-code.md")):
-			sawInstallDoc = true
-		case strings.HasSuffix(file.Path, filepath.Join(".claude", "hooks", "szr-rewrite.sh")):
-			sawHook = true
-			if file.Strategy != installers.StrategyDelete {
-				t.Fatalf("unexpected global uninstall hook file: %#v", file)
-			}
-		case strings.HasSuffix(file.Path, filepath.Join(".claude", "szr.md")):
-			sawSZRDoc = true
-			if file.Strategy != installers.StrategyDelete {
-				t.Fatalf("unexpected global uninstall szr.md file: %#v", file)
-			}
-		case strings.HasSuffix(file.Path, filepath.Join(".claude", "CLAUDE.md")):
-			sawClaudeMD = true
-			if file.Strategy != installers.StrategyUnmerge || file.Marker != "szr-claude-code-global" {
-				t.Fatalf("unexpected global uninstall CLAUDE.md file: %#v", file)
-			}
-		case strings.HasSuffix(file.Path, filepath.Join(".claude", "settings.json")):
-			sawSettings = true
-			if file.Strategy != installers.StrategyClaudeSettingsPrune {
-				t.Fatalf("unexpected global uninstall settings file: %#v", file)
-			}
-		}
+		key := classifyClaudeUninstallFile(file.Path)
+		saw[key] = true
+		assertClaudeUninstallFile(t, key, file)
 	}
-	if !sawHook || !sawInstallDoc || !sawSZRDoc || !sawClaudeMD || !sawSettings {
+	if !saw["hook"] || !saw["install-doc"] || !saw["szr"] || !saw["claude-md"] || !saw["settings"] {
 		t.Fatalf("missing generated files for claude uninstall: %#v", plan.Files)
 	}
 }
@@ -371,46 +270,19 @@ func assertUninstallRenderPlan(t *testing.T, target installers.Target, plan inst
 	if len(plan.Files) < 2 {
 		t.Fatalf("unexpected uninstall file count for %s: %d", target, len(plan.Files))
 	}
-	if target == installers.TargetShell {
-		if !strings.Contains(plan.ManualSteps[0], ".szr/install/shell.sh") {
-			t.Fatalf("unexpected shell uninstall manual step: %q", plan.ManualSteps[0])
-		}
-	} else if target == installers.TargetCodex {
-		if !strings.Contains(plan.ManualSteps[0], ".codex/szr.md") {
-			t.Fatalf("unexpected codex uninstall manual step: %q", plan.ManualSteps[0])
-		}
-	} else if target == installers.TargetClaude {
-		if !strings.Contains(plan.ManualSteps[0], ".claude/settings.json") {
-			t.Fatalf("unexpected claude uninstall manual step: %q", plan.ManualSteps[0])
-		}
-	} else if target == installers.TargetCursor {
-		if !strings.Contains(plan.ManualSteps[0], ".cursor/hooks.json") {
-			t.Fatalf("unexpected cursor uninstall manual step: %q", plan.ManualSteps[0])
-		}
-	} else if target == installers.TargetGemini {
-		if !strings.Contains(plan.ManualSteps[0], ".gemini/settings.json") {
-			t.Fatalf("unexpected gemini uninstall manual step: %q", plan.ManualSteps[0])
-		}
-	} else if !strings.Contains(plan.ManualSteps[0], ".szr/hooks/pre-command.sh") {
+	if !strings.Contains(plan.ManualSteps[0], uninstallManualStepSubstring(target)) {
 		t.Fatalf("unexpected uninstall manual step: %q", plan.ManualSteps[0])
 	}
 
 	var sawInstallDoc, sawTargetFile bool
 	for _, file := range plan.Files {
-		switch {
-		case strings.HasSuffix(file.Path, filepath.Join(".szr", "install", string(target)+".md")) ||
-			strings.HasSuffix(file.Path, filepath.Join(".claude", ".szr", "install", string(target)+".md")) ||
-			strings.HasSuffix(file.Path, filepath.Join(".codex", ".szr", "install", string(target)+".md")) ||
-			strings.HasSuffix(file.Path, filepath.Join(".cursor", ".szr", "install", string(target)+".md")) ||
-			strings.HasSuffix(file.Path, filepath.Join(".gemini", ".szr", "install", string(target)+".md")):
+		switch classifyInstallPlanFile(target, file.Path) {
+		case "install-doc":
 			sawInstallDoc = true
 			if file.Strategy != installers.StrategyDelete {
 				t.Fatalf("unexpected uninstall doc metadata: %#v", file)
 			}
-		case strings.HasSuffix(file.Path, filepath.Join(".szr", "hooks", "pre-command.sh")) ||
-			strings.HasSuffix(file.Path, filepath.Join(".claude", "hooks", "szr-rewrite.sh")) ||
-			strings.HasSuffix(file.Path, filepath.Join(".cursor", "hooks", "szr-rewrite.sh")) ||
-			strings.HasSuffix(file.Path, filepath.Join(".gemini", "hooks", "szr-rewrite.sh")):
+		case "hook":
 			if file.Strategy != installers.StrategyDelete {
 				t.Fatalf("unexpected uninstall hook metadata: %#v", file)
 			}
@@ -423,20 +295,8 @@ func assertUninstallRenderPlan(t *testing.T, target installers.Target, plan inst
 	if !sawInstallDoc || !sawTargetFile {
 		t.Fatalf("missing uninstall files for %s", target)
 	}
-	if expectHook {
-		foundHook := false
-		for _, file := range plan.Files {
-			if strings.HasSuffix(file.Path, filepath.Join(".szr", "hooks", "pre-command.sh")) ||
-				strings.HasSuffix(file.Path, filepath.Join(".claude", "hooks", "szr-rewrite.sh")) ||
-				strings.HasSuffix(file.Path, filepath.Join(".cursor", "hooks", "szr-rewrite.sh")) ||
-				strings.HasSuffix(file.Path, filepath.Join(".gemini", "hooks", "szr-rewrite.sh")) {
-				foundHook = true
-				break
-			}
-		}
-		if !foundHook {
-			t.Fatalf("missing uninstall hook for %s", target)
-		}
+	if expectHook && !planHasHookFile(target, plan.Files) {
+		t.Fatalf("missing uninstall hook for %s", target)
 	}
 }
 
@@ -448,55 +308,13 @@ func assertUninstallInstructionFile(t *testing.T, target installers.Target, file
 	t.Helper()
 	switch target {
 	case installers.TargetCodex:
-		if strings.HasSuffix(file.Path, filepath.Join(".codex", "szr.md")) {
-			if file.Strategy != installers.StrategyDelete {
-				t.Fatalf("unexpected uninstall codex szr.md file: %#v", file)
-			}
-			return
-		}
-		if strings.HasSuffix(file.Path, "AGENTS.md") {
-			if file.Strategy != installers.StrategyUnmerge || file.Marker != "szr-codex" {
-				t.Fatalf("unexpected uninstall codex AGENTS file: %#v", file)
-			}
-			return
-		}
-		t.Fatalf("unexpected uninstall codex file: %#v", file)
+		assertUninstallCodexInstruction(t, file)
 	case installers.TargetClaude:
-		if strings.HasSuffix(file.Path, filepath.Join(".claude", "szr.md")) {
-			if file.Strategy != installers.StrategyDelete {
-				t.Fatalf("unexpected uninstall claude szr.md file: %#v", file)
-			}
-			return
-		}
-		if strings.HasSuffix(file.Path, filepath.Join(".claude", "CLAUDE.md")) {
-			if file.Strategy != installers.StrategyUnmerge || file.Marker != "szr-claude-code-global" {
-				t.Fatalf("unexpected uninstall claude CLAUDE.md file: %#v", file)
-			}
-			return
-		}
-		if strings.HasSuffix(file.Path, filepath.Join(".claude", "settings.json")) {
-			if file.Strategy != installers.StrategyClaudeSettingsPrune {
-				t.Fatalf("unexpected uninstall claude settings file: %#v", file)
-			}
-			return
-		}
-		t.Fatalf("unexpected uninstall claude file: %#v", file)
+		assertUninstallClaudeInstruction(t, file)
 	case installers.TargetCursor:
-		if strings.HasSuffix(file.Path, filepath.Join(".cursor", "hooks.json")) {
-			if file.Strategy != installers.StrategyCursorHooksPrune {
-				t.Fatalf("unexpected uninstall cursor hooks.json file: %#v", file)
-			}
-			return
-		}
-		t.Fatalf("unexpected uninstall cursor file: %#v", file)
+		assertExactStrategySuffix(t, file, filepath.Join(".cursor", "hooks.json"), installers.StrategyCursorHooksPrune, "uninstall cursor")
 	case installers.TargetGemini:
-		if strings.HasSuffix(file.Path, filepath.Join(".gemini", "settings.json")) {
-			if file.Strategy != installers.StrategyGeminiSettingsPrune {
-				t.Fatalf("unexpected uninstall gemini settings file: %#v", file)
-			}
-			return
-		}
-		t.Fatalf("unexpected uninstall gemini file: %#v", file)
+		assertExactStrategySuffix(t, file, filepath.Join(".gemini", "settings.json"), installers.StrategyGeminiSettingsPrune, "uninstall gemini")
 	case installers.TargetShell:
 		if file.Strategy != installers.StrategyDelete {
 			t.Fatalf("unexpected uninstall delete file: %#v", file)
@@ -506,6 +324,217 @@ func assertUninstallInstructionFile(t *testing.T, target installers.Target, file
 			t.Fatalf("unexpected uninstall merge removal file: %#v", file)
 		}
 	}
+}
+
+func assertInstallShellInstruction(t *testing.T, file installers.File) {
+	t.Helper()
+	if file.Strategy != installers.StrategyWrite || !strings.Contains(file.Content, "szr_explain()") || !strings.Contains(file.Content, "szr_proxy()") {
+		t.Fatalf("unexpected shell file: %#v", file)
+	}
+}
+
+func assertInstallDefaultInstruction(t *testing.T, file installers.File) {
+	t.Helper()
+	if file.Strategy != installers.StrategyMerge || file.Marker == "" {
+		t.Fatalf("unexpected merge file: %#v", file)
+	}
+	if !strings.Contains(file.Content, "explain <cmd...>") || !strings.Contains(file.Content, "proxy <cmd...>") || !strings.Contains(file.Content, "wrap the noisy producer instead of the whole pipeline") || !strings.Contains(file.Content, "szr find <path> --name \"*.py\"") || !strings.Contains(file.Content, "szr run /usr/bin/grep ...") {
+		t.Fatalf("unexpected instruction body: %q", file.Content)
+	}
+}
+
+func classifyInstallPlanFile(target installers.Target, path string) string {
+	if strings.HasSuffix(path, filepath.Join(".szr", "hooks", "pre-command.sh")) ||
+		strings.HasSuffix(path, filepath.Join(".claude", "hooks", "szr-rewrite.sh")) ||
+		strings.HasSuffix(path, filepath.Join(".cursor", "hooks", "szr-rewrite.sh")) ||
+		strings.HasSuffix(path, filepath.Join(".gemini", "hooks", "szr-rewrite.sh")) {
+		return "hook"
+	}
+	if strings.HasSuffix(path, filepath.Join(".szr", "install", string(target)+".md")) ||
+		strings.HasSuffix(path, filepath.Join(".claude", ".szr", "install", string(target)+".md")) ||
+		strings.HasSuffix(path, filepath.Join(".codex", ".szr", "install", string(target)+".md")) ||
+		strings.HasSuffix(path, filepath.Join(".cursor", ".szr", "install", string(target)+".md")) ||
+		strings.HasSuffix(path, filepath.Join(".gemini", ".szr", "install", string(target)+".md")) {
+		return "install-doc"
+	}
+	return "instruction"
+}
+
+func classifyClaudeInstallFile(path string) string {
+	switch {
+	case strings.HasSuffix(path, filepath.Join(".claude", "hooks", "szr-rewrite.sh")):
+		return "hook"
+	case strings.HasSuffix(path, filepath.Join(".claude", ".szr", "install", "claude-code.md")):
+		return "install-doc"
+	case strings.HasSuffix(path, filepath.Join(".claude", "szr.md")):
+		return "szr"
+	case strings.HasSuffix(path, filepath.Join(".claude", "CLAUDE.md")):
+		return "claude-md"
+	case strings.HasSuffix(path, filepath.Join(".claude", "settings.json")):
+		return "settings"
+	default:
+		return ""
+	}
+}
+
+func classifyClaudeUninstallFile(path string) string {
+	return classifyClaudeInstallFile(path)
+}
+
+func assertClaudeInstallFile(t *testing.T, key string, file installers.File) {
+	t.Helper()
+	switch key {
+	case "hook":
+		assertInstallHookFile(t, file)
+	case "install-doc":
+		return
+	case "szr":
+		if file.Strategy != installers.StrategyWrite || !strings.Contains(file.Content, "## szr for Claude Code") {
+			t.Fatalf("unexpected global szr.md file: %#v", file)
+		}
+	case "claude-md":
+		if file.Strategy != installers.StrategyMerge || file.Marker != "szr-claude-code-global" {
+			t.Fatalf("unexpected global CLAUDE.md file: %#v", file)
+		}
+	case "settings":
+		if file.Strategy != installers.StrategyClaudeSettingsMerge {
+			t.Fatalf("unexpected global settings file: %#v", file)
+		}
+	default:
+		t.Fatalf("unexpected global claude file: %#v", file)
+	}
+}
+
+func assertClaudeUninstallFile(t *testing.T, key string, file installers.File) {
+	t.Helper()
+	switch key {
+	case "hook", "install-doc", "szr":
+		want := installers.StrategyDelete
+		if key == "install-doc" {
+			if file.Strategy != want {
+				t.Fatalf("unexpected global uninstall install doc file: %#v", file)
+			}
+			return
+		}
+		if file.Strategy != want {
+			t.Fatalf("unexpected global uninstall file: %#v", file)
+		}
+	case "claude-md":
+		if file.Strategy != installers.StrategyUnmerge || file.Marker != "szr-claude-code-global" {
+			t.Fatalf("unexpected global uninstall CLAUDE.md file: %#v", file)
+		}
+	case "settings":
+		if file.Strategy != installers.StrategyClaudeSettingsPrune {
+			t.Fatalf("unexpected global uninstall settings file: %#v", file)
+		}
+	default:
+		t.Fatalf("unexpected global claude uninstall file: %#v", file)
+	}
+}
+
+func assertInstallCodexInstruction(t *testing.T, file installers.File) {
+	t.Helper()
+	switch {
+	case strings.HasSuffix(file.Path, filepath.Join(".codex", "szr.md")):
+		if file.Strategy != installers.StrategyWrite || !strings.Contains(file.Content, "## szr for Codex") || !strings.Contains(file.Content, "Codex does not install a Bash rewrite hook today") || !strings.Contains(file.Content, "szr grep <pattern> <path>") {
+			t.Fatalf("unexpected Codex shared file: %#v", file)
+		}
+	case strings.HasSuffix(file.Path, "AGENTS.md"):
+		if file.Strategy != installers.StrategyMerge || file.Marker != "szr-codex" || !strings.Contains(file.Content, "@") {
+			t.Fatalf("unexpected Codex AGENTS.md file: %#v", file)
+		}
+	default:
+		t.Fatalf("unexpected Codex instruction file: %#v", file)
+	}
+}
+
+func assertInstallClaudeInstruction(t *testing.T, file installers.File) {
+	t.Helper()
+	switch {
+	case strings.HasSuffix(file.Path, filepath.Join(".claude", "szr.md")):
+		if file.Strategy != installers.StrategyWrite || !strings.Contains(file.Content, "## szr for Claude Code") {
+			t.Fatalf("unexpected Claude shared file: %#v", file)
+		}
+	case strings.HasSuffix(file.Path, filepath.Join(".claude", "CLAUDE.md")):
+		if file.Strategy != installers.StrategyMerge || file.Marker != "szr-claude-code-global" {
+			t.Fatalf("unexpected Claude CLAUDE.md file: %#v", file)
+		}
+	case strings.HasSuffix(file.Path, filepath.Join(".claude", "settings.json")):
+		if file.Strategy != installers.StrategyClaudeSettingsMerge {
+			t.Fatalf("unexpected Claude settings file: %#v", file)
+		}
+	default:
+		t.Fatalf("unexpected Claude instruction file: %#v", file)
+	}
+}
+
+func assertUninstallCodexInstruction(t *testing.T, file installers.File) {
+	t.Helper()
+	switch {
+	case strings.HasSuffix(file.Path, filepath.Join(".codex", "szr.md")):
+		if file.Strategy != installers.StrategyDelete {
+			t.Fatalf("unexpected uninstall codex szr.md file: %#v", file)
+		}
+	case strings.HasSuffix(file.Path, "AGENTS.md"):
+		if file.Strategy != installers.StrategyUnmerge || file.Marker != "szr-codex" {
+			t.Fatalf("unexpected uninstall codex AGENTS file: %#v", file)
+		}
+	default:
+		t.Fatalf("unexpected uninstall codex file: %#v", file)
+	}
+}
+
+func assertUninstallClaudeInstruction(t *testing.T, file installers.File) {
+	t.Helper()
+	switch {
+	case strings.HasSuffix(file.Path, filepath.Join(".claude", "szr.md")):
+		if file.Strategy != installers.StrategyDelete {
+			t.Fatalf("unexpected uninstall claude szr.md file: %#v", file)
+		}
+	case strings.HasSuffix(file.Path, filepath.Join(".claude", "CLAUDE.md")):
+		if file.Strategy != installers.StrategyUnmerge || file.Marker != "szr-claude-code-global" {
+			t.Fatalf("unexpected uninstall claude CLAUDE.md file: %#v", file)
+		}
+	case strings.HasSuffix(file.Path, filepath.Join(".claude", "settings.json")):
+		if file.Strategy != installers.StrategyClaudeSettingsPrune {
+			t.Fatalf("unexpected uninstall claude settings file: %#v", file)
+		}
+	default:
+		t.Fatalf("unexpected uninstall claude file: %#v", file)
+	}
+}
+
+func assertExactStrategySuffix(t *testing.T, file installers.File, suffix string, strategy installers.Strategy, label string) {
+	t.Helper()
+	if !strings.HasSuffix(file.Path, suffix) || file.Strategy != strategy {
+		t.Fatalf("unexpected %s file: %#v", label, file)
+	}
+}
+
+func uninstallManualStepSubstring(target installers.Target) string {
+	switch target {
+	case installers.TargetShell:
+		return ".szr/install/shell.sh"
+	case installers.TargetCodex:
+		return ".codex/szr.md"
+	case installers.TargetClaude:
+		return ".claude/settings.json"
+	case installers.TargetCursor:
+		return ".cursor/hooks.json"
+	case installers.TargetGemini:
+		return ".gemini/settings.json"
+	default:
+		return ".szr/hooks/pre-command.sh"
+	}
+}
+
+func planHasHookFile(target installers.Target, files []installers.File) bool {
+	for _, file := range files {
+		if classifyInstallPlanFile(target, file.Path) == "hook" {
+			return true
+		}
+	}
+	return false
 }
 
 func TestRenderAndDetectEdgeErrors(t *testing.T) {

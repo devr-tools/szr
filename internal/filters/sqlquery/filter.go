@@ -12,6 +12,23 @@ import (
 var sqlCommandTagPattern = regexp.MustCompile(`^(SELECT|INSERT|UPDATE|DELETE|MERGE|COPY) [0-9]+$`)
 
 func SummarizeSQLQuery(input string, maxLines int) string {
+	return summarizeSQLQueryResult(input, maxLines).Text
+}
+
+func SQLQueryRecoveryInfo(input string, maxLines int) (string, string, bool) {
+	result := summarizeSQLQueryResult(input, maxLines)
+	if result.OmittedCount <= 0 {
+		return shared.NoRecovery()
+	}
+	return shared.FullOutputRecovery(fmt.Sprintf("omitted %d additional rows or lines", result.OmittedCount))
+}
+
+type sqlQuerySummaryResult struct {
+	Text         string
+	OmittedCount int
+}
+
+func summarizeSQLQueryResult(input string, maxLines int) sqlQuerySummaryResult {
 	if maxLines <= 0 {
 		maxLines = 12
 	}
@@ -19,11 +36,14 @@ func SummarizeSQLQuery(input string, maxLines int) string {
 	clean := shared.StripANSI(input)
 	lines := shared.NonEmptyLines(clean)
 	if len(lines) == 0 {
-		return "ok"
+		return sqlQuerySummaryResult{Text: "ok"}
 	}
 
-	if jsonSummary := summarizeJSONResult(lines, maxLines); jsonSummary != "" {
-		return jsonSummary
+	if jsonSummary := summarizeJSONResult(lines, maxLines); jsonSummary.Text != "" {
+		return sqlQuerySummaryResult{
+			Text:         jsonSummary.Text,
+			OmittedCount: jsonSummary.OmittedCount,
+		}
 	}
 
 	errors, summaries, rows := classifySQLLines(lines)
@@ -31,17 +51,32 @@ func SummarizeSQLQuery(input string, maxLines int) string {
 	if len(errors) > 0 {
 		out := append([]string{}, errors...)
 		out = append(out, summaries...)
-		return shared.JoinLimitedLines(out, maxLines)
+		result := sqlQuerySummaryResult{
+			Text: shared.JoinLimitedLines(out, maxLines),
+		}
+		if len(out) > maxLines {
+			result.OmittedCount = len(out) - maxLines
+		}
+		return result
 	}
 
 	if len(rows) == 0 && len(summaries) == 0 {
-		return shared.SummarizeGenericFailure(clean, maxLines)
+		return sqlQuerySummaryResult{
+			Text: shared.SummarizeGenericFailure(clean, maxLines),
+		}
 	}
 
+	rawRowCount := len(rows)
 	rows = limitSQLRows(rows, len(summaries) > 0, maxLines)
 	out := append([]string{}, rows...)
 	out = append(out, summaries...)
-	return shared.JoinLimitedLines(out, maxLines)
+	result := sqlQuerySummaryResult{
+		Text: shared.JoinLimitedLines(out, maxLines),
+	}
+	if omitted := countSQLOmitted(rawRowCount, len(summaries), maxLines); omitted > 0 {
+		result.OmittedCount = omitted
+	}
+	return result
 }
 
 func classifySQLLines(lines []string) ([]string, []string, []string) {
@@ -101,15 +136,20 @@ func limitSQLRows(rows []string, hasSummaries bool, maxLines int) []string {
 	return append(rows[:limit], fmt.Sprintf("... +%d more rows", len(rows)-limit))
 }
 
-func summarizeJSONResult(lines []string, maxLines int) string {
+type sqlJSONSummaryResult struct {
+	Text         string
+	OmittedCount int
+}
+
+func summarizeJSONResult(lines []string, maxLines int) sqlJSONSummaryResult {
 	payload := strings.TrimSpace(strings.Join(lines, "\n"))
 	if payload == "" || (!strings.HasPrefix(payload, "[") && !strings.HasPrefix(payload, "{")) {
-		return ""
+		return sqlJSONSummaryResult{}
 	}
 
 	var decoded any
 	if err := json.Unmarshal([]byte(payload), &decoded); err != nil {
-		return ""
+		return sqlJSONSummaryResult{}
 	}
 
 	switch v := decoded.(type) {
@@ -129,16 +169,33 @@ func summarizeJSONResult(lines []string, maxLines int) string {
 		if len(v) > limit {
 			out = append(out, fmt.Sprintf("... +%d more rows", len(v)-limit))
 		}
-		return strings.Join(out, "\n")
+		result := sqlJSONSummaryResult{
+			Text: strings.Join(out, "\n"),
+		}
+		if len(v) > limit {
+			result.OmittedCount = len(v) - limit
+		}
+		return result
 	case map[string]any:
 		encoded, err := json.Marshal(v)
 		if err != nil {
-			return ""
+			return sqlJSONSummaryResult{}
 		}
-		return string(encoded)
+		return sqlJSONSummaryResult{Text: string(encoded)}
 	default:
-		return ""
+		return sqlJSONSummaryResult{}
 	}
+}
+
+func countSQLOmitted(rawRows, summaryCount, maxLines int) int {
+	if maxLines <= 0 {
+		return 0
+	}
+	total := rawRows + summaryCount
+	if total <= maxLines {
+		return 0
+	}
+	return total - maxLines
 }
 
 func isSQLNoise(line string) bool {

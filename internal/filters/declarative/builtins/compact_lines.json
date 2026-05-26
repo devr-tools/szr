@@ -1,0 +1,6 @@
+{
+  "name": "compact_lines",
+  "description": "Drop empty lines, keep the first N lines, and append an overflow summary.",
+  "drop_empty": true,
+  "head": 12
+}

@@ -44,7 +44,7 @@ func TestExecuteUsesStreamReducerAndStreamsTeeOnFailure(t *testing.T) {
 	if result.ExitCode != 7 {
 		t.Fatalf("expected exit 7, got %#v", result)
 	}
-	if !strings.Contains(result.Display, "stderr-one") || !strings.Contains(result.Display, "[full output:") {
+	if !strings.Contains(result.Display, "stderr-one") || !strings.Contains(result.Display, "[tee: ") {
 		t.Fatalf("unexpected rendered display: %q", result.Display)
 	}
 	if result.TeePath == "" {
@@ -202,6 +202,92 @@ func TestExecuteRemovesIncrementalTeeOnSuccess(t *testing.T) {
 	}
 	if len(entries) != 0 {
 		t.Fatalf("expected tee dir cleanup, found %d entries", len(entries))
+	}
+}
+
+func TestExecutePersistsRecoveryArtifactOnSuccessfulOmission(t *testing.T) {
+	t.Parallel()
+
+	binDir := t.TempDir()
+	findLikePath := testutil.WriteExecutable(t, binDir, "findlike", "#!/bin/sh\nprintf 'one\\ntwo\\nthree\\n'\n")
+
+	root := t.TempDir()
+	paths := testutil.Paths(root)
+	testutil.EnsurePaths(t, paths)
+
+	cfg := config.Default()
+	e := engine.New(cfg, paths, history.New(paths.HistoryFile), []engine.Profile{{
+		Name:       "recovery-stream",
+		Confidence: engine.ConfidenceHigh,
+		Match: func(inv engine.Invocation) bool {
+			return len(inv.Display) > 0 && inv.Display[0] == "findlike"
+		},
+		StreamRender: func(engine.Invocation, engine.OutputBudget) engine.StreamReducer {
+			return &recoverySummaryReducer{}
+		},
+	}})
+
+	result, err := e.Execute(context.Background(), engine.Invocation{
+		Command: []string{findLikePath},
+		Display: []string{"findlike"},
+		Cwd:     root,
+	}, false)
+	if err != nil {
+		t.Fatalf("execute recovery summary: %v", err)
+	}
+	if result.TeePath == "" {
+		t.Fatalf("expected recovery artifact tee path, got %#v", result)
+	}
+	if !strings.Contains(result.Display, "[recovery: omitted 2 additional matches; tee: ") {
+		t.Fatalf("expected recovery hint in display, got %q", result.Display)
+	}
+	teeData := string(testutil.MustReadFile(t, result.TeePath))
+	for _, want := range []string{"one", "two", "three"} {
+		if !strings.Contains(teeData, want) {
+			t.Fatalf("expected recovery artifact to contain %q, got %q", want, teeData)
+		}
+	}
+}
+
+func TestExecutePersistsRecoveryArtifactOnCompressionContract(t *testing.T) {
+	t.Parallel()
+
+	binDir := t.TempDir()
+	longOutPath := testutil.WriteExecutable(t, binDir, "longout", "#!/bin/sh\nfor i in $(seq 1 80); do printf 'token-%02d\\n' \"$i\"; done\n")
+
+	root := t.TempDir()
+	paths := testutil.Paths(root)
+	testutil.EnsurePaths(t, paths)
+
+	cfg := config.Default()
+	e := engine.New(cfg, paths, history.New(paths.HistoryFile), []engine.Profile{{
+		Name:   "contract-render",
+		Budget: engine.OutputBudget{MaxLines: 12, MaxTokens: 16},
+		Match: func(inv engine.Invocation) bool {
+			return len(inv.Display) > 0 && inv.Display[0] == "longout"
+		},
+		Render: func(_ engine.Invocation, exec engine.Execution) string {
+			return exec.Stdout
+		},
+	}})
+
+	result, err := e.Execute(context.Background(), engine.Invocation{
+		Command: []string{longOutPath},
+		Display: []string{"longout"},
+		Cwd:     root,
+	}, false)
+	if err != nil {
+		t.Fatalf("execute long output: %v", err)
+	}
+	if result.TeePath == "" {
+		t.Fatalf("expected tee path for compressed successful output, got %#v", result)
+	}
+	if !strings.Contains(result.Display, "[recovery: ") && !strings.Contains(result.Display, "[tee: ") && !strings.Contains(result.Display, "[full output saved]") {
+		t.Fatalf("expected budget-aware recovery suffix in display, got %q", result.Display)
+	}
+	allowed := 16
+	if got := history.EstimateTokens(result.Display); got > allowed {
+		t.Fatalf("expected final display <= %d tokens after hint decoration, got %d (%q)", allowed, got, result.Display)
 	}
 }
 
@@ -709,4 +795,26 @@ func (r *fallbackReducer) BytesParsed() int {
 
 func (r *fallbackReducer) FallbackUsed() bool {
 	return true
+}
+
+type recoverySummaryReducer struct{}
+
+func (r *recoverySummaryReducer) ConsumeStdout([]byte) {}
+
+func (r *recoverySummaryReducer) ConsumeStderr([]byte) {}
+
+func (r *recoverySummaryReducer) Result() string {
+	return "1 matches\none\n... +2 more matches"
+}
+
+func (r *recoverySummaryReducer) BytesParsed() int {
+	return 0
+}
+
+func (r *recoverySummaryReducer) FallbackUsed() bool {
+	return false
+}
+
+func (r *recoverySummaryReducer) RecoveryInfo() (string, string, bool) {
+	return engine.RecoveryKindFullOutput, "omitted 2 additional matches", true
 }

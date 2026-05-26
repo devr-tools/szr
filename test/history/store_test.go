@@ -54,17 +54,24 @@ func TestStoreSummaryProfileStats(t *testing.T) {
 	for _, stat := range summary.ProfileStats {
 		statsByName[stat.Name] = stat
 	}
-	if stat := statsByName["git-status"]; stat.SavedTokens != 80 || stat.DurationP50MS != 30 || stat.DurationP95MS != 30 || !closeEnough(stat.AveragePct, 80, 0.01) {
-		t.Fatalf("unexpected git-status stat: %#v", stat)
-	}
-	if stat := statsByName["go-test-json"]; stat.TeeCount != 1 || stat.Failures != 1 || !closeEnough(stat.FailureRate, 100, 0.01) || stat.DurationP50MS != 90 {
-		t.Fatalf("unexpected go-test-json stat: %#v", stat)
-	}
-	if stat := statsByName["passthrough"]; stat.SavedTokens != 0 || stat.Failures != 1 || stat.DurationP50MS != 10 {
-		t.Fatalf("unexpected passthrough stat: %#v", stat)
-	}
+	assertProfileStat(t, statsByName["git-status"], func(stat history.ProfileStat) bool {
+		return stat.SavedTokens == 80 && stat.DurationP50MS == 30 && stat.DurationP95MS == 30 && closeEnough(stat.AveragePct, 80, 0.01)
+	})
+	assertProfileStat(t, statsByName["go-test-json"], func(stat history.ProfileStat) bool {
+		return stat.TeeCount == 1 && stat.Failures == 1 && closeEnough(stat.FailureRate, 100, 0.01) && stat.DurationP50MS == 90
+	})
+	assertProfileStat(t, statsByName["passthrough"], func(stat history.ProfileStat) bool {
+		return stat.SavedTokens == 0 && stat.Failures == 1 && stat.DurationP50MS == 10
+	})
 	if len(summary.CommandHotspots) != 1 || summary.CommandHotspots[0].Command != "szr custom command" || !closeEnough(summary.CommandHotspots[0].FallbackRate, 100, 0.01) {
 		t.Fatalf("unexpected command hotspots: %#v", summary.CommandHotspots)
+	}
+}
+
+func assertProfileStat(t *testing.T, stat history.ProfileStat, ok func(history.ProfileStat) bool) {
+	t.Helper()
+	if !ok(stat) {
+		t.Fatalf("unexpected profile stat: %#v", stat)
 	}
 }
 

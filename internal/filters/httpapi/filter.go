@@ -1,12 +1,30 @@
 package httpapi
 
 import (
+	"fmt"
 	"strings"
 
 	shared "github.com/devr-tools/szr/internal/filters"
 )
 
 func SummarizeHTTPAPI(input string, maxLines int) string {
+	return summarizeHTTPAPIResult(input, maxLines).Text
+}
+
+func HTTPAPIRecoveryInfo(input string, maxLines int) (string, string, bool) {
+	result := summarizeHTTPAPIResult(input, maxLines)
+	if result.OmittedCount <= 0 {
+		return shared.NoRecovery()
+	}
+	return shared.FullOutputRecovery(fmt.Sprintf("omitted %d additional lines", result.OmittedCount))
+}
+
+type httpAPISummaryResult struct {
+	Text         string
+	OmittedCount int
+}
+
+func summarizeHTTPAPIResult(input string, maxLines int) httpAPISummaryResult {
 	if maxLines <= 0 {
 		maxLines = 10
 	}
@@ -29,9 +47,15 @@ func SummarizeHTTPAPI(input string, maxLines int) string {
 	}
 
 	if len(out) == 0 {
-		return shared.CompactLines(clean, maxLines)
+		return httpAPISummaryResult{Text: shared.CompactLines(clean, maxLines)}
 	}
-	return shared.JoinLimitedLines(out, maxLines)
+	result := httpAPISummaryResult{
+		Text: shared.JoinLimitedLines(out, maxLines),
+	}
+	if len(out) > maxLines {
+		result.OmittedCount = len(out) - maxLines
+	}
+	return result
 }
 
 func splitHTTPExchange(input string) (string, map[string]string, string) {

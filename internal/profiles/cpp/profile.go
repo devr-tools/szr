@@ -29,9 +29,16 @@ func Profiles(maxLines int) []engine.Profile {
 				return cppfilter.SummarizeCTest(exec.Stdout+"\n"+exec.Stderr, maxLines)
 			},
 			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return shared.NewBufferedTextReducer(true, true, func(input string) string {
-					return cppfilter.SummarizeCTest(input, budget.MaxLines)
-				})
+				return shared.NewBufferedTextReducerWithRecovery(
+					true,
+					true,
+					func(input string) string {
+						return cppfilter.SummarizeCTest(input, budget.MaxLines)
+					},
+					func(input string) (string, string, bool) {
+						return cppfilter.CTestRecoveryInfo(input, budget.MaxLines)
+					},
+				)
 			},
 			ParseBytes: profilekit.ParseCombined,
 			Explain: []string{
@@ -56,9 +63,16 @@ func Profiles(maxLines int) []engine.Profile {
 				return cppfilter.SummarizeClangTooling(exec.Stdout+"\n"+exec.Stderr, maxLines)
 			},
 			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return shared.NewBufferedTextReducer(true, true, func(input string) string {
-					return cppfilter.SummarizeClangTooling(input, budget.MaxLines)
-				})
+				return shared.NewBufferedTextReducerWithRecovery(
+					true,
+					true,
+					func(input string) string {
+						return cppfilter.SummarizeClangTooling(input, budget.MaxLines)
+					},
+					func(input string) (string, string, bool) {
+						return cppfilter.ClangToolingRecoveryInfo(input, budget.MaxLines)
+					},
+				)
 			},
 			ParseBytes: profilekit.ParseCombined,
 			Explain: []string{

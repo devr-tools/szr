@@ -9,16 +9,32 @@ import (
 )
 
 func Profiles(maxLines int) []engine.Profile {
+	statusSummary := profilekit.StdoutSummary(maxLines, 8, 15, engine.StreamStdoutOnly, func(stdout string) string {
+		return gitfilter.SummarizeGitStatus(shared.StripANSI(stdout))
+	}, func(budget engine.OutputBudget) engine.StreamReducer {
+		return gitfilter.NewGitStatusReducer(budget.MaxLines, budget.MaxBytes)
+	})
+	logSummary := profilekit.StdoutSummary(maxLines, 11, 15, engine.StreamStdoutOnly, func(stdout string) string {
+		return gitfilter.SummarizeGitLog(shared.StripANSI(stdout))
+	}, func(budget engine.OutputBudget) engine.StreamReducer {
+		return gitfilter.NewGitLogReducer(budget.MaxLines, budget.MaxBytes)
+	})
+
 	return []engine.Profile{
 		{
-			Name:             "git-ls-files",
-			Description:      "Summarizes tracked file lists into a bounded path preview.",
-			Confidence:       engine.ConfidenceHigh,
+			Name:        "git-ls-files",
+			Description: "Summarizes tracked file lists into a bounded path preview.",
+			Confidence:  engine.ConfidenceHigh,
+			Capabilities: engine.ProfileCapabilities{
+				FastPathBypass:     engine.FastPathBypassSafeOnly,
+				StructuredMode:     engine.StructuredModePreferred,
+				InjectsPrepareArgs: true,
+			},
 			StreamPreference: engine.StreamStdoutOnly,
 			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 8)),
 			LatencyBudget:    profilekit.LatencyBudget(15),
 			Match: func(inv engine.Invocation) bool {
-				return profilekit.HasCommand(inv.Display, "git", "ls-files")
+				return inv.Classification.Display.Head == "git" && inv.Classification.Display.Subcommand == "ls-files"
 			},
 			Prepare: func(inv engine.Invocation) []string {
 				return inv.Command
@@ -35,83 +51,79 @@ func Profiles(maxLines int) []engine.Profile {
 				"Summarizes tracked paths as a bounded, deduplicated list with the same path-list behavior used for other discovery commands.",
 			},
 		},
-		{
-			Name:             "git-status",
-			Description:      "Condenses git working tree state into branch and file counts.",
-			Confidence:       engine.ConfidenceHigh,
-			StreamPreference: engine.StreamStdoutOnly,
-			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 8)),
-			LatencyBudget:    profilekit.LatencyBudget(15),
+		profilekit.WithSummary(engine.Profile{
+			Name:        "git-status",
+			Description: "Condenses git working tree state into branch and file counts.",
+			Confidence:  engine.ConfidenceHigh,
+			Capabilities: engine.ProfileCapabilities{
+				FastPathBypass:            engine.FastPathBypassSafeOnly,
+				StructuredMode:            engine.StructuredModePreferred,
+				InjectsPrepareArgs:        true,
+				SupportsAggressivePrepare: true,
+			},
 			Match: func(inv engine.Invocation) bool {
-				return profilekit.HasCommand(inv.Display, "git", "status")
+				return inv.Classification.Display.Head == "git" && inv.Classification.Display.Subcommand == "status"
 			},
 			Prepare: func(inv engine.Invocation) []string {
-				if profilekit.ContainsAny(inv.Command[1:], "--short", "--porcelain", "-s") {
+				if inv.Classification.Command.Git.StatusFormatRequested {
 					return inv.Command
 				}
 				return append(inv.Command, "--short", "--branch")
 			},
-			Render: func(_ engine.Invocation, exec engine.Execution) string {
-				return gitfilter.SummarizeGitStatus(shared.StripANSI(exec.Stdout))
-			},
-			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return gitfilter.NewGitStatusReducer(budget.MaxLines, budget.MaxBytes)
-			},
-			ParseBytes: profilekit.ParseStdout,
 			Explain: []string{
 				"Rewrites `git status` into `git status --short --branch` unless a machine-readable mode was already requested.",
 				"Extracts branch, staged, unstaged, and untracked counts with a short file preview.",
 			},
-		},
-		{
-			Name:             "git-log",
-			Description:      "Prefers oneline commit output and trims the history preview.",
-			Confidence:       engine.ConfidenceHigh,
-			StreamPreference: engine.StreamStdoutOnly,
-			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 11)),
-			LatencyBudget:    profilekit.LatencyBudget(15),
+		}, statusSummary),
+		profilekit.WithSummary(engine.Profile{
+			Name:        "git-log",
+			Description: "Prefers oneline commit output and trims the history preview.",
+			Confidence:  engine.ConfidenceHigh,
+			Capabilities: engine.ProfileCapabilities{
+				FastPathBypass:     engine.FastPathBypassSafeOnly,
+				StructuredMode:     engine.StructuredModePreferred,
+				InjectsPrepareArgs: true,
+			},
 			Match: func(inv engine.Invocation) bool {
-				return profilekit.HasCommand(inv.Display, "git", "log")
+				return inv.Classification.Display.Head == "git" && inv.Classification.Display.Subcommand == "log"
 			},
 			Prepare: func(inv engine.Invocation) []string {
-				if profilekit.ContainsPrefix(inv.Command[1:], "--format") || profilekit.ContainsAny(inv.Command[1:], "--oneline", "--stat", "-p") {
+				if inv.Classification.Command.Git.LogFormatRequested {
 					return inv.Command
 				}
 				return append(inv.Command, "--oneline", "-n", "20")
 			},
-			Render: func(_ engine.Invocation, exec engine.Execution) string {
-				return gitfilter.SummarizeGitLog(shared.StripANSI(exec.Stdout))
-			},
-			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return gitfilter.NewGitLogReducer(budget.MaxLines, budget.MaxBytes)
-			},
-			ParseBytes: profilekit.ParseStdout,
 			Explain: []string{
 				"Injects `--oneline -n 20` for plain `git log` calls.",
 				"Keeps the preview shallow so the LLM sees commit shape instead of full message bodies.",
 			},
-		},
+		}, logSummary),
 		{
-			Name:             "git-diff",
-			Description:      "Summarizes file churn and preserves `--stat` style detail.",
-			Confidence:       engine.ConfidenceHigh,
+			Name:        "git-diff",
+			Description: "Summarizes file churn and preserves `--stat` style detail.",
+			Confidence:  engine.ConfidenceHigh,
+			Capabilities: engine.ProfileCapabilities{
+				StructuredMode:            engine.StructuredModePreferred,
+				InjectsPrepareArgs:        true,
+				SupportsAggressivePrepare: true,
+			},
 			StreamPreference: engine.StreamStdoutOnly,
 			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 9)),
 			LatencyBudget:    profilekit.LatencyBudget(20),
 			Match: func(inv engine.Invocation) bool {
-				return profilekit.HasCommand(inv.Display, "git", "diff")
+				return inv.Classification.Display.Head == "git" && inv.Classification.Display.Subcommand == "diff"
 			},
 			Prepare: func(inv engine.Invocation) []string {
-				if profilekit.ContainsAny(inv.Command[1:], "--quiet", "--exit-code", "--no-patch", "-s") {
+				if inv.Classification.Command.Git.DiffNoPatchRequested {
 					return inv.Command
 				}
 				if !inv.Advanced.AggressivePrepareRewrites {
-					if profilekit.ContainsAny(inv.Command[1:], "--stat", "--numstat", "--shortstat", "--name-only", "--name-status") {
+					if inv.Classification.Command.Git.DiffFormatRequested {
 						return inv.Command
 					}
 					return append(inv.Command, "--stat=120,40")
 				}
-				if profilekit.ContainsAny(inv.Command[1:], "--stat", "--numstat", "--shortstat", "--name-only", "--name-status") {
+				if inv.Classification.Command.Git.DiffFormatRequested {
 					return ensureGitDiffNoiseFlags(inv.Command)
 				}
 				if isAggressiveGitDiff(inv) {

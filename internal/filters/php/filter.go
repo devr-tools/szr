@@ -1,12 +1,30 @@
 package php
 
 import (
+	"strconv"
 	"strings"
 
 	shared "github.com/devr-tools/szr/internal/filters"
 )
 
 func SummarizePHP(input string, maxLines int) string {
+	return summarizePHPResult(input, maxLines).Text
+}
+
+func PHPRecoveryInfo(input string, maxLines int) (string, string, bool) {
+	result := summarizePHPResult(input, maxLines)
+	if result.OmittedCount <= 0 {
+		return shared.NoRecovery()
+	}
+	return shared.FullOutputRecovery("omitted " + strconv.Itoa(result.OmittedCount) + " additional lines")
+}
+
+type phpSummaryResult struct {
+	Text         string
+	OmittedCount int
+}
+
+func summarizePHPResult(input string, maxLines int) phpSummaryResult {
 	if maxLines <= 0 {
 		maxLines = 12
 	}
@@ -56,7 +74,7 @@ func SummarizePHP(input string, maxLines int) string {
 	lines = shared.UniqueStrings(shared.FoldConsecutiveLines(lines))
 	summaries = shared.UniqueStrings(shared.FoldConsecutiveLines(summaries))
 	if len(lines) == 0 && len(summaries) == 0 {
-		return shared.SummarizeGenericFailure(clean, maxLines)
+		return phpSummaryResult{Text: shared.SummarizeGenericFailure(clean, maxLines)}
 	}
 
 	anchors := []string{}
@@ -72,5 +90,9 @@ func SummarizePHP(input string, maxLines int) string {
 	out := append([]string{}, other...)
 	out = append(out, shared.SelectUniqueAnchoredLines(anchors, maxLines/3+1)...)
 	out = append(out, summaries...)
-	return shared.JoinLimitedLines(out, maxLines)
+	result := phpSummaryResult{Text: shared.JoinLimitedLines(out, maxLines)}
+	if len(out) > maxLines {
+		result.OmittedCount = len(out) - maxLines
+	}
+	return result
 }

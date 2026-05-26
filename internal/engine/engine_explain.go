@@ -63,7 +63,7 @@ func (e *Engine) prepareInvocation(inv Invocation) (Invocation, []PreferenceDeci
 			Explain:          preferenceExplainLines(preference),
 		})
 	}
-	return effective, decisions
+	return classifyInvocation(effective), decisions
 }
 
 func sameStrings(left, right []string) bool {

@@ -27,9 +27,9 @@ func (e *Engine) ExecuteStreaming(
 
 	preparedInv, profile, command, budget, streamReducer, options, profileConfidence := e.prepareStreamingExecution(inv, passthrough, onPartial)
 	runResult, execResult, fastPath, rawCombined, rawBytesRead, rawTokens, duration, err := e.runStreamingCommand(ctx, inv, command, profile, streamReducer, options)
-	rendered, fallbackUsed := renderStreamingOutput(profile, preparedInv, execResult, streamReducer, budget, rawCombined, passthrough, fastPath)
-	teePath := e.ensureStreamingTeePath(runResult.teePath, execResult.ExitCode, rawCombined, command)
-	rendered = appendTeeReference(rendered, teePath, passthrough)
+	rendered, fallbackUsed, recoveryPlan := renderStreamingOutput(profile, preparedInv, execResult, streamReducer, budget, rawCombined, passthrough, fastPath)
+	teePath := e.ensureStreamingArtifactPath(runResult.teePath, execResult.ExitCode, rawCombined, command, recoveryPlan, passthrough)
+	rendered = finalizeRenderedDisplay(rendered, rawCombined, budget, recoveryPlan, teePath, passthrough, preparedInv.Advanced.CompactArtifactRefs, preparedInv.Advanced.CompressionContract, shouldGuardSmallOutput(profile, passthrough))
 	bytesParsed := streamingBytesParsed(streamReducer, profile, execResult, rawBytesRead)
 	bytesEmitted := len(rendered)
 	record := buildStreamingHistoryRecord(inv, profile, profileConfidence, duration, execResult.ExitCode, rawBytesRead, bytesParsed, bytesEmitted, rawTokens, fallbackUsed, teePath, rendered)
@@ -56,7 +56,7 @@ func (e *Engine) prepareStreamingExecution(
 	budget, _ := ResolveBudgetWithAdapter(profile, preparedInv, e.config.MaxPreviewLines, e.budgetAdapter)
 	streamReducer := streamingReducer(profile, preparedInv, budget, passthrough)
 	profileConfidence := normalizedProfileConfidence(profile)
-	options := buildRunOptions(preparedInv, profile, passthrough, streamReducer != nil)
+	options := buildRunOptions(preparedInv, profile, passthrough, streamReducer)
 	options.command = command
 	options.teeOnFailure = e.config.TeeOnFailure
 	options.teeDir = e.paths.TeeDir
@@ -128,12 +128,13 @@ func renderStreamingOutput(
 	rawCombined string,
 	passthrough bool,
 	fastPath FastPathDecision,
-) (string, bool) {
+) (string, bool, RecoveryPlan) {
 	rendered := rawCombined
 	if !passthrough {
 		rendered = renderedStreamingContent(profile, preparedInv, execResult, streamReducer, rawCombined, fastPath)
 	}
 	fallbackUsed := streamingFallbackUsed(profile, streamReducer, passthrough, rendered, rawCombined)
+	recoveryPlan := reducerRecoveryPlan(streamReducer)
 	if strings.TrimSpace(rendered) == "" {
 		rendered = rawCombined
 	}
@@ -143,7 +144,11 @@ func renderStreamingOutput(
 			rendered = escaped
 		}
 	}
-	return rendered, fallbackUsed
+	rendered, recoveryPlan, _ = enforceCompressionContract(rendered, rawCombined, budget, recoveryPlan, passthrough, preparedInv.Advanced.CompressionContract)
+	if shouldGuardSmallOutput(profile, passthrough) {
+		rendered = preferRawSmallOutput(rendered, rawCombined)
+	}
+	return rendered, fallbackUsed, recoveryPlan
 }
 
 func renderedStreamingContent(
@@ -177,9 +182,25 @@ func streamingFallbackUsed(profile Profile, streamReducer StreamReducer, passthr
 	return fallbackUsed
 }
 
-func (e *Engine) ensureStreamingTeePath(teePath string, exitCode int, rawCombined string, command []string) string {
-	if teePath != "" || exitCode == 0 || !e.config.TeeOnFailure || rawCombined == "" {
+func (e *Engine) ensureStreamingArtifactPath(
+	teePath string,
+	exitCode int,
+	rawCombined string,
+	command []string,
+	recoveryPlan RecoveryPlan,
+	passthrough bool,
+) string {
+	if teePath != "" {
 		return teePath
+	}
+	if rawCombined == "" {
+		return ""
+	}
+	if exitCode == 0 && !shouldPersistRecoveryArtifact(recoveryPlan, rawCombined, passthrough) {
+		return ""
+	}
+	if exitCode != 0 && !e.config.TeeOnFailure && !shouldPersistRecoveryArtifact(recoveryPlan, rawCombined, passthrough) {
+		return ""
 	}
 	path, teeErr := e.writeTee(rawCombined, command)
 	if teeErr != nil {
@@ -316,9 +337,14 @@ func publishFinalPartial(onPartial func(PartialResult), result Result) {
 
 const rawPreviewBytes = defaultTinyOutputBypassBytes * 2
 
-func buildRunOptions(inv Invocation, profile Profile, passthrough bool, hasStreamReducer bool) runOptions {
+func buildRunOptions(inv Invocation, profile Profile, passthrough bool, streamReducer StreamReducer) runOptions {
 	options := runOptions{}
-	fullCapture := passthrough || inv.Verbose >= 3 || (!hasStreamReducer && profile.Render != nil) || profile.Confidence != ConfidenceHigh
+	hasStreamReducer := streamReducer != nil
+	fullCapture := passthrough || inv.Verbose >= 3 || (!hasStreamReducer && profile.Render != nil) || profile.Capabilities.RequireFullCapture
+	if !fullCapture {
+		recoveryPlan := reducerRecoveryPlan(streamReducer)
+		fullCapture = recoveryPlan.RequireRawCapture
+	}
 	applyCaptureMode(&options, fullCapture)
 
 	if !hasStreamReducer {

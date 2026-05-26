@@ -15,6 +15,9 @@ func TestDecideFastPathSkipsBypassOnNonZeroExit(t *testing.T) {
 	if decision.Reason != "" {
 		t.Fatalf("expected no bypass reason on nonzero exit, got %q", decision.Reason)
 	}
+	if decision.BypassKind != FastPathBypassKindNone {
+		t.Fatalf("expected no bypass kind on nonzero exit, got %q", decision.BypassKind)
+	}
 }
 
 func TestDecideFastPathBypassesEmptyStderrOnlyProfile(t *testing.T) {
@@ -26,6 +29,9 @@ func TestDecideFastPathBypassesEmptyStderrOnlyProfile(t *testing.T) {
 	}
 	if decision.Reason != "stderr-only profile with empty stderr payload" {
 		t.Fatalf("unexpected reason: %q", decision.Reason)
+	}
+	if decision.BypassKind != FastPathBypassKindEmptyPreferredStream {
+		t.Fatalf("unexpected bypass kind: %q", decision.BypassKind)
 	}
 }
 
@@ -40,9 +46,11 @@ func TestDecideFastPathFamilyAwareBypasses(t *testing.T) {
 		wantReason string
 	}{
 		{name: "tiny ripgrep", profile: "ripgrep", command: []string{"rg", "todo", "."}, rawBytes: 320, rawTokens: 80, wantBypass: true, wantReason: "tiny ripgrep output"},
+		{name: "larger tiny ripgrep", profile: "ripgrep", command: []string{"rg", "todo", "."}, rawBytes: 384, rawTokens: 96, wantBypass: true, wantReason: "tiny ripgrep output"},
 		{name: "tiny grep", profile: "grep", command: []string{"grep", "-rn", "todo", "."}, rawBytes: 320, rawTokens: 80, wantBypass: true, wantReason: "tiny grep output"},
-		{name: "ripgrep over token limit", profile: "ripgrep", command: []string{"rg", "todo", "."}, rawBytes: 320, rawTokens: 81, wantBypass: false},
+		{name: "ripgrep over token limit", profile: "ripgrep", command: []string{"rg", "todo", "."}, rawBytes: 384, rawTokens: 97, wantBypass: false},
 		{name: "tiny find", profile: "path-find", command: []string{"find", ".", "-name", "*.go"}, rawBytes: 300, rawTokens: 72, wantBypass: true, wantReason: "tiny find output"},
+		{name: "larger tiny find", profile: "path-find", command: []string{"find", ".", "-name", "*.go"}, rawBytes: 384, rawTokens: 96, wantBypass: true, wantReason: "tiny find output"},
 		{name: "short directory listing", profile: "directory-listing", command: []string{"ls", "."}, rawBytes: 288, rawTokens: 72, wantBypass: true, wantReason: "short directory listing"},
 		{name: "directory listing over byte limit", profile: "directory-listing", command: []string{"ls", "."}, rawBytes: 289, rawTokens: 72, wantBypass: false},
 		{name: "short tree gets tree-specific threshold", profile: "directory-listing", command: []string{"tree", "."}, rawBytes: 384, rawTokens: 96, wantBypass: true, wantReason: "short tree output"},
@@ -82,8 +90,16 @@ func TestDecideFastPathFallsBackToGenericTinyOutput(t *testing.T) {
 	if !decision.BypassCompression {
 		t.Fatalf("expected generic tiny output bypass, got %+v", decision)
 	}
-	if decision.Reason != "tiny output fast path" {
+	if decision.Reason != "short summary output" {
 		t.Fatalf("unexpected reason: %q", decision.Reason)
+	}
+	if decision.BypassKind != FastPathBypassKindFamilyRule {
+		t.Fatalf("unexpected bypass kind: %q", decision.BypassKind)
+	}
+
+	decision = DecideFastPath(Profile{Name: "generic-summary"}, Invocation{Command: []string{"summary", "tail"}}, 384, 96, 0, 0)
+	if !decision.BypassCompression || decision.Reason != "short summary output" {
+		t.Fatalf("expected family summary bypass, got %+v", decision)
 	}
 }
 
@@ -96,5 +112,43 @@ func TestDecideFastPathSetsLatencyWarningIndependently(t *testing.T) {
 	}
 	if !decision.BypassCompression {
 		t.Fatalf("expected family-aware bypass to remain active, got %+v", decision)
+	}
+}
+
+func TestShouldApplyBypassUsesCapabilities(t *testing.T) {
+	decision := FastPathDecision{
+		BypassCompression: true,
+		BypassKind:        FastPathBypassKindTinyOutput,
+		Reason:            "tiny output fast path",
+	}
+
+	safeOnly := Profile{
+		Name:         "safe-only",
+		StreamRender: func(Invocation, OutputBudget) StreamReducer { return nil },
+		Capabilities: ProfileCapabilities{FastPathBypass: FastPathBypassSafeOnly},
+	}
+	if shouldApplyBypass(safeOnly, decision) {
+		t.Fatal("expected safe-only profile to reject tiny-output bypass")
+	}
+
+	smallOutput := Profile{
+		Name:         "small-output",
+		StreamRender: func(Invocation, OutputBudget) StreamReducer { return nil },
+		Capabilities: ProfileCapabilities{FastPathBypass: FastPathBypassSmallOutput},
+	}
+	if !shouldApplyBypass(smallOutput, decision) {
+		t.Fatal("expected small-output profile to allow tiny-output bypass")
+	}
+}
+
+func TestShouldUseFailureEscapeUsesCapabilities(t *testing.T) {
+	profile := Profile{Capabilities: ProfileCapabilities{AllowFailureEscape: true}}
+	if !shouldUseFailureEscape(profile, 1, false, true) {
+		t.Fatal("expected failure escape when capability is enabled")
+	}
+
+	profile.Capabilities.AllowFailureEscape = false
+	if shouldUseFailureEscape(profile, 1, false, true) {
+		t.Fatal("did not expect failure escape when capability is disabled")
 	}
 }

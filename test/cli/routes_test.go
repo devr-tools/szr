@@ -71,7 +71,7 @@ func TestRunRoutes(t *testing.T) {
 		{"self doctor", []string{"self", "doctor"}, 0, []string{"version: test", "install target:", "config dir:", "update checks: disabled"}, nil, ""},
 		{"doctor missing tool", []string{"doctor"}, 0, []string{"go: missing"}, nil, ""},
 		{"git status", []string{"git", "status"}, 0, []string{"main...origin/main", "M  README.md"}, nil, ""},
-		{"git log", []string{"git", "log"}, 0, []string{"2 commits"}, nil, ""},
+		{"git log", []string{"git", "log"}, 0, []string{"abc123 first", "def456 second"}, nil, ""},
 		{"git diff", []string{"git", "diff"}, 0, []string{"files=1 +1 -1", "a.go | 2 +-"}, nil, ""},
 		{"go test", []string{"go", "test", "./..."}, 0, []string{"pkg/fail", "TestSad"}, nil, ""},
 		{"go build", []string{"go", "build"}, 1, []string{"compile error"}, nil, ""},
@@ -89,14 +89,15 @@ func TestRunRoutes(t *testing.T) {
 		{"ls", []string{"ls", root}, 0, []string{filepath.Base(root), "dir", "sub"}, nil, ""},
 		{"ls default root", []string{"ls"}, 0, []string{filepath.Base(".")}, nil, ""},
 		{"find", []string{"find", root, "--name", "*.go"}, 0, []string{"1 matches", "b.go"}, nil, ""},
+		{"find grouped", []string{"find", root, "--name", "*.go", "--grouped"}, 0, []string{"1F 1D", "./ b.go"}, nil, ""},
 		{"find path filter", []string{"find", root, "--name", "*.txt", "--path", "*a.txt"}, 0, []string{"1 matches", "a.txt"}, nil, ""},
 		{"find exclude", []string{"find", root, "--exclude", "dir/*"}, 0, []string{"5 matches"}, nil, ""},
-		{"find max depth", []string{"find", root, "--type", "d", "--max-depth", "1"}, 0, []string{"1 matches", filepath.ToSlash(filepath.Join(root, "dir"))}, nil, ""},
+		{"find max depth", []string{"find", root, "--type", "d", "--max-depth", "1"}, 0, []string{"1 matches", "examples: dir"}, nil, ""},
 		{"read single", []string{"read", fileA}, 0, []string{"one", "// c"}, nil, ""},
 		{"read multi aggressive", []string{"read", "-l", "aggressive", "-n", "--max-lines", "1", fileA, fileB}, 0, []string{"== " + fileA + " ==", "== " + fileB + " ==", "func x() { ... }"}, nil, ""},
 		{"grep", []string{"grep", "match", "."}, 0, []string{"file.go (2 matches)"}, nil, ""},
 		{"grep default path", []string{"grep", "match"}, 0, []string{"file.go (2 matches)"}, nil, ""},
-		{"rg external", []string{"rg", "match", "."}, 0, []string{"file.go (2 matches)"}, nil, ""},
+		{"rg external", []string{"rg", "match", "."}, 0, []string{"file.go:12:match one", "file.go:20:match two"}, nil, ""},
 		{"json", []string{"json", jsonFile}, 0, []string{"a: string", "c: number"}, nil, ""},
 		{"log file", []string{"log", logFile}, 0, []string{"same (x2)"}, nil, ""},
 		{"log stdin", []string{"log"}, 0, []string{"same (x2)"}, nil, "same\nsame\n"},
@@ -278,13 +279,13 @@ func TestSettingsInteractivePersistsConfig(t *testing.T) {
 
 	var code int
 	var stdout, stderr string
-	testutil.WithStdin(t, "1\n1\n2\n1\n3\n12\n4\n2\n5\n20\n6\n11\n7\n2\n8\n2\n9\n2\n10\n1\n11\n2\n12\n2\nq\n", func() {
+	testutil.WithStdin(t, "1\n1\n2\n1\n3\n12\n4\n2\n5\n20\n6\n11\n7\n2\n8\n2\n9\n2\n10\n1\n11\n2\n12\n2\n13\n2\n14\n2\nq\n", func() {
 		code, stdout, stderr = testutil.RunApp(t, app, "settings")
 	})
 	if code != 0 || stderr != "" {
 		t.Fatalf("unexpected settings stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
-	for _, want := range []string{
+	assertStdoutContainsAll(t, stdout,
 		"settings",
 		"current: disabled",
 		"1. enable",
@@ -301,25 +302,37 @@ func TestSettingsInteractivePersistsConfig(t *testing.T) {
 		"saved: adaptive budgets enabled",
 		"saved: early capture stop disabled",
 		"saved: semantic compaction disabled",
+		"saved: compression contract disabled",
+		"saved: compact artifact refs disabled",
 		"settings: saved and exiting",
-	} {
-		if !strings.Contains(stdout, want) {
-			t.Fatalf("expected stdout to contain %q, got %q", want, stdout)
-		}
-	}
+	)
 
 	data := testutil.MustReadFile(t, paths.ConfigFile)
 	var saved config.Config
 	if err := json.Unmarshal(data, &saved); err != nil {
 		t.Fatalf("decode saved config: %v", err)
 	}
+	assertSavedSettingsConfig(t, saved)
+}
+
+func assertStdoutContainsAll(t *testing.T, got string, wants ...string) {
+	t.Helper()
+	for _, want := range wants {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected stdout to contain %q, got %q", want, got)
+		}
+	}
+}
+
+func assertSavedSettingsConfig(t *testing.T, saved config.Config) {
+	t.Helper()
 	if !saved.UpdateCheck.Enabled || !saved.UpdateCheck.AutoUpdate || saved.UpdateCheck.IntervalHours != 12 {
 		t.Fatalf("unexpected update settings: %#v", saved.UpdateCheck)
 	}
 	if saved.TeeOnFailure || saved.MaxPreviewLines != 20 || saved.MaxMatchGroups != 11 || saved.ReasoningBudgetMode != config.ReasoningBudgetAgent {
 		t.Fatalf("unexpected saved config: %#v", saved)
 	}
-	if saved.Advanced.AggressivePrepareRewrites || saved.Advanced.NoisePrefiltering || !saved.Advanced.AdaptiveBudgets || saved.Advanced.EarlyCaptureStop || saved.Advanced.SemanticCompaction {
+	if saved.Advanced.AggressivePrepareRewrites || saved.Advanced.NoisePrefiltering || !saved.Advanced.AdaptiveBudgets || saved.Advanced.EarlyCaptureStop || saved.Advanced.SemanticCompaction || saved.Advanced.CompressionContract || saved.Advanced.CompactArtifactRefs {
 		t.Fatalf("unexpected advanced settings: %#v", saved.Advanced)
 	}
 }

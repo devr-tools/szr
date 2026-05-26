@@ -29,9 +29,16 @@ func Profiles(maxLines int) []engine.Profile {
 				return buildfilter.SummarizeBuildSystem(exec.Stdout+"\n"+exec.Stderr, maxLines)
 			},
 			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return shared.NewBufferedTextReducer(true, true, func(input string) string {
-					return buildfilter.SummarizeBuildSystem(input, budget.MaxLines)
-				})
+				return shared.NewBufferedTextReducerWithRecovery(
+					true,
+					true,
+					func(input string) string {
+						return buildfilter.SummarizeBuildSystem(input, budget.MaxLines)
+					},
+					func(input string) (string, string, bool) {
+						return buildfilter.BuildSystemRecoveryInfo(input, budget.MaxLines)
+					},
+				)
 			},
 			ParseBytes: profilekit.ParseCombined,
 			Explain: []string{

@@ -9,15 +9,32 @@ import (
 )
 
 func SummarizeGet(input string, maxLines int) string {
+	return summarizeGetResult(input, maxLines).Text
+}
+
+func KubectlGetRecoveryInfo(input string, maxLines int) (string, string, bool) {
+	result := summarizeGetResult(input, maxLines)
+	if result.OmittedCount <= 0 {
+		return shared.NoRecovery()
+	}
+	return shared.FullOutputRecovery(fmt.Sprintf("omitted %d additional resources", result.OmittedCount))
+}
+
+type kubernetesSummaryResult struct {
+	Text         string
+	OmittedCount int
+}
+
+func summarizeGetResult(input string, maxLines int) kubernetesSummaryResult {
 	if maxLines <= 0 {
 		maxLines = 10
 	}
 
 	clean := shared.StripANSI(input)
-	if summary, ok := summarizeGetJSON(clean, maxLines); ok {
-		return summary
+	if summary, ok, omitted := summarizeGetJSON(clean, maxLines); ok {
+		return kubernetesSummaryResult{Text: summary, OmittedCount: omitted}
 	}
-	return shared.CompactLines(clean, maxLines)
+	return kubernetesSummaryResult{Text: shared.CompactLines(clean, maxLines)}
 }
 
 func SummarizeKubectlGet(input string, maxLines int) string {
@@ -25,13 +42,25 @@ func SummarizeKubectlGet(input string, maxLines int) string {
 }
 
 func SummarizeDescribe(input string, maxLines int) string {
+	return summarizeDescribeResult(input, maxLines).Text
+}
+
+func KubectlDescribeRecoveryInfo(input string, maxLines int) (string, string, bool) {
+	result := summarizeDescribeResult(input, maxLines)
+	if result.OmittedCount <= 0 {
+		return shared.NoRecovery()
+	}
+	return shared.FullOutputRecovery(fmt.Sprintf("omitted %d additional lines", result.OmittedCount))
+}
+
+func summarizeDescribeResult(input string, maxLines int) kubernetesSummaryResult {
 	if maxLines <= 0 {
 		maxLines = 12
 	}
 
 	lines := shared.NonEmptyLines(shared.StripANSI(input))
 	if len(lines) == 0 {
-		return "ok"
+		return kubernetesSummaryResult{Text: "ok"}
 	}
 
 	meta := []string{}
@@ -52,9 +81,9 @@ func SummarizeDescribe(input string, maxLines int) string {
 	meta = shared.UniqueStrings(meta)
 	events = shared.UniqueStrings(events)
 	if len(events) == 0 {
-		return shared.JoinLimitedLines(meta, maxLines)
+		return summarizeKubernetesLines(meta, maxLines)
 	}
-	return shared.JoinLimitedLines(append(meta, events...), maxLines)
+	return summarizeKubernetesLines(append(meta, events...), maxLines)
 }
 
 func SummarizeKubectlDescribe(input string, maxLines int) string {
@@ -62,13 +91,25 @@ func SummarizeKubectlDescribe(input string, maxLines int) string {
 }
 
 func SummarizeLogs(input string, maxLines int) string {
+	return summarizeLogsResult(input, maxLines).Text
+}
+
+func KubectlLogsRecoveryInfo(input string, maxLines int) (string, string, bool) {
+	result := summarizeLogsResult(input, maxLines)
+	if result.OmittedCount <= 0 {
+		return shared.NoRecovery()
+	}
+	return shared.FullOutputRecovery(fmt.Sprintf("omitted %d additional log lines", result.OmittedCount))
+}
+
+func summarizeLogsResult(input string, maxLines int) kubernetesSummaryResult {
 	if maxLines <= 0 {
 		maxLines = 12
 	}
 
 	lines := shared.NonEmptyLines(shared.StripANSI(input))
 	if len(lines) == 0 {
-		return "ok"
+		return kubernetesSummaryResult{Text: "ok"}
 	}
 
 	sources := map[string]map[string]int{}
@@ -90,7 +131,7 @@ func SummarizeLogs(input string, maxLines int) string {
 	}
 
 	if len(order) == 0 {
-		return shared.JoinLimitedLines(shared.UniqueStrings(fallback), maxLines)
+		return summarizeKubernetesLines(shared.UniqueStrings(fallback), maxLines)
 	}
 
 	out := []string{fmt.Sprintf("sources: %d", len(order))}
@@ -103,22 +144,22 @@ func SummarizeLogs(input string, maxLines int) string {
 			out = append(out, line)
 		}
 	}
-	return shared.JoinLimitedLines(out, maxLines)
+	return summarizeKubernetesLines(out, maxLines)
 }
 
 func SummarizeKubectlLogs(input string, maxLines int) string {
 	return SummarizeLogs(input, maxLines)
 }
 
-func summarizeGetJSON(input string, maxLines int) (string, bool) {
+func summarizeGetJSON(input string, maxLines int) (string, bool, int) {
 	trimmed := strings.TrimSpace(input)
 	if trimmed == "" || trimmed[0] != '{' {
-		return "", false
+		return "", false, 0
 	}
 
 	var decoded map[string]any
 	if err := json.Unmarshal([]byte(trimmed), &decoded); err != nil {
-		return "", false
+		return "", false, 0
 	}
 
 	kind, _ := decoded["kind"].(string)
@@ -133,10 +174,20 @@ func summarizeGetJSON(input string, maxLines int) (string, bool) {
 			}
 			out = append(out, shared.Clip(summarizeObject(obj), 160))
 		}
-		return shared.JoinLimitedLines(out, maxLines), true
+		result := summarizeKubernetesLines(out, maxLines)
+		return result.Text, true, result.OmittedCount
 	}
 
-	return shared.JoinLimitedLines([]string{shared.Clip(summarizeObject(decoded), 160)}, maxLines), true
+	result := summarizeKubernetesLines([]string{shared.Clip(summarizeObject(decoded), 160)}, maxLines)
+	return result.Text, true, result.OmittedCount
+}
+
+func summarizeKubernetesLines(lines []string, maxLines int) kubernetesSummaryResult {
+	result := kubernetesSummaryResult{Text: shared.JoinLimitedLines(lines, maxLines)}
+	if len(lines) > maxLines {
+		result.OmittedCount = len(lines) - maxLines
+	}
+	return result
 }
 
 func summarizeObject(obj map[string]any) string {

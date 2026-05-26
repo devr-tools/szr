@@ -52,3 +52,22 @@ func TestPHPProfileCoverage(t *testing.T) {
 		t.Fatalf("unexpected php stream metadata: %#v", php)
 	}
 }
+
+func TestPHPProfileStreamRecovery(t *testing.T) {
+	list := profiles.Builtins(4)
+	php := testutil.FindProfile(t, list, "php-tooling")
+	stream := php.StreamRender(engine.Invocation{}, engine.OutputBudget{MaxLines: 3})
+	stream.ConsumeStdout([]byte(strings.Join([]string{
+		"Problem 1",
+		"Failed asserting that 200 is identical to 500.",
+		"/app/tests/Feature/HealthCheckTest.php:27",
+		"Tests: 1, Assertions: 1, Failures: 1.",
+	}, "\n")))
+	recoveryStream, ok := stream.(interface{ RecoveryInfo() (string, string, bool) })
+	if !ok {
+		t.Fatalf("expected recovery-capable php reducer, got %T", stream)
+	}
+	if kind, summary, requireRawCapture := recoveryStream.RecoveryInfo(); kind != "full-output" || summary != "omitted 1 additional lines" || !requireRawCapture {
+		t.Fatalf("unexpected php recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+}

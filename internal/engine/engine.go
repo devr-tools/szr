@@ -18,8 +18,8 @@ type Engine struct {
 }
 
 func New(cfg config.Config, paths config.Paths, store *history.Store, profiles []Profile) *Engine {
-	projectProfiles := compileRuleProfiles(cfg)
-	builtinProfiles := annotateProfilesSource(profiles, SourceBuiltin)
+	projectProfiles := annotateProfilesCapabilities(compileRuleProfiles(cfg))
+	builtinProfiles := annotateProfilesCapabilities(annotateProfilesSource(profiles, SourceBuiltin))
 	var budgetAdapter BudgetAdapter
 	if cfg.Advanced.AdaptiveBudgets {
 		budgetAdapter = NewHistoryBudgetAdapter(store)
@@ -44,16 +44,10 @@ func shouldApplyBypass(profile Profile, decision FastPathDecision) bool {
 	if !decision.BypassCompression {
 		return false
 	}
-	if profile.Name == "passthrough" {
-		return true
-	}
 	if profile.StreamRender == nil {
 		return false
 	}
-	if profile.Confidence != ConfidenceHigh {
-		return true
-	}
-	return allowsHighConfidenceBypass(profile.Name)
+	return shouldBypassForDecisionMode(profile.Capabilities.FastPathBypass, decision)
 }
 
 func allowsHighConfidenceBypass(name string) bool {
@@ -92,8 +86,5 @@ func shouldUseFailureEscape(profile Profile, exitCode int, passthrough bool, fal
 	if passthrough || exitCode == 0 || !fallbackUsed {
 		return false
 	}
-	if profile.Name == "passthrough" {
-		return false
-	}
-	return profile.Confidence != ConfidenceHigh
+	return profile.Capabilities.AllowFailureEscape
 }

@@ -17,6 +17,23 @@ type event struct {
 }
 
 func SummarizeCloudLogs(input string, maxLines int) string {
+	return summarizeCloudLogsResult(input, maxLines).Text
+}
+
+func CloudLogsRecoveryInfo(input string, maxLines int) (string, string, bool) {
+	result := summarizeCloudLogsResult(input, maxLines)
+	if result.OmittedCount <= 0 {
+		return shared.NoRecovery()
+	}
+	return shared.FullOutputRecovery(fmt.Sprintf("omitted %d additional log lines", result.OmittedCount))
+}
+
+type cloudLogsSummaryResult struct {
+	Text         string
+	OmittedCount int
+}
+
+func summarizeCloudLogsResult(input string, maxLines int) cloudLogsSummaryResult {
 	if maxLines <= 0 {
 		maxLines = 12
 	}
@@ -27,7 +44,7 @@ func SummarizeCloudLogs(input string, maxLines int) string {
 		events = parseTextEvents(clean)
 	}
 	if len(events) == 0 {
-		return shared.CompactLines(clean, maxLines)
+		return cloudLogsSummaryResult{Text: shared.CompactLines(clean, maxLines)}
 	}
 
 	return renderEvents(events, maxLines)
@@ -247,7 +264,7 @@ func parseVercelLine(line string) (event, bool) {
 	return event{Timestamp: fields[0], Source: normalizeLogSource(source), Severity: severity, Message: canonicalizeVercelMessage(message)}, true
 }
 
-func renderEvents(events []event, maxLines int) string {
+func renderEvents(events []event, maxLines int) cloudLogsSummaryResult {
 	stats := collectEventStats(events)
 	out := []string{fmt.Sprintf("events: %d sources: %d", len(events), len(stats.sources))}
 	if stats.firstTS != "" || stats.lastTS != "" {
@@ -262,7 +279,13 @@ func renderEvents(events []event, maxLines int) string {
 	}
 
 	out = appendRenderedEvents(out, stats.order, stats.signatures)
-	return shared.JoinLimitedLines(out, maxLines)
+	result := cloudLogsSummaryResult{
+		Text: shared.JoinLimitedLines(out, maxLines),
+	}
+	if len(out) > maxLines {
+		result.OmittedCount = len(out) - maxLines
+	}
+	return result
 }
 
 type eventStats struct {

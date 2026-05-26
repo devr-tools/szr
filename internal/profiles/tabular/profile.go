@@ -28,8 +28,10 @@ func Profiles(maxLines int) []engine.Profile {
 				return tabularfilter.SummarizeWideTable(exec.Stdout+"\n"+exec.Stderr, maxLines)
 			},
 			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return shared.NewBufferedTextReducer(true, true, func(input string) string {
+				return shared.NewBufferedTextReducerWithRecovery(true, true, func(input string) string {
 					return tabularfilter.SummarizeWideTable(input, budget.MaxLines)
+				}, func(input string) (string, string, bool) {
+					return tabularfilter.WideTableRecoveryInfo(input, budget.MaxLines)
 				})
 			},
 			ParseBytes: profilekit.ParseCombined,

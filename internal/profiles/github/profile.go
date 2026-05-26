@@ -31,6 +31,8 @@ func Profiles(maxLines int) []engine.Profile {
 			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
 				return newBufferedStdoutReducer(func(input string) string {
 					return ghfilter.SummarizePRView(input, budget.MaxLines)
+				}, func(input string) (string, string, bool) {
+					return ghfilter.GHPRViewRecoveryInfo(input, budget.MaxLines)
 				})
 			},
 			ParseBytes: profilekit.ParseStdout,
@@ -56,12 +58,14 @@ func Profiles(maxLines int) []engine.Profile {
 				return shared.SummarizeGenericFailure(exec.Stdout+"\n"+exec.Stderr, maxLines)
 			},
 			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return newBufferedCombinedReducer(func(input string) string {
-					return shared.SummarizeGenericFailureWithOptions(input, shared.GenericFailureReducerOptions{
-						MaxLines:           budget.MaxLines,
-						NoisePrefiltering:  budget.NoisePrefiltering,
-						SemanticCompaction: budget.SemanticCompaction,
-					})
+				return shared.NewGenericFailureReducerWithOptions(shared.GenericFailureReducerOptions{
+					MaxLines:           budget.MaxLines,
+					MaxBytes:           budget.MaxBytes,
+					MinFailures:        budget.MinFailures,
+					MinAnchors:         budget.MinAnchors,
+					MinHints:           budget.MinHints,
+					NoisePrefiltering:  budget.NoisePrefiltering,
+					SemanticCompaction: budget.SemanticCompaction,
 				})
 			},
 			ParseBytes: profilekit.ParseCombined,
@@ -89,6 +93,8 @@ func Profiles(maxLines int) []engine.Profile {
 			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
 				return newBufferedCombinedReducer(func(input string) string {
 					return ghfilter.SummarizeRunLog(input, budget.MaxLines)
+				}, func(input string) (string, string, bool) {
+					return ghfilter.GHRunLogRecoveryInfo(input, budget.MaxLines)
 				})
 			},
 			ParseBytes: profilekit.ParseCombined,
@@ -111,12 +117,10 @@ func Profiles(maxLines int) []engine.Profile {
 				return inv.Command
 			},
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
-				return shared.CompactLines(exec.Stdout+"\n"+exec.Stderr, maxLines)
+				return shared.RenderDeclarativeBuiltin("compact_lines", exec.Stdout+"\n"+exec.Stderr, maxLines)
 			},
 			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return newBufferedCombinedReducer(func(input string) string {
-					return shared.CompactLines(input, budget.MaxLines)
-				})
+				return shared.NewDeclarativeBuiltinReducer("compact_lines", "lines", budget.MaxLines, true, true)
 			},
 			ParseBytes: profilekit.ParseCombined,
 			Explain: []string{
@@ -146,6 +150,8 @@ func Profiles(maxLines int) []engine.Profile {
 			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
 				return newBufferedCombinedReducer(func(input string) string {
 					return ghfilter.SummarizeRunView(input, budget.MaxLines)
+				}, func(input string) (string, string, bool) {
+					return ghfilter.GHRunViewRecoveryInfo(input, budget.MaxLines)
 				})
 			},
 			ParseBytes: profilekit.ParseCombined,

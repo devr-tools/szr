@@ -36,3 +36,15 @@ func TestSummarizePHPFallback(t *testing.T) {
 		t.Fatalf("unexpected php fallback summary: %q", got)
 	}
 }
+
+func TestPHPRecoveryInfo(t *testing.T) {
+	input := strings.Join([]string{
+		"Problem 1",
+		"Failed asserting that false is true.",
+		"/app/tests/Feature/ExampleTest.php:14",
+		"Tests: 1, Assertions: 1, Failures: 1.",
+	}, "\n")
+	if kind, summary, requireRawCapture := phpfilter.PHPRecoveryInfo(input, 3); kind != "full-output" || summary != "omitted 1 additional lines" || !requireRawCapture {
+		t.Fatalf("unexpected PHP recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+}

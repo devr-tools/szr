@@ -35,3 +35,20 @@ func TestCloudListProfileRenderAndStream(t *testing.T) {
 		}
 	}
 }
+
+func TestCloudListProfileStreamRecovery(t *testing.T) {
+	list := cloudprofiles.Profiles(6)
+	profile := testutil.FindProfile(t, list, "cloud-list")
+	stream := profile.StreamRender(engine.Invocation{}, engine.OutputBudget{MaxLines: 3})
+	stream.ConsumeStdout([]byte(`[{"name":"api-prod","zone":"https://www.googleapis.com/compute/v1/projects/demo/zones/us-central1-a","status":"RUNNING","project":"demo-project"},{"name":"jobs-prod","zone":"https://www.googleapis.com/compute/v1/projects/demo/zones/us-central1-b","status":"TERMINATED","project":"demo-project"},{"name":"cron-prod","zone":"https://www.googleapis.com/compute/v1/projects/demo/zones/us-central1-c","status":"RUNNING","project":"demo-project"}]`))
+
+	recoveryStream, ok := stream.(interface {
+		RecoveryInfo() (string, string, bool)
+	})
+	if !ok {
+		t.Fatalf("expected recovery-capable cloud-list reducer, got %T", stream)
+	}
+	if kind, summary, requireRawCapture := recoveryStream.RecoveryInfo(); kind != "full-output" || summary != "omitted 1 additional resources" || !requireRawCapture {
+		t.Fatalf("unexpected cloud-list recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+}

@@ -31,3 +31,26 @@ func TestPatchDiffProfileRender(t *testing.T) {
 		t.Fatalf("unexpected patch-diff stream metadata: %#v", profile)
 	}
 }
+
+func TestPatchDiffProfileStreamRecovery(t *testing.T) {
+	list := profiles.Builtins(6)
+	profile := testutil.FindProfile(t, list, "patch-diff")
+	stream := profile.StreamRender(engine.Invocation{}, engine.OutputBudget{MaxLines: 3})
+	stream.ConsumeStdout([]byte(strings.Join([]string{
+		"diff --git a/src/app.go b/src/app.go",
+		"--- a/src/app.go",
+		"+++ b/src/app.go",
+		"error: patch failed: src/app.go:10",
+		"src/app.go.rej",
+	}, "\n")))
+
+	recoveryStream, ok := stream.(interface {
+		RecoveryInfo() (string, string, bool)
+	})
+	if !ok {
+		t.Fatalf("expected recovery-capable patch reducer, got %T", stream)
+	}
+	if kind, summary, requireRawCapture := recoveryStream.RecoveryInfo(); kind != "full-output" || summary != "omitted 3 additional lines" || !requireRawCapture {
+		t.Fatalf("unexpected patch recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+}

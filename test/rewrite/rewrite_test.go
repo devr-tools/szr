@@ -8,103 +8,71 @@ import (
 )
 
 func TestAnalyze(t *testing.T) {
-	t.Run("git direct", func(t *testing.T) {
-		decision := rewrite.Analyze("git diff HEAD~1..HEAD --stat", "szr")
-		if !decision.AutoRewrite || decision.Rewrite != "szr git diff HEAD~1..HEAD --stat" {
-			t.Fatalf("unexpected git direct rewrite: %#v", decision)
-		}
-	})
+	cases := []struct {
+		name           string
+		command        string
+		autoRewrite    bool
+		rewriteCommand string
+		producerOnly   bool
+		wrapMode       string
+		checkHint      bool
+		wantHint       bool
+		hintContains   string
+	}{
+		{name: "git direct", command: "git diff HEAD~1..HEAD --stat", autoRewrite: true, rewriteCommand: "szr git diff HEAD~1..HEAD --stat"},
+		{name: "git pipeline", command: "git diff HEAD~1..HEAD --stat | tail -30", autoRewrite: true, rewriteCommand: "szr proxy git diff HEAD~1..HEAD --stat | tail -30", producerOnly: true},
+		{name: "grep hint only", command: "/usr/bin/grep -rn 'user.*id' .", checkHint: true, wantHint: true},
+		{name: "git status hint", command: "/usr/bin/git status --short", autoRewrite: true, rewriteCommand: "szr /usr/bin/git status --short", checkHint: true, wantHint: true},
+		{name: "grep structured direct", command: "/usr/bin/grep -rn needle .", autoRewrite: true, rewriteCommand: "szr grep needle .", wrapMode: "direct", checkHint: true, wantHint: true, hintContains: "szr grep <pattern> <path>"},
+		{name: "grep pipeline remains hint only", command: "/usr/bin/grep -rn needle . | head -20", checkHint: true, wantHint: true},
+		{name: "find structured direct", command: "/usr/bin/find /repo -name users.py -type f -maxdepth 2", autoRewrite: true, rewriteCommand: "szr find /repo --name users.py --type f --max-depth 2", wrapMode: "direct"},
+		{name: "find unsupported flags stay hint only", command: "/usr/bin/find /repo -mtime -1", checkHint: true, wantHint: true},
+		{name: "git ls-files direct", command: "git ls-files '*.go'", autoRewrite: true, rewriteCommand: "szr git ls-files '*.go'"},
+		{name: "fd pipeline producer only", command: "fd needle src | head -20", autoRewrite: true, rewriteCommand: "szr proxy fd needle src | head -20", producerOnly: true},
+		{name: "fd exec remains unsupported", command: "fd needle src -x rm {}", checkHint: true, wantHint: true},
+		{name: "ls structured direct", command: "ls ./internal", autoRewrite: true, rewriteCommand: "szr ls ./internal"},
+		{name: "tree rewrites to ls", command: "tree ./internal", autoRewrite: true, rewriteCommand: "szr ls ./internal"},
+		{name: "ls flags remain unsupported", command: "ls -la", checkHint: true, wantHint: true},
+	}
 
-	t.Run("git pipeline", func(t *testing.T) {
-		decision := rewrite.Analyze("git diff HEAD~1..HEAD --stat | tail -30", "szr")
-		if !decision.AutoRewrite || decision.Rewrite != "szr proxy git diff HEAD~1..HEAD --stat | tail -30" || !decision.ProducerOnly {
-			t.Fatalf("unexpected git pipeline rewrite: %#v", decision)
-		}
-	})
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			decision := rewrite.Analyze(tc.command, "szr")
+			assertAnalyzeDecision(t, decision, tc)
+		})
+	}
+}
 
-	t.Run("grep hint only", func(t *testing.T) {
-		decision := rewrite.Analyze("/usr/bin/grep -rn 'user.*id' .", "szr")
-		if decision.AutoRewrite || decision.Rewrite != "" || decision.Hint == "" {
-			t.Fatalf("unexpected grep wrapper decision: %#v", decision)
-		}
-	})
-
-	t.Run("git status hint", func(t *testing.T) {
-		decision := rewrite.Analyze("/usr/bin/git status --short", "szr")
-		if !decision.AutoRewrite || decision.Hint == "" || decision.Rewrite != "szr /usr/bin/git status --short" {
-			t.Fatalf("unexpected git status decision: %#v", decision)
-		}
-	})
-
-	t.Run("grep structured direct", func(t *testing.T) {
-		decision := rewrite.Analyze("/usr/bin/grep -rn needle .", "szr")
-		if !decision.AutoRewrite || decision.Rewrite != "szr grep needle ." || decision.WrapMode != "direct" || !strings.Contains(decision.Hint, "szr grep <pattern> <path>") {
-			t.Fatalf("unexpected grep structured rewrite: %#v", decision)
-		}
-	})
-
-	t.Run("grep pipeline remains hint only", func(t *testing.T) {
-		decision := rewrite.Analyze("/usr/bin/grep -rn needle . | head -20", "szr")
-		if decision.AutoRewrite || decision.ProducerOnly || decision.Hint == "" {
-			t.Fatalf("unexpected grep pipeline rewrite: %#v", decision)
-		}
-	})
-
-	t.Run("find structured direct", func(t *testing.T) {
-		decision := rewrite.Analyze("/usr/bin/find /repo -name users.py -type f -maxdepth 2", "szr")
-		if !decision.AutoRewrite || decision.Rewrite != "szr find /repo --name users.py --type f --max-depth 2" || decision.WrapMode != "direct" {
-			t.Fatalf("unexpected find structured rewrite: %#v", decision)
-		}
-	})
-
-	t.Run("find unsupported flags stay hint only", func(t *testing.T) {
-		decision := rewrite.Analyze("/usr/bin/find /repo -mtime -1", "szr")
-		if decision.AutoRewrite || decision.Rewrite != "" || decision.Hint == "" {
-			t.Fatalf("unexpected find wrapper decision: %#v", decision)
-		}
-	})
-
-	t.Run("git ls-files direct", func(t *testing.T) {
-		decision := rewrite.Analyze("git ls-files '*.go'", "szr")
-		if !decision.AutoRewrite || decision.Rewrite != "szr git ls-files '*.go'" {
-			t.Fatalf("unexpected git ls-files rewrite: %#v", decision)
-		}
-	})
-
-	t.Run("fd pipeline producer only", func(t *testing.T) {
-		decision := rewrite.Analyze("fd needle src | head -20", "szr")
-		if !decision.AutoRewrite || !decision.ProducerOnly || decision.Rewrite != "szr proxy fd needle src | head -20" {
-			t.Fatalf("unexpected fd pipeline rewrite: %#v", decision)
-		}
-	})
-
-	t.Run("fd exec remains unsupported", func(t *testing.T) {
-		decision := rewrite.Analyze("fd needle src -x rm {}", "szr")
-		if decision.AutoRewrite {
-			t.Fatalf("unexpected fd exec rewrite: %#v", decision)
-		}
-	})
-
-	t.Run("ls structured direct", func(t *testing.T) {
-		decision := rewrite.Analyze("ls ./internal", "szr")
-		if !decision.AutoRewrite || decision.Rewrite != "szr ls ./internal" {
-			t.Fatalf("unexpected ls rewrite: %#v", decision)
-		}
-	})
-
-	t.Run("tree rewrites to ls", func(t *testing.T) {
-		decision := rewrite.Analyze("tree ./internal", "szr")
-		if !decision.AutoRewrite || decision.Rewrite != "szr ls ./internal" {
-			t.Fatalf("unexpected tree rewrite: %#v", decision)
-		}
-	})
-
-	t.Run("ls flags remain unsupported", func(t *testing.T) {
-		decision := rewrite.Analyze("ls -la", "szr")
-		if decision.AutoRewrite || decision.Hint == "" {
-			t.Fatalf("unexpected ls flag rewrite: %#v", decision)
-		}
-	})
+func assertAnalyzeDecision(t *testing.T, decision rewrite.Decision, tc struct {
+	name           string
+	command        string
+	autoRewrite    bool
+	rewriteCommand string
+	producerOnly   bool
+	wrapMode       string
+	checkHint      bool
+	wantHint       bool
+	hintContains   string
+}) {
+	t.Helper()
+	if decision.AutoRewrite != tc.autoRewrite {
+		t.Fatalf("unexpected auto rewrite for %s: %#v", tc.name, decision)
+	}
+	if decision.Rewrite != tc.rewriteCommand {
+		t.Fatalf("unexpected rewrite for %s: %#v", tc.name, decision)
+	}
+	if decision.ProducerOnly != tc.producerOnly {
+		t.Fatalf("unexpected producer-only flag for %s: %#v", tc.name, decision)
+	}
+	if tc.wrapMode != "" && decision.WrapMode != tc.wrapMode {
+		t.Fatalf("unexpected wrap mode for %s: %#v", tc.name, decision)
+	}
+	if tc.checkHint && tc.wantHint != (decision.Hint != "") {
+		t.Fatalf("unexpected hint presence for %s: %#v", tc.name, decision)
+	}
+	if tc.hintContains != "" && !strings.Contains(decision.Hint, tc.hintContains) {
+		t.Fatalf("expected hint %q in %q", tc.hintContains, decision.Hint)
+	}
 }
 
 func TestFamily(t *testing.T) {

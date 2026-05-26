@@ -26,9 +26,16 @@ func Profiles(maxLines int) []engine.Profile {
 				return cloudfilter.SummarizeCloudList(exec.Stdout, maxLines)
 			},
 			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return shared.NewBufferedTextReducer(true, false, func(input string) string {
-					return cloudfilter.SummarizeCloudList(input, budget.MaxLines)
-				})
+				return shared.NewBufferedTextReducerWithRecovery(
+					true,
+					false,
+					func(input string) string {
+						return cloudfilter.SummarizeCloudList(input, budget.MaxLines)
+					},
+					func(input string) (string, string, bool) {
+						return cloudfilter.CloudListRecoveryInfo(input, budget.MaxLines)
+					},
+				)
 			},
 			ParseBytes: profilekit.ParseStdout,
 			Explain: []string{
@@ -53,9 +60,16 @@ func Profiles(maxLines int) []engine.Profile {
 				return cloudfilter.SummarizeCloudList(exec.Stdout, maxLines)
 			},
 			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return shared.NewBufferedTextReducer(true, false, func(input string) string {
-					return cloudfilter.SummarizeCloudList(input, budget.MaxLines)
-				})
+				return shared.NewBufferedTextReducerWithRecovery(
+					true,
+					false,
+					func(input string) string {
+						return cloudfilter.SummarizeCloudList(input, budget.MaxLines)
+					},
+					func(input string) (string, string, bool) {
+						return cloudfilter.CloudListRecoveryInfo(input, budget.MaxLines)
+					},
+				)
 			},
 			ParseBytes: profilekit.ParseStdout,
 			Explain: []string{

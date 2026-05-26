@@ -10,6 +10,23 @@ import (
 )
 
 func SummarizeDockerPS(input string, maxLines int) string {
+	return summarizeDockerPSResult(input, maxLines).Text
+}
+
+func DockerPSRecoveryInfo(input string, maxLines int) (string, string, bool) {
+	result := summarizeDockerPSResult(input, maxLines)
+	if result.OmittedCount <= 0 {
+		return shared.NoRecovery()
+	}
+	return shared.FullOutputRecovery(fmt.Sprintf("omitted %d additional containers", result.OmittedCount))
+}
+
+type dockerPSSummaryResult struct {
+	Text         string
+	OmittedCount int
+}
+
+func summarizeDockerPSResult(input string, maxLines int) dockerPSSummaryResult {
 	if maxLines <= 0 {
 		maxLines = 10
 	}
@@ -21,7 +38,7 @@ func SummarizeDockerPS(input string, maxLines int) string {
 
 	lines := shared.NonEmptyLines(clean)
 	if len(lines) == 0 {
-		return "ok"
+		return dockerPSSummaryResult{Text: "ok"}
 	}
 
 	services := make([]dockerServiceState, 0, len(lines))
@@ -40,17 +57,34 @@ func SummarizeDockerPS(input string, maxLines int) string {
 	if len(services) > 0 {
 		return summarizeDockerServices(services, maxLines)
 	}
-	return shared.CompactLines(clean, maxLines)
+	return dockerPSSummaryResult{Text: shared.CompactLines(clean, maxLines)}
 }
 
 func SummarizeDockerLogs(input string, maxLines int) string {
+	return summarizeDockerLogsResult(input, maxLines).Text
+}
+
+func DockerLogsRecoveryInfo(input string, maxLines int) (string, string, bool) {
+	result := summarizeDockerLogsResult(input, maxLines)
+	if result.OmittedCount <= 0 {
+		return shared.NoRecovery()
+	}
+	return shared.FullOutputRecovery(fmt.Sprintf("omitted %d additional log lines", result.OmittedCount))
+}
+
+type dockerLogsSummaryResult struct {
+	Text         string
+	OmittedCount int
+}
+
+func summarizeDockerLogsResult(input string, maxLines int) dockerLogsSummaryResult {
 	if maxLines <= 0 {
 		maxLines = 12
 	}
 
 	lines := shared.NonEmptyLines(shared.StripANSI(input))
 	if len(lines) == 0 {
-		return "ok"
+		return dockerLogsSummaryResult{Text: "ok"}
 	}
 
 	type sourceSummary struct {
@@ -107,7 +141,13 @@ func SummarizeDockerLogs(input string, maxLines int) string {
 			out = append(out, line)
 		}
 	}
-	return shared.JoinLimitedLines(out, maxLines)
+	result := dockerLogsSummaryResult{
+		Text: shared.JoinLimitedLines(out, maxLines),
+	}
+	if len(out) > maxLines {
+		result.OmittedCount = len(out) - maxLines
+	}
+	return result
 }
 
 type dockerServiceState struct {
@@ -152,9 +192,9 @@ func parseComposePSJSON(input string) []dockerServiceState {
 	return out
 }
 
-func summarizeDockerServices(services []dockerServiceState, maxLines int) string {
+func summarizeDockerServices(services []dockerServiceState, maxLines int) dockerPSSummaryResult {
 	if len(services) == 0 {
-		return "ok"
+		return dockerPSSummaryResult{Text: "ok"}
 	}
 	running := 0
 	exited := 0
@@ -182,7 +222,14 @@ func summarizeDockerServices(services []dockerServiceState, maxLines int) string
 		out = append(out, shared.Clip(line, 160))
 	}
 	header := fmt.Sprintf("containers: running=%d exited=%d other=%d", running, exited, other)
-	return shared.JoinLimitedLines(append([]string{header}, out...), maxLines)
+	lines := append([]string{header}, out...)
+	result := dockerPSSummaryResult{
+		Text: shared.JoinLimitedLines(lines, maxLines),
+	}
+	if len(lines) > maxLines {
+		result.OmittedCount = len(lines) - maxLines
+	}
+	return result
 }
 
 func splitDockerLogLine(line string) (string, string) {

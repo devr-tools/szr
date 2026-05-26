@@ -81,3 +81,41 @@ func TestPythonToolingProfileRender(t *testing.T) {
 		t.Fatalf("unexpected python-tooling stream metadata: %#v", profile)
 	}
 }
+
+func TestPythonProfilesStreamRecovery(t *testing.T) {
+	list := profiles.Builtins(6)
+
+	pytest := testutil.FindProfile(t, list, "pytest")
+	pytestStream := pytest.StreamRender(engine.Invocation{}, engine.OutputBudget{MaxLines: 4})
+	pytestStream.ConsumeStdout([]byte(strings.Join([]string{
+		"collected 3 items",
+		"FAILED tests/test_math.py::test_add - AssertionError: assert 3 == 2",
+		"assert add(1, 2) == 2",
+		"assert 3 == 2",
+		"tests/test_math.py:12: AssertionError",
+		"available fixtures: cache, capfd, caplog",
+	}, "\n")))
+	pytestRecovery, ok := pytestStream.(interface{ RecoveryInfo() (string, string, bool) })
+	if !ok {
+		t.Fatalf("expected recovery-capable pytest reducer, got %T", pytestStream)
+	}
+	if kind, summary, requireRawCapture := pytestRecovery.RecoveryInfo(); kind != "full-output" || summary != "omitted 2 additional lines" || !requireRawCapture {
+		t.Fatalf("unexpected pytest recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+
+	tooling := testutil.FindProfile(t, list, "python-tooling")
+	toolingStream := tooling.StreamRender(engine.Invocation{}, engine.OutputBudget{MaxLines: 3})
+	toolingStream.ConsumeStdout([]byte(strings.Join([]string{
+		"src/app.py:12: error: Name \"missing\" is not defined  [name-defined]",
+		"src/app.py:18:5: F401 `os` imported but unused",
+		"ERROR: Could not find a version that satisfies the requirement missing-pkg",
+		"Found 2 errors in 1 file (checked 4 source files)",
+	}, "\n")))
+	toolingRecovery, ok := toolingStream.(interface{ RecoveryInfo() (string, string, bool) })
+	if !ok {
+		t.Fatalf("expected recovery-capable python tooling reducer, got %T", toolingStream)
+	}
+	if kind, summary, requireRawCapture := toolingRecovery.RecoveryInfo(); kind != "full-output" || summary != "omitted 1 additional lines" || !requireRawCapture {
+		t.Fatalf("unexpected python tooling recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+}

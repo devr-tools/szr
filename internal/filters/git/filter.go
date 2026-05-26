@@ -218,6 +218,17 @@ func (r *GitLogReducer) Preview() string {
 	return formatGitLog(r.entries, r.total)
 }
 
+func (r *GitLogReducer) RecoveryInfo() (string, string, bool) {
+	visible := 0
+	for _, entry := range r.entries {
+		visible += entry.Count
+	}
+	if extra := r.total - visible; extra > 0 {
+		return shared.FullOutputRecovery(fmt.Sprintf("omitted %d commits", extra))
+	}
+	return shared.NoRecovery()
+}
+
 func (r *GitLogReducer) consume(chunk []byte) {
 	r.bytesParsed += len(chunk)
 	r.scanner.Consume(chunk, r.recordLine)
@@ -491,6 +502,19 @@ func (r *GitDiffReducer) Preview() string {
 		return header
 	}
 	return header + "\n" + strings.Join(r.summary, "\n")
+}
+
+func (r *GitDiffReducer) RecoveryInfo() (string, string, bool) {
+	switch {
+	case r.fileCount == 0 && len(r.patchFiles) == 0 && len(r.summary) == 0:
+		return shared.NoRecovery()
+	case len(r.patchFiles) > 0:
+		return shared.FullOutputRecovery("omitted full diff hunks")
+	case len(r.statEntries) > len(r.summary):
+		return shared.FullOutputRecovery(fmt.Sprintf("omitted %d diff summary entries", len(r.statEntries)-len(r.summary)))
+	default:
+		return shared.NoRecovery()
+	}
 }
 
 func (r *GitDiffReducer) displayFileCount() int {

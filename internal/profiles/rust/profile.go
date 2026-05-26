@@ -26,8 +26,10 @@ func Profiles(maxLines int) []engine.Profile {
 				return rustfilter.SummarizeCargoTest(exec.Stdout+"\n"+exec.Stderr, maxLines)
 			},
 			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return shared.NewBufferedTextReducer(true, true, func(input string) string {
+				return shared.NewBufferedTextReducerWithRecovery(true, true, func(input string) string {
 					return rustfilter.SummarizeCargoTest(input, budget.MaxLines)
+				}, func(input string) (string, string, bool) {
+					return rustfilter.CargoTestRecoveryInfo(input, budget.MaxLines)
 				})
 			},
 			ParseBytes: profilekit.ParseCombined,
@@ -56,8 +58,10 @@ func Profiles(maxLines int) []engine.Profile {
 				return rustfilter.SummarizeCargoBuild(exec.Stderr+"\n"+exec.Stdout, maxLines)
 			},
 			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return shared.NewBufferedTextReducer(true, true, func(input string) string {
+				return shared.NewBufferedTextReducerWithRecovery(true, true, func(input string) string {
 					return rustfilter.SummarizeCargoBuild(input, budget.MaxLines)
+				}, func(input string) (string, string, bool) {
+					return rustfilter.CargoBuildRecoveryInfo(input, budget.MaxLines)
 				})
 			},
 			ParseBytes: profilekit.ParseStderrFirst,
