@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.0](https://github.com/devr-tools/szr/compare/v0.4.0...v0.5.0) (2026-05-26)
+
+
+### Features
+
+* fix tests and updated the profiles strategies ([d6d4142](https://github.com/devr-tools/szr/commit/d6d4142eda1eb38733bba16d531e620945d9ec8d))
+* update commands and profile strategy ([14913ef](https://github.com/devr-tools/szr/commit/14913efa02775253ad13283b52fed133160e856f))
+
 ## [0.4.0](https://github.com/devr-tools/szr/compare/v0.3.0...v0.4.0) (2026-05-26)
 
 
