@@ -141,51 +141,67 @@ func autoRewriteCommand(words []string) (routePlan, bool) {
 		return routePlan{}, false
 	}
 	name := strings.ToLower(filepath.Base(words[0]))
-	switch name {
-	case "git":
-		if len(words) > 1 && (contains(words[1], "status", "diff", "log", "show") || words[1] == "ls-files") {
-			return routePlan{}, true
-		}
-	case "go":
-		if len(words) > 1 && contains(words[1], "test", "build", "vet", "list") {
-			return routePlan{}, true
-		}
-	case "find":
-		args, ok := rewriteFind(words)
-		if ok {
-			return routePlan{command: "find " + strings.Join(args, " "), structured: true}, true
-		}
-	case "grep":
-		args, ok := rewriteGrep(words)
-		if ok {
-			return routePlan{command: "grep " + strings.Join(args, " "), structured: true}, true
-		}
-	case "ls":
-		args, ok := rewriteLS(words)
-		if ok {
-			return routePlan{command: "ls " + strings.Join(args, " "), structured: true}, true
-		}
-	case "tree":
-		args, ok := rewriteTree(words)
-		if ok {
-			return routePlan{command: "ls " + strings.Join(args, " "), structured: true}, true
-		}
-	case "fd":
-		if isSafeFD(words) {
-			return routePlan{}, true
-		}
-	case "npm", "pnpm", "yarn", "bun", "pytest", "cargo", "docker", "kubectl", "gh", "uv", "poetry", "pip", "pip3", "ruff", "mypy", "make", "just", "task", "bazel", "ninja", "cmake", "terraform", "tofu", "helm", "gradle", "mvn", "clang-tidy", "clang-format", "bear", "ctest", "diff", "patch", "rg":
-		return routePlan{}, true
-	case "python", "python3":
-		if len(words) > 2 && words[1] == "-m" && contains(words[2], "pytest", "pip", "ruff", "mypy") {
-			return routePlan{}, true
-		}
-	case "cat":
-		if len(words) == 2 && !strings.HasPrefix(words[1], "-") {
-			return routePlan{}, true
-		}
+	if plan, ok, handled := autoRewriteStructuredCommand(name, words); handled {
+		return plan, ok
 	}
 	return routePlan{}, false
+}
+
+func autoRewriteStructuredCommand(name string, words []string) (routePlan, bool, bool) {
+	switch name {
+	case "git":
+		return routePlan{}, isGitStructured(words), true
+	case "go":
+		return routePlan{}, isGoStructured(words), true
+	case "find":
+		args, ok := rewriteFind(words)
+		plan, ok := rewriteStructuredCommand("find", args, ok)
+		return plan, ok, true
+	case "grep":
+		args, ok := rewriteGrep(words)
+		plan, ok := rewriteStructuredCommand("grep", args, ok)
+		return plan, ok, true
+	case "ls":
+		args, ok := rewriteLS(words)
+		plan, ok := rewriteStructuredCommand("ls", args, ok)
+		return plan, ok, true
+	case "tree":
+		args, ok := rewriteTree(words)
+		plan, ok := rewriteStructuredCommand("ls", args, ok)
+		return plan, ok, true
+	case "fd":
+		return routePlan{}, isSafeFD(words), true
+	case "npm", "pnpm", "yarn", "bun", "pytest", "cargo", "docker", "kubectl", "gh", "uv", "poetry", "pip", "pip3", "ruff", "mypy", "make", "just", "task", "bazel", "ninja", "cmake", "terraform", "tofu", "helm", "gradle", "mvn", "clang-tidy", "clang-format", "bear", "ctest", "diff", "patch", "rg":
+		return routePlan{}, true, true
+	case "python", "python3":
+		return routePlan{}, isPythonModuleStructured(words), true
+	case "cat":
+		return routePlan{}, isSimpleCat(words), true
+	}
+	return routePlan{}, false, false
+}
+
+func rewriteStructuredCommand(prefix string, args []string, ok bool) (routePlan, bool) {
+	if !ok {
+		return routePlan{}, false
+	}
+	return routePlan{command: prefix + " " + strings.Join(args, " "), structured: true}, true
+}
+
+func isGitStructured(words []string) bool {
+	return len(words) > 1 && (contains(words[1], "status", "diff", "log", "show") || words[1] == "ls-files")
+}
+
+func isGoStructured(words []string) bool {
+	return len(words) > 1 && contains(words[1], "test", "build", "vet", "list")
+}
+
+func isPythonModuleStructured(words []string) bool {
+	return len(words) > 2 && words[1] == "-m" && contains(words[2], "pytest", "pip", "ruff", "mypy")
+}
+
+func isSimpleCat(words []string) bool {
+	return len(words) == 2 && !strings.HasPrefix(words[1], "-")
 }
 
 func rewriteFind(words []string) ([]string, bool) {

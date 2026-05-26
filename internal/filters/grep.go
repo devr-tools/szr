@@ -138,45 +138,78 @@ func (r *RipgrepReducer) render(preview bool) string {
 		return "no matches"
 	}
 	out := make([]string, 0, r.maxLines+1)
-	footerLines := 0
-	if r.extraFiles > 0 {
-		footerLines++
-	}
-	if summarizeSuppressedSearchBuckets(r.suppressed) != "" {
-		footerLines++
-	}
 	for _, file := range r.order {
 		group := r.groups[file]
 		if group == nil {
 			continue
 		}
-		reserve := footerLines
-		if extra := group.count - len(group.previews); extra > 0 {
-			reserve++
-		}
-		if len(out)+1+reserve > r.maxLines {
+		reserve := r.renderReserve(group)
+		if !r.canRenderGroup(out, reserve) {
 			break
 		}
 		out = append(out, fmt.Sprintf("%s (%d matches)", file, group.count))
-		availablePreviews := maxInt(0, r.maxLines-len(out)-reserve)
-		if availablePreviews > len(group.previews) {
-			availablePreviews = len(group.previews)
-		}
+		availablePreviews := r.renderPreviewCount(out, group, reserve)
 		out = append(out, group.previews[:availablePreviews]...)
-		if extra := group.count - availablePreviews; extra > 0 && len(out) < r.maxLines-reserve+1 {
-			out = append(out, fmt.Sprintf("  ... +%d more", extra))
-		}
+		out = r.appendExtraMatches(out, group, availablePreviews, reserve)
 	}
-	if r.extraFiles > 0 && len(out) < r.maxLines {
-		out = append(out, fmt.Sprintf("... +%d more files", r.extraFiles))
-	}
-	if line := summarizeSuppressedSearchBuckets(r.suppressed); line != "" && len(out) < r.maxLines+1 {
-		out = append(out, line)
-	}
+	out = r.appendFooter(out)
 	if preview && len(out) > r.maxLines {
 		out = out[:r.maxLines]
 	}
 	return strings.Join(out, "\n")
+}
+
+func (r *RipgrepReducer) renderReserve(group *ripgrepGroup) int {
+	reserve := r.footerLines()
+	if group.count > len(group.previews) {
+		reserve++
+	}
+	return reserve
+}
+
+func (r *RipgrepReducer) footerLines() int {
+	lines := 0
+	if r.extraFiles > 0 {
+		lines++
+	}
+	if r.suppressedSummary() != "" {
+		lines++
+	}
+	return lines
+}
+
+func (r *RipgrepReducer) suppressedSummary() string {
+	return summarizeSuppressedSearchBuckets(r.suppressed)
+}
+
+func (r *RipgrepReducer) canRenderGroup(out []string, reserve int) bool {
+	return len(out)+1+reserve <= r.maxLines
+}
+
+func (r *RipgrepReducer) renderPreviewCount(out []string, group *ripgrepGroup, reserve int) int {
+	available := maxInt(0, r.maxLines-len(out)-reserve)
+	if available > len(group.previews) {
+		return len(group.previews)
+	}
+	return available
+}
+
+func (r *RipgrepReducer) appendExtraMatches(out []string, group *ripgrepGroup, shown, reserve int) []string {
+	extra := group.count - shown
+	if extra <= 0 || len(out) >= r.maxLines-reserve+1 {
+		return out
+	}
+	return append(out, fmt.Sprintf("  ... +%d more", extra))
+}
+
+func (r *RipgrepReducer) appendFooter(out []string) []string {
+	if r.extraFiles > 0 && len(out) < r.maxLines {
+		out = append(out, fmt.Sprintf("... +%d more files", r.extraFiles))
+	}
+	if summary := r.suppressedSummary(); summary != "" && len(out) < r.maxLines+1 {
+		out = append(out, summary)
+	}
+	return out
 }
 
 func suppressedBucketTotal(counts map[string]int) int {
