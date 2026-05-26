@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.3.0](https://github.com/devr-tools/szr/compare/v0.2.0...v0.3.0) (2026-05-26)
+
+
+### Features
+
+* add commands add settings ([1caaf56](https://github.com/devr-tools/szr/commit/1caaf5699c2503bc409a748e238691ac8bf02406))
+* add settings add commands ([e135d70](https://github.com/devr-tools/szr/commit/e135d704a21b5617403e635396355be1d9c7b4a0))
+* add settings add commands ([bd47581](https://github.com/devr-tools/szr/commit/bd4758148a3cb3ee4dac4d5e358234366c2f25fb))
+* fix commmits ([dc57b75](https://github.com/devr-tools/szr/commit/dc57b75c3ac3baa36780a0dfb7a0809b2a38b906))
+* fix semgrep ([c0f6ce7](https://github.com/devr-tools/szr/commit/c0f6ce7d257ff4ca3df81b426309eb560187f518))
+* release file ([d0c4b25](https://github.com/devr-tools/szr/commit/d0c4b25d82bcdeab84594801e79f9c66435172a1))
+
+
+### Bug Fixes
+
+* use semver-compatible release tags ([3ab318e](https://github.com/devr-tools/szr/commit/3ab318e069f6f7b55882880444aaac8a1d15326b))
+
 ## [0.2.0](https://github.com/devr-tools/szr/compare/szr-v0.1.0...szr-v0.2.0) (2026-05-25)
 
 
