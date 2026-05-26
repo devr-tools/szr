@@ -25,7 +25,7 @@ Pushes to `main` or `master` trigger `.github/workflows/cd.yml`. That workflow r
 
 When the release PR is merged:
 
-- `release-please` creates the stable tag
+- `release-please` creates the stable tag, currently in `szr-v1.2.3` form
 - the tag push triggers `.github/workflows/release.yml`
 - `goreleaser` publishes release artifacts and `checksums.txt`
 - the workflow also uploads the `dist/*` bundle as a GitHub Actions artifact for the tagged release run
@@ -57,10 +57,10 @@ Stable releases are produced from `main` or `master` through `release-please`, w
 If release automation needs help, there are two manual fallback paths:
 
 1. Dispatch `.github/workflows/release.yml` with:
-   - `tag=v1.2.3` and `prerelease=false` for a stable release
+   - `tag=v1.2.3` or `tag=szr-v1.2.3` and `prerelease=false` for a stable release
    - `tag=v1.2.3-rc.4` and `prerelease=true` for a prerelease
    - the workflow also normalizes common inputs like `1.2.3`, `refs/tags/v1.2.3`, `tag=v1.2.3`, or `szr: v1.2.3`
-2. Push a tag that matches `v*`, which still triggers `.github/workflows/release.yml`:
+2. Push a tag that matches `v*` or `szr-v*`, which still triggers `.github/workflows/release.yml`:
 
 ```bash
 git push origin v0.1.0
