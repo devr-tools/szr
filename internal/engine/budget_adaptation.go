@@ -150,7 +150,7 @@ func adaptBudgetConservatively(
 	suggestion history.BudgetSuggestion,
 	opts HistoryBudgetAdapterOptions,
 ) (OutputBudget, bool) {
-	adapted := suggested
+	var adapted OutputBudget
 	switch suggestion.Direction {
 	case history.BudgetSuggestionTighten:
 		tightest := scaleBudgetByPercent(base, 100-opts.MaxTightenPercent)
