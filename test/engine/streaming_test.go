@@ -61,6 +61,48 @@ func TestExecuteUsesStreamReducerAndStreamsTeeOnFailure(t *testing.T) {
 	}
 }
 
+func TestExecuteWritesFailureTeeWithoutStreamReducer(t *testing.T) {
+	t.Parallel()
+
+	binDir := t.TempDir()
+	failPath := testutil.WriteExecutable(t, binDir, "renderfail", "#!/bin/sh\nprintf 'stdout-one\\n'\nprintf 'stderr-one\\n' >&2\nexit 9\n")
+
+	root := t.TempDir()
+	paths := testutil.Paths(root)
+	testutil.EnsurePaths(t, paths)
+
+	cfg := config.Default()
+	e := engine.New(cfg, paths, history.New(paths.HistoryFile), []engine.Profile{{
+		Name:       "render-only",
+		Confidence: engine.ConfidenceHigh,
+		Match: func(inv engine.Invocation) bool {
+			return len(inv.Display) > 0 && inv.Display[0] == "renderfail"
+		},
+		Render: func(_ engine.Invocation, exec engine.Execution) string {
+			return exec.Stderr
+		},
+	}})
+
+	result, err := e.Execute(context.Background(), engine.Invocation{
+		Command: []string{failPath},
+		Display: []string{"renderfail"},
+		Cwd:     root,
+	}, false)
+	if err != nil {
+		t.Fatalf("execute render-only failure: %v", err)
+	}
+	if result.ExitCode != 9 {
+		t.Fatalf("expected exit 9, got %#v", result)
+	}
+	if result.TeePath == "" {
+		t.Fatalf("expected tee path for non-stream reducer failure, got %#v", result)
+	}
+	teeData := string(testutil.MustReadFile(t, result.TeePath))
+	if !strings.Contains(teeData, "stdout-one") || !strings.Contains(teeData, "stderr-one") {
+		t.Fatalf("expected tee output to contain both streams, got %q", teeData)
+	}
+}
+
 func TestExecuteBypassesTinyStreamOutput(t *testing.T) {
 	t.Parallel()
 
@@ -211,6 +253,57 @@ func TestExecuteCountsTokensWithoutFullyCapturingIgnoredStream(t *testing.T) {
 	}
 }
 
+func TestExecuteCountsTokensWithoutFullyCapturingIgnoredStdout(t *testing.T) {
+	t.Parallel()
+
+	binDir := t.TempDir()
+	mixedErrPath := testutil.WriteExecutable(t, binDir, "mixederr", "#!/bin/sh\nprintf 'very noisy ignored stdout line\\n'\nprintf 'primary stderr\\n' >&2\n")
+
+	root := t.TempDir()
+	paths := testutil.Paths(root)
+	testutil.EnsurePaths(t, paths)
+
+	cfg := config.Default()
+	store := history.New(paths.HistoryFile)
+	e := engine.New(cfg, paths, store, []engine.Profile{{
+		Name:             "stderr-only-stream",
+		Confidence:       engine.ConfidenceHigh,
+		StreamPreference: engine.StreamStderrOnly,
+		Match: func(inv engine.Invocation) bool {
+			return len(inv.Display) > 0 && inv.Display[0] == "mixederr"
+		},
+		StreamRender: func(engine.Invocation, engine.OutputBudget) engine.StreamReducer {
+			return &diagnosticReducer{}
+		},
+	}})
+
+	result, err := e.Execute(context.Background(), engine.Invocation{
+		Command: []string{mixedErrPath},
+		Display: []string{"mixederr"},
+		Cwd:     root,
+	}, false)
+	if err != nil {
+		t.Fatalf("execute mixed stderr output: %v", err)
+	}
+	if result.Display != "primary stderr" {
+		t.Fatalf("expected stderr-only render, got %#v", result)
+	}
+	if strings.Contains(result.RawCombined, "ignored stdout") {
+		t.Fatalf("did not expect ignored stdout to be fully buffered, got %#v", result)
+	}
+
+	records, loadErr := store.LoadAll()
+	if loadErr != nil {
+		t.Fatalf("load history: %v", loadErr)
+	}
+	if len(records) != 1 {
+		t.Fatalf("expected one history record, got %#v", records)
+	}
+	if records[0].RawTokens <= history.EstimateTokens("primary stderr") {
+		t.Fatalf("expected raw token count to include ignored stdout, got %#v", records[0])
+	}
+}
+
 func TestVerboseCaptureKeepsRawCombined(t *testing.T) {
 	t.Parallel()
 
@@ -245,6 +338,44 @@ func TestVerboseCaptureKeepsRawCombined(t *testing.T) {
 	}
 	if !strings.Contains(result.RawCombined, "stderr detail") {
 		t.Fatalf("expected verbose execution to keep full raw output, got %#v", result)
+	}
+}
+
+func TestExecuteStreamsBothChannelsByDefault(t *testing.T) {
+	t.Parallel()
+
+	binDir := t.TempDir()
+	bothPath := testutil.WriteExecutable(t, binDir, "bothstreams", "#!/bin/sh\nprintf 'stdout-one\\nstdout-two\\nstdout-three\\nstdout-four\\n'\nprintf 'stderr-one\\nstderr-two\\nstderr-three\\nstderr-four\\n' >&2\nexit 7\n")
+
+	root := t.TempDir()
+	paths := testutil.Paths(root)
+	testutil.EnsurePaths(t, paths)
+
+	cfg := config.Default()
+	e := engine.New(cfg, paths, history.New(paths.HistoryFile), []engine.Profile{{
+		Name:       "dual-stream",
+		Confidence: engine.ConfidenceHigh,
+		Match: func(inv engine.Invocation) bool {
+			return len(inv.Display) > 0 && inv.Display[0] == "bothstreams"
+		},
+		StreamRender: func(engine.Invocation, engine.OutputBudget) engine.StreamReducer {
+			return &combinedReducer{}
+		},
+	}})
+
+	result, err := e.Execute(context.Background(), engine.Invocation{
+		Command: []string{bothPath},
+		Display: []string{"bothstreams"},
+		Cwd:     root,
+	}, false)
+	if err != nil {
+		t.Fatalf("execute dual stream: %v", err)
+	}
+	if result.ExitCode != 7 {
+		t.Fatalf("expected failure exit code, got %#v", result)
+	}
+	if !strings.Contains(result.Display, "stdout-one") || !strings.Contains(result.Display, "stderr-one") {
+		t.Fatalf("expected default stream mode to reduce both channels, got %#v", result)
 	}
 }
 
@@ -502,6 +633,38 @@ func (r *doneReducer) Preview() string {
 
 type previewReducer struct {
 	lines []string
+}
+
+type combinedReducer struct {
+	lines []string
+}
+
+func (r *combinedReducer) ConsumeStdout(chunk []byte) {
+	r.consume(chunk)
+}
+
+func (r *combinedReducer) ConsumeStderr(chunk []byte) {
+	r.consume(chunk)
+}
+
+func (r *combinedReducer) consume(chunk []byte) {
+	for _, line := range strings.Split(strings.TrimSpace(string(chunk)), "\n") {
+		if line != "" {
+			r.lines = append(r.lines, line)
+		}
+	}
+}
+
+func (r *combinedReducer) Result() string {
+	return strings.Join(r.lines, "\n")
+}
+
+func (r *combinedReducer) BytesParsed() int {
+	return len(r.Result())
+}
+
+func (r *combinedReducer) FallbackUsed() bool {
+	return false
 }
 
 func (r *previewReducer) ConsumeStdout(chunk []byte) {
