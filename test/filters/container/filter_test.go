@@ -53,3 +53,24 @@ func TestSummarizeDockerLogs(t *testing.T) {
 		}
 	}
 }
+
+func TestDockerRecoveryInfo(t *testing.T) {
+	psInput := strings.Join([]string{
+		"api\tUp 3 minutes\tapp:latest",
+		"worker\tExited (1) 10 seconds ago\tworker:latest",
+		"cron\tUp 1 minute\tcron:latest",
+	}, "\n")
+	if kind, summary, requireRawCapture := containerfilter.DockerPSRecoveryInfo(psInput, 2); kind != "full-output" || summary != "omitted 2 additional containers" || !requireRawCapture {
+		t.Fatalf("unexpected docker ps recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+
+	logsInput := strings.Join([]string{
+		"api-1  | ERROR failed to connect to db",
+		"api-1  | WARN backing off",
+		"worker-1  | panic: bad queue state",
+		"worker-1  | fatal: exiting",
+	}, "\n")
+	if kind, summary, requireRawCapture := containerfilter.DockerLogsRecoveryInfo(logsInput, 3); kind != "full-output" || summary != "omitted 2 additional log lines" || !requireRawCapture {
+		t.Fatalf("unexpected docker logs recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+}

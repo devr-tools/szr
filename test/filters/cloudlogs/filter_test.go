@@ -132,3 +132,17 @@ func TestSummarizeCloudLogsHerokuText(t *testing.T) {
 		}
 	}
 }
+
+func TestCloudLogsRecoveryInfo(t *testing.T) {
+	t.Parallel()
+
+	input := strings.Join([]string{
+		"2026-05-25T10:00:00Z api ERROR timeout talking to redis",
+		"2026-05-25T10:00:05Z api ERROR timeout talking to redis",
+		"2026-05-25T10:01:00Z worker WARN retry scheduled",
+		"2026-05-25T10:01:05Z worker ERROR queue stalled",
+	}, "\n")
+	if kind, summary, requireRawCapture := cloudfilter.CloudLogsRecoveryInfo(input, 4); kind != "full-output" || summary != "omitted 1 additional log lines" || !requireRawCapture {
+		t.Fatalf("unexpected cloud logs recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+}

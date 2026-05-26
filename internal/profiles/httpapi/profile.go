@@ -28,9 +28,16 @@ func Profiles(maxLines int) []engine.Profile {
 				return httpapifilter.SummarizeHTTPAPI(exec.Stdout+"\n"+exec.Stderr, maxLines)
 			},
 			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return shared.NewBufferedTextReducer(true, true, func(input string) string {
-					return httpapifilter.SummarizeHTTPAPI(input, budget.MaxLines)
-				})
+				return shared.NewBufferedTextReducerWithRecovery(
+					true,
+					true,
+					func(input string) string {
+						return httpapifilter.SummarizeHTTPAPI(input, budget.MaxLines)
+					},
+					func(input string) (string, string, bool) {
+						return httpapifilter.HTTPAPIRecoveryInfo(input, budget.MaxLines)
+					},
+				)
 			},
 			ParseBytes: profilekit.ParseCombined,
 			Explain: []string{

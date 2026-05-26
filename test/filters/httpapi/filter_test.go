@@ -49,3 +49,20 @@ func TestSummarizeHTTPAPI(t *testing.T) {
 		}
 	}
 }
+
+func TestHTTPAPIRecoveryInfo(t *testing.T) {
+	input := strings.Join([]string{
+		"HTTP/1.1 429 Too Many Requests",
+		"content-type: text/plain",
+		"",
+		"rate limit exceeded",
+		"retry later",
+		"contact support",
+		"request id: req_123",
+	}, "\n")
+
+	kind, summary, requireRawCapture := httpapifilter.HTTPAPIRecoveryInfo(input, 3)
+	if kind != "full-output" || summary != "omitted 2 additional lines" || !requireRawCapture {
+		t.Fatalf("unexpected HTTP API recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+}

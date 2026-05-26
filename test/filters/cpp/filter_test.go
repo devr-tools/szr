@@ -47,3 +47,27 @@ func TestSummarizeClangTooling(t *testing.T) {
 		}
 	}
 }
+
+func TestCPPRecoveryInfo(t *testing.T) {
+	ctestInput := strings.Join([]string{
+		"Test project /tmp/build",
+		"1/2 Test #1: api_smoke ....................***Failed    0.02 sec",
+		"src/api_test.cpp:19: Assertion failed",
+		"The following tests FAILED:",
+		"1 - api_smoke (Failed)",
+	}, "\n")
+	if kind, summary, requireRawCapture := cppfilter.CTestRecoveryInfo(ctestInput, 3); kind != "full-output" || summary != "omitted 1 additional lines" || !requireRawCapture {
+		t.Fatalf("unexpected ctest recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+
+	clangInput := strings.Join([]string{
+		"Running clang-tidy",
+		"src/main.cpp:10:5: warning: use nullptr [modernize-use-nullptr]",
+		"include/app.h:7:2: error: expected ';' after class",
+		"src/lib.cpp:20:7: warning: dead store [clang-analyzer-deadcode.DeadStores]",
+		"bear: compiled 12 translation units",
+	}, "\n")
+	if kind, summary, requireRawCapture := cppfilter.ClangToolingRecoveryInfo(clangInput, 3); kind != "full-output" || summary != "omitted 1 additional lines" || !requireRawCapture {
+		t.Fatalf("unexpected clang recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+}

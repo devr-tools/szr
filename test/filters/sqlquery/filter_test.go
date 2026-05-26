@@ -65,3 +65,21 @@ func TestSummarizeSQLQueryJSONOutput(t *testing.T) {
 		}
 	}
 }
+
+func TestSQLQueryRecoveryInfo(t *testing.T) {
+	tableInput := strings.Join([]string{
+		"| id | name  |",
+		"| 1  | alpha |",
+		"| 2  | beta  |",
+		"| 3  | gamma |",
+		"3 rows in set (0.01 sec)",
+	}, "\n")
+	if kind, summary, requireRawCapture := sqlfilter.SQLQueryRecoveryInfo(tableInput, 3); kind != "full-output" || summary != "omitted 2 additional rows or lines" || !requireRawCapture {
+		t.Fatalf("unexpected SQL table recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+
+	jsonInput := `[{"id":1,"name":"alpha"},{"id":2,"name":"beta"},{"id":3,"name":"gamma"}]`
+	if kind, summary, requireRawCapture := sqlfilter.SQLQueryRecoveryInfo(jsonInput, 2); kind != "full-output" || summary != "omitted 2 additional rows or lines" || !requireRawCapture {
+		t.Fatalf("unexpected SQL JSON recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+}

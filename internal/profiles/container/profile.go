@@ -32,9 +32,16 @@ func dockerPSProfile(maxLines int) engine.Profile {
 			return containerfilter.SummarizeDockerPS(exec.Stdout, maxLines)
 		},
 		StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-			return shared.NewBufferedTextReducer(true, false, func(input string) string {
-				return containerfilter.SummarizeDockerPS(input, budget.MaxLines)
-			})
+			return shared.NewBufferedTextReducerWithRecovery(
+				true,
+				false,
+				func(input string) string {
+					return containerfilter.SummarizeDockerPS(input, budget.MaxLines)
+				},
+				func(input string) (string, string, bool) {
+					return containerfilter.DockerPSRecoveryInfo(input, budget.MaxLines)
+				},
+			)
 		},
 		ParseBytes: profilekit.ParseStdout,
 		Explain: []string{
@@ -62,9 +69,16 @@ func dockerLogsProfile(maxLines int) engine.Profile {
 			return containerfilter.SummarizeDockerLogs(exec.Stdout+"\n"+exec.Stderr, maxLines)
 		},
 		StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-			return shared.NewBufferedTextReducer(true, true, func(input string) string {
-				return containerfilter.SummarizeDockerLogs(input, budget.MaxLines)
-			})
+			return shared.NewBufferedTextReducerWithRecovery(
+				true,
+				true,
+				func(input string) string {
+					return containerfilter.SummarizeDockerLogs(input, budget.MaxLines)
+				},
+				func(input string) (string, string, bool) {
+					return containerfilter.DockerLogsRecoveryInfo(input, budget.MaxLines)
+				},
+			)
 		},
 		ParseBytes: profilekit.ParseCombined,
 		Explain: []string{

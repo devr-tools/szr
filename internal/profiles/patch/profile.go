@@ -26,9 +26,16 @@ func Profiles(maxLines int) []engine.Profile {
 				return patchfilter.SummarizePatchDiff(exec.Stdout+"\n"+exec.Stderr, maxLines)
 			},
 			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return shared.NewBufferedTextReducer(true, true, func(input string) string {
-					return patchfilter.SummarizePatchDiff(input, budget.MaxLines)
-				})
+				return shared.NewBufferedTextReducerWithRecovery(
+					true,
+					true,
+					func(input string) string {
+						return patchfilter.SummarizePatchDiff(input, budget.MaxLines)
+					},
+					func(input string) (string, string, bool) {
+						return patchfilter.PatchDiffRecoveryInfo(input, budget.MaxLines)
+					},
+				)
 			},
 			ParseBytes: profilekit.ParseCombined,
 			Explain: []string{

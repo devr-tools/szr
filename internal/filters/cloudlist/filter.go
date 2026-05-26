@@ -9,6 +9,23 @@ import (
 )
 
 func SummarizeCloudList(input string, maxLines int) string {
+	return summarizeCloudListResult(input, maxLines).Text
+}
+
+func CloudListRecoveryInfo(input string, maxLines int) (string, string, bool) {
+	result := summarizeCloudListResult(input, maxLines)
+	if result.OmittedCount <= 0 {
+		return shared.NoRecovery()
+	}
+	return shared.FullOutputRecovery(fmt.Sprintf("omitted %d additional resources", result.OmittedCount))
+}
+
+type cloudListSummaryResult struct {
+	Text         string
+	OmittedCount int
+}
+
+func summarizeCloudListResult(input string, maxLines int) cloudListSummaryResult {
 	if maxLines <= 0 {
 		maxLines = 10
 	}
@@ -16,40 +33,47 @@ func SummarizeCloudList(input string, maxLines int) string {
 	clean := shared.StripANSI(input)
 	trimmed := strings.TrimSpace(clean)
 	if trimmed == "" {
-		return "ok"
+		return cloudListSummaryResult{Text: "ok"}
 	}
 
-	if summary, ok := summarizeStructured(trimmed, maxLines); ok {
-		return summary
+	if summary, ok, omitted := summarizeStructured(trimmed, maxLines); ok {
+		return cloudListSummaryResult{
+			Text:         summary,
+			OmittedCount: omitted,
+		}
 	}
-	return shared.CompactLines(clean, maxLines)
+	return cloudListSummaryResult{Text: shared.CompactLines(clean, maxLines)}
 }
 
-func summarizeStructured(input string, maxLines int) (string, bool) {
+func summarizeStructured(input string, maxLines int) (string, bool, int) {
 	if input == "" {
-		return "", false
+		return "", false, 0
 	}
 	switch input[0] {
 	case '{', '[':
 	default:
-		return "", false
+		return "", false, 0
 	}
 
 	var decoded any
 	if err := json.Unmarshal([]byte(input), &decoded); err != nil {
-		return "", false
+		return "", false, 0
 	}
 
 	label, records := extractRecords(decoded)
 	if len(records) == 0 {
-		return "", false
+		return "", false, 0
 	}
 
 	out := []string{fmt.Sprintf("%s: %d", label, len(records))}
 	for _, record := range records {
 		out = append(out, shared.Clip(summarizeRecord(record), 160))
 	}
-	return shared.JoinLimitedLines(out, maxLines), true
+	omitted := 0
+	if len(out) > maxLines {
+		omitted = len(out) - maxLines
+	}
+	return shared.JoinLimitedLines(out, maxLines), true, omitted
 }
 
 func extractRecords(value any) (string, []map[string]any) {

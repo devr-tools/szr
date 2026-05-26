@@ -1,12 +1,30 @@
 package cpp
 
 import (
+	"strconv"
 	"strings"
 
 	shared "github.com/devr-tools/szr/internal/filters"
 )
 
 func SummarizeCTest(input string, maxLines int) string {
+	return summarizeCTestResult(input, maxLines).Text
+}
+
+func CTestRecoveryInfo(input string, maxLines int) (string, string, bool) {
+	result := summarizeCTestResult(input, maxLines)
+	if result.OmittedCount <= 0 {
+		return shared.NoRecovery()
+	}
+	return shared.FullOutputRecovery("omitted " + strconv.Itoa(result.OmittedCount) + " additional lines")
+}
+
+type cppSummaryResult struct {
+	Text         string
+	OmittedCount int
+}
+
+func summarizeCTestResult(input string, maxLines int) cppSummaryResult {
 	if maxLines <= 0 {
 		maxLines = 12
 	}
@@ -38,7 +56,7 @@ func SummarizeCTest(input string, maxLines int) string {
 	lines = shared.UniqueStrings(shared.FoldConsecutiveLines(lines))
 	summaries = shared.UniqueStrings(shared.FoldConsecutiveLines(summaries))
 	if len(lines) == 0 && len(summaries) == 0 {
-		return shared.SummarizeGenericFailure(clean, maxLines)
+		return cppSummaryResult{Text: shared.SummarizeGenericFailure(clean, maxLines)}
 	}
 	stackLines := []string{}
 	rootLines := []string{}
@@ -49,10 +67,22 @@ func SummarizeCTest(input string, maxLines int) string {
 		}
 		rootLines = append(rootLines, line)
 	}
-	return shared.JoinLimitedLines(append(append(rootLines, shared.SelectUniqueAnchoredLines(stackLines, maxLines/3+1)...), summaries...), maxLines)
+	return joinCPPSummary(rootLines, stackLines, summaries, maxLines)
 }
 
 func SummarizeClangTooling(input string, maxLines int) string {
+	return summarizeClangToolingResult(input, maxLines).Text
+}
+
+func ClangToolingRecoveryInfo(input string, maxLines int) (string, string, bool) {
+	result := summarizeClangToolingResult(input, maxLines)
+	if result.OmittedCount <= 0 {
+		return shared.NoRecovery()
+	}
+	return shared.FullOutputRecovery("omitted " + strconv.Itoa(result.OmittedCount) + " additional lines")
+}
+
+func summarizeClangToolingResult(input string, maxLines int) cppSummaryResult {
 	if maxLines <= 0 {
 		maxLines = 12
 	}
@@ -87,7 +117,7 @@ func SummarizeClangTooling(input string, maxLines int) string {
 	lines = shared.UniqueStrings(shared.FoldConsecutiveLines(lines))
 	summaries = shared.UniqueStrings(shared.FoldConsecutiveLines(summaries))
 	if len(lines) == 0 && len(summaries) == 0 {
-		return shared.SummarizeGenericFailure(clean, maxLines)
+		return cppSummaryResult{Text: shared.SummarizeGenericFailure(clean, maxLines)}
 	}
 	stackLines := []string{}
 	rootLines := []string{}
@@ -98,5 +128,18 @@ func SummarizeClangTooling(input string, maxLines int) string {
 		}
 		rootLines = append(rootLines, line)
 	}
-	return shared.JoinLimitedLines(append(append(rootLines, shared.SelectUniqueAnchoredLines(stackLines, maxLines/3+1)...), summaries...), maxLines)
+	return joinCPPSummary(rootLines, stackLines, summaries, maxLines)
+}
+
+func joinCPPSummary(rootLines, stackLines, summaries []string, maxLines int) cppSummaryResult {
+	out := append([]string{}, rootLines...)
+	out = append(out, shared.SelectUniqueAnchoredLines(stackLines, maxLines/3+1)...)
+	out = append(out, summaries...)
+	result := cppSummaryResult{
+		Text: shared.JoinLimitedLines(out, maxLines),
+	}
+	if len(out) > maxLines {
+		result.OmittedCount = len(out) - maxLines
+	}
+	return result
 }

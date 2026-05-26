@@ -26,3 +26,18 @@ func TestSummarizeBuildSystem(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildSystemRecoveryInfo(t *testing.T) {
+	input := strings.Join([]string{
+		"FAILED: src/app.cpp.o",
+		"src/app.cpp:12:3: error: use of undeclared identifier 'boom'",
+		"src/app.cpp:14:2: note: candidate function not viable",
+		"src/lib.cpp:20:7: error: no member named 'x' in 'Thing'",
+		"ninja: build stopped: subcommand failed.",
+	}, "\n")
+
+	kind, summary, requireRawCapture := buildfilter.BuildSystemRecoveryInfo(input, 3)
+	if kind != "full-output" || summary != "omitted 1 additional lines" || !requireRawCapture {
+		t.Fatalf("unexpected build recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+}

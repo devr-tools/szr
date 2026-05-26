@@ -56,3 +56,21 @@ func TestSQLQueryProfileRender(t *testing.T) {
 		}
 	}
 }
+
+func TestSQLQueryProfileStreamRecovery(t *testing.T) {
+	list := sqlqueryprofiles.Profiles(6)
+	profile := testutil.FindProfile(t, list, "sql-query")
+
+	stream := profile.StreamRender(engine.Invocation{}, engine.OutputBudget{MaxLines: 2})
+	stream.ConsumeStdout([]byte(`[{"id":1,"name":"alpha"},{"id":2,"name":"beta"},{"id":3,"name":"gamma"}]`))
+
+	recoveryStream, ok := stream.(interface {
+		RecoveryInfo() (string, string, bool)
+	})
+	if !ok {
+		t.Fatalf("expected recovery-capable SQL reducer, got %T", stream)
+	}
+	if kind, summary, requireRawCapture := recoveryStream.RecoveryInfo(); kind != "full-output" || summary != "omitted 2 additional rows or lines" || !requireRawCapture {
+		t.Fatalf("unexpected SQL recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+}

@@ -42,3 +42,21 @@ func TestJSONQueryProfileRender(t *testing.T) {
 		}
 	}
 }
+
+func TestJSONQueryProfileStreamRecovery(t *testing.T) {
+	list := jsonqueryprofiles.Profiles(6)
+	profile := testutil.FindProfile(t, list, "json-query")
+
+	stream := profile.StreamRender(engine.Invocation{}, engine.OutputBudget{MaxLines: 4})
+	stream.ConsumeStdout([]byte(`{"user":{"id":7,"name":"alex","team":{"id":"t_1","name":"platform"}},"items":[1,2,3],"meta":{"page":1,"total":10}}`))
+
+	recoveryStream, ok := stream.(interface {
+		RecoveryInfo() (string, string, bool)
+	})
+	if !ok {
+		t.Fatalf("expected recovery-capable json-query reducer, got %T", stream)
+	}
+	if kind, summary, requireRawCapture := recoveryStream.RecoveryInfo(); kind != "full-output" || summary != "omitted 7 additional lines" || !requireRawCapture {
+		t.Fatalf("unexpected json-query recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+}

@@ -43,3 +43,25 @@ func TestCloudLogsProfileRender(t *testing.T) {
 		}
 	}
 }
+
+func TestCloudLogsProfileStreamRecovery(t *testing.T) {
+	list := cloudprofiles.Profiles(6)
+	profile := testutil.FindProfile(t, list, "cloud-logs")
+	stream := profile.StreamRender(engine.Invocation{}, engine.OutputBudget{MaxLines: 4})
+	stream.ConsumeStdout([]byte(strings.Join([]string{
+		"2026-05-25T10:00:00Z api ERROR timeout talking to redis",
+		"2026-05-25T10:00:05Z api ERROR timeout talking to redis",
+		"2026-05-25T10:01:00Z worker WARN retry scheduled",
+		"2026-05-25T10:01:05Z worker ERROR queue stalled",
+	}, "\n")))
+
+	recoveryStream, ok := stream.(interface {
+		RecoveryInfo() (string, string, bool)
+	})
+	if !ok {
+		t.Fatalf("expected recovery-capable cloud-logs reducer, got %T", stream)
+	}
+	if kind, summary, requireRawCapture := recoveryStream.RecoveryInfo(); kind != "full-output" || summary != "omitted 1 additional log lines" || !requireRawCapture {
+		t.Fatalf("unexpected cloud-logs recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+}

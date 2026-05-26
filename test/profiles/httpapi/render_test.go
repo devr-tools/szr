@@ -52,3 +52,22 @@ func TestHTTPAPIProfileRender(t *testing.T) {
 		t.Fatal("expected HTTP API stream reducer to track parsed bytes")
 	}
 }
+
+func TestHTTPAPIProfileStreamRecovery(t *testing.T) {
+	list := httpapiprofiles.Profiles(10)
+	profile := testutil.FindProfile(t, list, "http-api")
+
+	stream := profile.StreamRender(engine.Invocation{}, engine.OutputBudget{MaxLines: 3})
+	stream.ConsumeStderr([]byte("HTTP/1.1 429 Too Many Requests\ncontent-type: text/plain\n\n"))
+	stream.ConsumeStdout([]byte("rate limit exceeded\nretry later\ncontact support\nrequest id: req_123\n"))
+
+	recoveryStream, ok := stream.(interface {
+		RecoveryInfo() (string, string, bool)
+	})
+	if !ok {
+		t.Fatalf("expected recovery-capable HTTP API reducer, got %T", stream)
+	}
+	if kind, summary, requireRawCapture := recoveryStream.RecoveryInfo(); kind != "full-output" || summary != "omitted 2 additional lines" || !requireRawCapture {
+		t.Fatalf("unexpected HTTP API recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+}

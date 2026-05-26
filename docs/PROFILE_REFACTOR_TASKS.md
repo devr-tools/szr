@@ -30,37 +30,36 @@ This document breaks the `profiles` refactor into agent-sized tasks. The goal is
 7. Write contributor docs by ecosystem and extension path.
 8. Migrate profiles incrementally.
 
-## Active Delegation
+## Current Status
 
-Current parallel workstreams:
+Completed and integrated:
 
-- `Task 4` is delegated to agent `Lovelace`.
-  - Scope: reusable profile builders plus representative migration in `git` and `javascript`.
-  - Status: `completed and integrated`
-- `Task 5` is delegated to agent `Poincare`.
-  - Scope: declarative fallback reducer layer for simple line-based reducers.
-  - Status: `runtime landed; engine fallback adoption landed; broader integration still in progress`
-- `Task 6` is delegated as a split migration wave.
-  - `Worker A`
-  - Scope: non-stream `Render`-only summarizers and adjacent tests/docs.
-  - Write scope: `internal/filters/**` for non-stream summarizers, `internal/profiles/**` only if needed to consume already-existing recovery-aware helpers, `test/filters/**`, and this task doc only if the worker finishes a meaningful slice.
-  - Status: `spawned`
-  - Remaining slices after worker A: additional stream reducers, profile-local renderers that still omit content without recovery, and any remaining family-specific truncators.
-- `Task 7` is delegated to agent `Dewey`.
-  - Scope: contributor docs for `git`, `javascript`, and generic fallback/declarative reducers.
-  - Status: `spawned`
-- `Task 8` is delegated to agent `Hilbert` for a narrow first slice only.
-  - Scope: search/path-list family migration, because the needed infrastructure is already merged for that family.
-  - Status: `spawned`
+- Task 1 architecture contracts
+- Task 2 command classification layer
+- Task 3 explicit profile capabilities
+- Task 4 reusable profile builders with representative `git` and `javascript` migration
+- Task 7 contributor docs for `git`, `javascript`, and generic fallback reducers
+- Task 8 first migration slice for search/path-list families
 
-Dependency guardrails for active agents:
+In progress:
+
+- Task 5 declarative fallback reducers
+  - Runtime, builtin specs, validation, and filter helpers landed.
+  - Engine fallback adoption landed for unmatched commands.
+  - Remaining scope: broader configurable adoption beyond the generic fallback path and any additional builtin reducers that justify declarative treatment.
+- Task 6 truncation and recovery policy
+  - Shared recovery contract and engine hinting landed.
+  - Representative stream and non-stream migrations landed for `git`, search/path-list, generic failure compaction, directory listing, and file-read previews.
+  - Remaining scope: family-by-family migration of any reducers that still omit meaningful output without `RecoveryInfo()` or equivalent shared recovery wiring.
+
+Dependency guardrails:
 
 - Task 4 starts after Task 3 because builders must populate stable capability metadata.
 - Task 5 starts after Task 1 because the fallback boundary is now defined.
 - Task 6 may proceed before Task 5 finishes, but Task 5 should consume the shared recovery API that Task 6 defines instead of inventing a parallel one.
-  - Current state: the declarative reducer result now exposes reusable omission metadata and the top-level filter layer can map that into the shared recovery contract.
+  - Current state: the declarative reducer result exposes reusable omission metadata and the top-level filter layer maps that into the shared recovery contract.
 - Task 8 remains blocked for families whose needed infrastructure is not yet merged.
-  - Current state: only the search/path-list family is in scope for the first migration slice.
+  - Current state: `git`, `javascript`, and search/path-list are migrated; later families should follow the same incremental pattern.
 
 ## Task 1: Architecture Contracts
 
@@ -260,17 +259,29 @@ Define one shared policy for hidden-output recovery.
 
 **Current implementation notes**
 
-- The first slice should land shared engine recovery helpers before broad family migration.
-- Task 5 should reuse the same recovery helper contract for declarative fallback reducers instead of inventing a second hint/artifact path.
-- Family-by-family reducer migration can follow after the helper layer is merged.
-- Recent Task 6 stream migrations now cover:
+- Shared engine recovery helpers and filter-level recovery adapters are landed.
+- Task 5 reuses the same recovery helper contract for declarative fallback reducers instead of inventing a second hint/artifact path.
+- Family-by-family reducer migration should continue from the helpers that are now in place.
+- Current Task 6 migrations cover:
+  - `cloud-list`
+  - `cloud-logs`
+  - `ctest`
+  - `docker ps`
+  - `docker logs`
   - `find`
+  - `http-api`
+  - `json-query`
+  - `clang-tooling`
+  - `patch-diff`
   - `ripgrep`
   - generic failure compaction
+  - `build-system`
   - `git log`
   - `git diff`
   - core directory-listing/tree previews
   - core file-read previews
+  - `sql-query`
+- Remaining Task 6 targets should prioritize families that still truncate or collapse output in custom `Render` functions without shared recovery metadata.
 
 ## Task 7: Contributor Docs By Ecosystem
 
@@ -368,9 +379,9 @@ These tasks can overlap once Task 1 lands:
 - [x] Task 8 unblocked
 - [x] `git` family migrated
 - [x] `javascript` family migrated
-- [ ] `git` contributor guide landed
-- [ ] `javascript` contributor guide landed
-- [ ] declarative fallback contributor guide landed
+- [x] `git` contributor guide landed
+- [x] `javascript` contributor guide landed
+- [x] declarative fallback contributor guide landed
 - [x] search/path-list families migrated
 - [ ] build/test families migrated
 - [ ] cloud/Kubernetes families migrated

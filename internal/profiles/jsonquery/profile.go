@@ -29,9 +29,16 @@ func Profiles(maxLines int) []engine.Profile {
 				return jsonqueryfilter.SummarizeQueryOutput(exec.Stdout, exec.Stderr, maxLines)
 			},
 			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return shared.NewBufferedTextReducer(true, true, func(input string) string {
-					return jsonqueryfilter.SummarizeQueryOutput(input, "", budget.MaxLines)
-				})
+				return shared.NewBufferedTextReducerWithRecovery(
+					true,
+					true,
+					func(input string) string {
+						return jsonqueryfilter.SummarizeQueryOutput(input, "", budget.MaxLines)
+					},
+					func(input string) (string, string, bool) {
+						return jsonqueryfilter.QueryOutputRecoveryInfo(input, "", budget.MaxLines)
+					},
+				)
 			},
 			ParseBytes: profilekit.ParseCombined,
 			Explain: []string{
