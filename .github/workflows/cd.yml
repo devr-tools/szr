@@ -46,10 +46,19 @@ jobs:
 
           manifest_version="$(sed -n 's/.*"\\." *: *"\\([0-9][0-9.]*\\)".*/\\1/p' .release-please-manifest.json)"
           bootstrap_sha="$(sed -n 's/.*"bootstrap-sha" *: *"\\([0-9a-f]\\{40\\}\\)".*/\\1/p' .github/release-please-config.json)"
-          latest_tag="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-version:refname | head -n 1)"
+          latest_tag="$(
+            {
+              git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-version:refname
+              git tag --list 'szr-v[0-9]*.[0-9]*.[0-9]*' --sort=-version:refname
+            } | head -n 1
+          )"
 
           if [ -n "$latest_tag" ]; then
-            base_version="${latest_tag#v}"
+            if [[ "$latest_tag" == szr-v* ]]; then
+              base_version="${latest_tag#szr-v}"
+            else
+              base_version="${latest_tag#v}"
+            fi
             commit_range="${latest_tag}..HEAD"
           else
             base_version="${manifest_version:-0.1.0}"
