@@ -5,17 +5,23 @@ import (
 
 	"github.com/devr-tools/szr/internal/engine"
 	buildprofiles "github.com/devr-tools/szr/internal/profiles/build"
+	cloudlistprofiles "github.com/devr-tools/szr/internal/profiles/cloudlist"
+	cloudlogsprofiles "github.com/devr-tools/szr/internal/profiles/cloudlogs"
 	containerprofiles "github.com/devr-tools/szr/internal/profiles/container"
 	cppprofiles "github.com/devr-tools/szr/internal/profiles/cpp"
 	gitprofiles "github.com/devr-tools/szr/internal/profiles/git"
 	githubprofiles "github.com/devr-tools/szr/internal/profiles/github"
+	httpapiprofiles "github.com/devr-tools/szr/internal/profiles/httpapi"
 	javascriptprofiles "github.com/devr-tools/szr/internal/profiles/javascript"
+	jsonqueryprofiles "github.com/devr-tools/szr/internal/profiles/jsonquery"
 	kubernetesprofiles "github.com/devr-tools/szr/internal/profiles/kubernetes"
 	patchprofiles "github.com/devr-tools/szr/internal/profiles/patch"
 	phpprofiles "github.com/devr-tools/szr/internal/profiles/php"
 	pythonprofiles "github.com/devr-tools/szr/internal/profiles/python"
 	rustprofiles "github.com/devr-tools/szr/internal/profiles/rust"
 	searchprofiles "github.com/devr-tools/szr/internal/profiles/search"
+	sqlqueryprofiles "github.com/devr-tools/szr/internal/profiles/sqlquery"
+	tabularprofiles "github.com/devr-tools/szr/internal/profiles/tabular"
 )
 
 func Builtins(maxLines int) []engine.Profile {
@@ -27,11 +33,17 @@ func Builtins(maxLines int) []engine.Profile {
 	list = append(list, rustprofiles.Profiles(maxLines)...)
 	list = append(list, pythonprofiles.Profiles(maxLines)...)
 	list = append(list, containerprofiles.Profiles(maxLines)...)
+	list = append(list, cloudlistprofiles.Profiles(maxLines)...)
+	list = append(list, cloudlogsprofiles.Profiles(maxLines)...)
 	list = append(list, kubernetesprofiles.Profiles(maxLines)...)
 	list = append(list, githubprofiles.Profiles(maxLines)...)
+	list = append(list, httpapiprofiles.Profiles(maxLines)...)
 	list = append(list, javascriptprofiles.Profiles(maxLines)...)
+	list = append(list, jsonqueryprofiles.Profiles(maxLines)...)
 	list = append(list, phpprofiles.Profiles(maxLines)...)
 	list = append(list, searchprofiles.Profiles(maxLines, 4)...)
+	list = append(list, sqlqueryprofiles.Profiles(maxLines)...)
+	list = append(list, tabularprofiles.Profiles(maxLines)...)
 	return list
 }
 
