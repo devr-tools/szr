@@ -17,6 +17,9 @@ env:
   GOVULNCHECK_MODE: required
   GOVULNCHECK_VERSION: v1.3.0
   GOCYCLO_VERSION: v0.6.0
+  SCC_VERSION: v3.7.0
+  MAX_GO_FILE_CODE_LINES: "400"
+  GOLANGCI_LINT_VERSION: v2.12.2
   MIN_INTERNAL_COVERAGE: "80.0"
 
 concurrency:
@@ -150,6 +153,147 @@ jobs:
             exit 1
           fi
 
+  scc:
+    name: scc
+    needs: vet
+    runs-on: ubuntu-latest
+    env:
+      PR_BASE_REF: ${{ github.base_ref }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Fetch base branch
+        run: git fetch origin "${PR_BASE_REF}" --depth=1
+
+      - name: Install scc
+        run: go install github.com/boyter/scc/v3@${{ env.SCC_VERSION }}
+
+      - name: Enforce god-file size budget
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mapfile -t files < <(
+            git diff --name-only "origin/${PR_BASE_REF}"...HEAD \
+              | grep -E '^(cmd/|internal/|pkg/).+\.go$' \
+              | grep -Ev '(^|/).+_test\.go$' \
+              | sort -u || true
+          )
+
+          {
+            echo "## Go File Size"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No changed non-test Go files to inspect."
+            echo "No changed non-test Go files exceeded the size budget." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          scc_bin="$(go env GOPATH)/bin/scc"
+          "$scc_bin" --by-file --format json "${files[@]}" > scc.json
+
+          if python3 - "$MAX_GO_FILE_CODE_LINES" scc.json >> "$GITHUB_STEP_SUMMARY" <<'PY'
+import json
+import sys
+
+limit = int(sys.argv[1])
+path = sys.argv[2]
+payload = json.load(open(path, encoding="utf-8"))
+rows = payload if isinstance(payload, list) else payload.get("files", [])
+offenders = []
+
+for row in rows:
+    if not isinstance(row, dict):
+        continue
+    name = row.get("Name") or row.get("name")
+    if not name:
+        continue
+    code = int(row.get("Code", row.get("code", 0)) or 0)
+    if code > limit:
+        offenders.append((name, code))
+
+offenders.sort()
+
+if offenders:
+    print(f"Files above the code-line limit of {limit}:")
+    print("```")
+    for name, code in offenders:
+        print(f"{code:>5}  {name}")
+    print("```")
+    raise SystemExit(1)
+
+print(f"No changed non-test Go files exceeded the code-line limit of {limit}.")
+PY
+          then
+            exit 0
+          fi
+
+          echo "::error title=God file size budget exceeded::One or more changed Go files exceeded the maximum code-line budget"
+          exit 1
+
+  golangci-lint:
+    name: golangci-lint
+    needs: vet
+    runs-on: ubuntu-latest
+    env:
+      PR_BASE_REF: ${{ github.base_ref }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Fetch base branch
+        run: git fetch origin "${PR_BASE_REF}" --depth=1
+
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${{ env.GOLANGCI_LINT_VERSION }}
+
+      - name: Enforce maintainability lint budget
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          golangci_bin="$(go env GOPATH)/bin/golangci-lint"
+          status=0
+
+          if "$golangci_bin" run --config .golangci.yml --new-from-rev "origin/${PR_BASE_REF}" ./... 2>&1 | tee golangci.out; then
+            status=0
+          else
+            status=$?
+          fi
+
+          {
+            echo "## golangci-lint"
+            echo
+            if [ "$status" -eq 0 ]; then
+              echo "No new maintainability lint issues detected."
+            else
+              echo "New maintainability lint issues detected:"
+              echo '```'
+              sed -n '1,80p' golangci.out
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$status" -ne 0 ]; then
+            echo "::error title=Maintainability lint budget exceeded::golangci-lint reported new maintainability issues"
+            exit "$status"
+          fi
+
   # ─── Parallel gates (all need the code-quality gate first) ───
 
   test:
@@ -157,6 +301,8 @@ jobs:
     needs:
       - vet
       - gocyclo
+      - scc
+      - golangci-lint
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -187,6 +333,8 @@ jobs:
     needs:
       - vet
       - gocyclo
+      - scc
+      - golangci-lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -218,6 +366,8 @@ jobs:
     needs:
       - vet
       - gocyclo
+      - scc
+      - golangci-lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -235,6 +385,8 @@ jobs:
     needs:
       - vet
       - gocyclo
+      - scc
+      - golangci-lint
     runs-on: ubuntu-latest
     env:
       PR_BASE_REF: ${{ github.base_ref }}
@@ -402,6 +554,8 @@ jobs:
     needs:
       - vet
       - gocyclo
+      - scc
+      - golangci-lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6

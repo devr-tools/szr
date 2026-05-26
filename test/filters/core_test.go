@@ -55,22 +55,35 @@ func declarativeResultForTest(omittedBefore, omittedAfter int) declarative.Resul
 func TestFailureHelpers(t *testing.T) {
 	t.Parallel()
 
+	t.Run("basic summaries", testBasicFailureSummaries)
+	t.Run("streaming reducer", testStreamingFailureReducer)
+	t.Run("ranked stack summary", testRankedStackSummary)
+	t.Run("php anchor summary", testPHPAnchorSummary)
+	t.Run("prefiltered summary", testPrefilteredSummary)
+	t.Run("go test json recovery", testGoTestJSONRecovery)
+}
+
+func testBasicFailureSummaries(t *testing.T) {
+	t.Helper()
+
 	if got := filters.SummarizeGenericFailure("", 3); got != "ok" {
 		t.Fatalf("unexpected empty generic failure: %q", got)
 	}
-	generic := filters.SummarizeGenericFailure("info\nwarning: x\npanic: y\n", 1)
-	if generic != "panic: y" {
-		t.Fatalf("unexpected generic failure summary: %q", generic)
+	if got := filters.SummarizeGenericFailure("info\nwarning: x\npanic: y\n", 1); got != "panic: y" {
+		t.Fatalf("unexpected generic failure summary: %q", got)
 	}
-	fallback := filters.SummarizeGenericFailure("line1\nline2\nline3\n", 2)
-	if fallback != "line1\nline2\n... +1 more lines" {
-		t.Fatalf("unexpected generic fallback: %q", fallback)
+	if got := filters.SummarizeGenericFailure("line1\nline2\nline3\n", 2); got != "line1\nline2\n... +1 more lines" {
+		t.Fatalf("unexpected generic fallback: %q", got)
 	}
+
 	fallbackReducer := filters.NewGenericFailureReducer(2, 0)
 	fallbackReducer.ConsumeStdout([]byte("line1\nline2\nline3\n"))
-	if kind, summary, requireRawCapture := fallbackReducer.RecoveryInfo(); kind != filters.RecoveryKindFullOutput || summary != "omitted 1 additional lines" || !requireRawCapture {
-		t.Fatalf("unexpected generic fallback recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
-	}
+	kind, summary, requireRawCapture := fallbackReducer.RecoveryInfo()
+	assertRecoveryInfo(t, kind, summary, requireRawCapture, filters.RecoveryKindFullOutput, "omitted 1 additional lines", true)
+}
+
+func testStreamingFailureReducer(t *testing.T) {
+	t.Helper()
 
 	reducer := filters.NewGenericFailureReducer(2, 0)
 	reducer.ConsumeStderr([]byte("\x1b[31mwarning"))
@@ -84,6 +97,10 @@ func TestFailureHelpers(t *testing.T) {
 	if reducer.BytesParsed() != len("\x1b[31mwarning")+len(": x\x1b[0m\npanic: y\n") {
 		t.Fatalf("unexpected bytes parsed: %d", reducer.BytesParsed())
 	}
+}
+
+func testRankedStackSummary(t *testing.T) {
+	t.Helper()
 
 	stack := filters.SummarizeGenericFailure(strings.Join([]string{
 		"warning: retrying connection",
@@ -93,27 +110,33 @@ func TestFailureHelpers(t *testing.T) {
 		"at /tmp/app/main.go:42",
 		"help: rerun with --verbose",
 	}, "\n"), 4)
-	for _, want := range []string{"panic: nil pointer dereference", "/tmp/app/main.go:42", "help: rerun with --verbose"} {
-		if !strings.Contains(stack, want) {
-			t.Fatalf("expected %q in ranked failure output:\n%s", want, stack)
-		}
-	}
-	if !strings.Contains(stack, "warning: retrying connection (+1 similar warnings)") {
-		t.Fatalf("expected repeated warning folding, got %q", stack)
-	}
+	assertContainsAll(t, stack,
+		"panic: nil pointer dereference",
+		"/tmp/app/main.go:42",
+		"help: rerun with --verbose",
+		"warning: retrying connection (+1 similar warnings)",
+	)
+}
+
+func testPHPAnchorSummary(t *testing.T) {
+	t.Helper()
 
 	phpAnchor := filters.SummarizeGenericFailure(strings.Join([]string{
 		"Fatal error: Uncaught RuntimeException",
 		"at /srv/app/src/Kernel.php:27",
 		"help: rerun with APP_ENV=test",
 	}, "\n"), 3)
-	for _, want := range []string{"Fatal error: Uncaught RuntimeException", "Kernel.php:27", "help: rerun with APP_ENV=test"} {
-		if !strings.Contains(phpAnchor, want) {
-			t.Fatalf("expected %q in php anchored failure output:\n%s", want, phpAnchor)
-		}
-	}
+	assertContainsAll(t, phpAnchor,
+		"Fatal error: Uncaught RuntimeException",
+		"Kernel.php:27",
+		"help: rerun with APP_ENV=test",
+	)
+}
 
-	prefiltered := filters.SummarizeGenericFailure(strings.Join([]string{
+func testPrefilteredSummary(t *testing.T) {
+	t.Helper()
+
+	input := strings.Join([]string{
 		"Downloading registry index",
 		"Resolving: total 12, reused 0, downloaded 6",
 		"added 487 packages in 8s",
@@ -121,33 +144,24 @@ func TestFailureHelpers(t *testing.T) {
 		"/Users/alex/Documents/GitHub/szr/internal/filters/failure.go:201:3 undefined: noiseGate",
 		"/Users/alex/Documents/GitHub/szr/internal/filters/failure.go:201:3 undefined: noiseGate",
 		"help: rerun with --verbose",
-	}, "\n"), 5)
-	for _, want := range []string{
+	}, "\n")
+	prefiltered := filters.SummarizeGenericFailure(input, 5)
+	assertContainsAll(t, prefiltered,
 		"error: build failed",
 		".../internal/filters/failure.go:201:3",
 		"help: rerun with --verbose",
 		"... omitted 2 progress lines, 1 install lines",
-	} {
-		if !strings.Contains(prefiltered, want) {
-			t.Fatalf("expected %q in prefiltered failure output:\n%s", want, prefiltered)
-		}
-	}
-	if !strings.Contains(prefiltered, "(+1 similar frames)") {
-		t.Fatalf("expected repeated stack frame compaction, got %q", prefiltered)
-	}
+		"(+1 similar frames)",
+	)
+
 	prefilterReducer := filters.NewGenericFailureReducer(5, 0)
-	prefilterReducer.ConsumeStdout([]byte(strings.Join([]string{
-		"Downloading registry index",
-		"Resolving: total 12, reused 0, downloaded 6",
-		"added 487 packages in 8s",
-		"error: build failed",
-		"/Users/alex/Documents/GitHub/szr/internal/filters/failure.go:201:3 undefined: noiseGate",
-		"/Users/alex/Documents/GitHub/szr/internal/filters/failure.go:201:3 undefined: noiseGate",
-		"help: rerun with --verbose",
-	}, "\n")))
-	if kind, summary, requireRawCapture := prefilterReducer.RecoveryInfo(); kind != filters.RecoveryKindFullOutput || summary != "omitted 2 progress lines, 1 install lines" || !requireRawCapture {
-		t.Fatalf("unexpected prefiltered recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
-	}
+	prefilterReducer.ConsumeStdout([]byte(input))
+	kind, summary, requireRawCapture := prefilterReducer.RecoveryInfo()
+	assertRecoveryInfo(t, kind, summary, requireRawCapture, filters.RecoveryKindFullOutput, "omitted 2 progress lines, 1 install lines", true)
+}
+
+func testGoTestJSONRecovery(t *testing.T) {
+	t.Helper()
 
 	goTestJSON := strings.Join([]string{
 		`{"Action":"pass","Package":"github.com/acme/pass"}`,
@@ -157,8 +171,25 @@ func TestFailureHelpers(t *testing.T) {
 		`{"Action":"fail","Package":"github.com/acme/fail","Test":"TestFour"}`,
 		`{"Action":"fail","Package":"github.com/acme/fail","Test":"TestFive"}`,
 	}, "\n")
-	if kind, summary, requireRawCapture := filters.GoTestJSONRecoveryInfo(goTestJSON); kind != filters.RecoveryKindFullOutput || summary != "omitted 1 additional test lines" || !requireRawCapture {
-		t.Fatalf("unexpected go test json recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	kind, summary, requireRawCapture := filters.GoTestJSONRecoveryInfo(goTestJSON)
+	assertRecoveryInfo(t, kind, summary, requireRawCapture, filters.RecoveryKindFullOutput, "omitted 1 additional test lines", true)
+}
+
+func assertContainsAll(t *testing.T, got string, want ...string) {
+	t.Helper()
+
+	for _, fragment := range want {
+		if !strings.Contains(got, fragment) {
+			t.Fatalf("expected %q in output:\n%s", fragment, got)
+		}
+	}
+}
+
+func assertRecoveryInfo(t *testing.T, kind, summary string, requireRawCapture bool, wantKind, wantSummary string, wantRequireRawCapture bool) {
+	t.Helper()
+
+	if kind != wantKind || summary != wantSummary || requireRawCapture != wantRequireRawCapture {
+		t.Fatalf("unexpected recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
 	}
 }
 

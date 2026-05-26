@@ -1,0 +1,26 @@
+version: "2"
+
+run:
+  timeout: 5m
+  relative-path-mode: gomod
+  tests: false
+
+linters:
+  default: none
+  enable:
+    - funlen
+    - gocognit
+    - maintidx
+  settings:
+    funlen:
+      lines: 120
+      statements: 60
+      ignore-comments: true
+    gocognit:
+      min-complexity: 15
+    maintidx:
+      under: 50
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
