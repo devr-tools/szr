@@ -85,17 +85,17 @@ func TestResolveBudgetAgentMode(t *testing.T) {
 }
 
 func TestDecideFastPath(t *testing.T) {
-	fast := engine.DecideFastPath(engine.Profile{}, 64, 12, 2*time.Millisecond, 0)
+	fast := engine.DecideFastPath(engine.Profile{}, engine.Invocation{Command: []string{"echo", "ok"}}, 64, 12, 2*time.Millisecond, 0)
 	if !fast.BypassCompression || fast.Reason == "" {
 		t.Fatalf("expected tiny output fast path, got %#v", fast)
 	}
 
-	fast = engine.DecideFastPath(engine.Profile{LatencyBudget: time.Millisecond}, 500, 100, 2*time.Millisecond, 0)
+	fast = engine.DecideFastPath(engine.Profile{LatencyBudget: time.Millisecond}, engine.Invocation{Command: []string{"echo", "ok"}}, 500, 100, 2*time.Millisecond, 0)
 	if fast.BypassCompression || !fast.WarnLatency {
 		t.Fatalf("expected latency warning without bypass, got %#v", fast)
 	}
 
-	fast = engine.DecideFastPath(engine.Profile{}, 64, 12, 2*time.Millisecond, 1)
+	fast = engine.DecideFastPath(engine.Profile{}, engine.Invocation{Command: []string{"echo", "ok"}}, 64, 12, 2*time.Millisecond, 1)
 	if fast.BypassCompression {
 		t.Fatalf("did not expect failure bypass, got %#v", fast)
 	}

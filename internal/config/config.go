@@ -61,6 +61,10 @@ func Load() (Config, Paths, error) {
 	return LoadWith(ResolvePaths, EnsurePaths, os.Getwd, os.Stat, os.ReadFile)
 }
 
+func Save(paths Paths, cfg Config) error {
+	return SaveWith(paths, cfg, EnsurePaths, os.WriteFile)
+}
+
 func ResolvePathsWith(
 	userConfigDir func() (string, error),
 	userCacheDir func() (string, error),
@@ -207,4 +211,25 @@ func attachProjectRules(
 	paths.ProjectDir = filepath.Dir(projectRuleFile)
 	paths.ProjectRuleFile = projectRuleFile
 	return cfg, paths, nil
+}
+
+func SaveWith(
+	paths Paths,
+	cfg Config,
+	ensure func(Paths) error,
+	writeFile func(string, []byte, os.FileMode) error,
+) error {
+	if err := ensure(paths); err != nil {
+		return err
+	}
+	cfg, err := Normalize(cfg)
+	if err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	data = append(data, '\n')
+	return writeFile(paths.ConfigFile, data, 0o644)
 }

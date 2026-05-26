@@ -72,7 +72,7 @@ func TestRenderClaudeTarget(t *testing.T) {
 		switch {
 		case strings.HasSuffix(file.Path, filepath.Join(".claude", "hooks", "szr-rewrite.sh")):
 			sawHook = true
-			if file.Strategy != installers.StrategyWrite || !strings.Contains(file.Content, "\"hookSpecificOutput\"") {
+			if file.Strategy != installers.StrategyWrite || !strings.Contains(file.Content, "rewrite --binary") || !strings.Contains(file.Content, "--hook claude") {
 				t.Fatalf("unexpected global hook file: %#v", file)
 			}
 		case strings.HasSuffix(file.Path, filepath.Join(".claude", ".szr", "install", "claude-code.md")):
@@ -148,24 +148,24 @@ func assertInstallHookFile(t *testing.T, file installers.File) {
 		t.Fatalf("unexpected hook file metadata: %#v", file)
 	}
 	if strings.HasSuffix(file.Path, filepath.Join(".claude", "hooks", "szr-rewrite.sh")) {
-		if !strings.Contains(file.Content, "\"hookSpecificOutput\"") {
+		if !strings.Contains(file.Content, "rewrite --binary") || !strings.Contains(file.Content, "--hook claude") {
 			t.Fatalf("unexpected global hook content: %q", file.Content)
 		}
 		return
 	}
 	if strings.HasSuffix(file.Path, filepath.Join(".cursor", "hooks", "szr-rewrite.sh")) {
-		if !strings.Contains(file.Content, "\"updated_input\"") {
+		if !strings.Contains(file.Content, "rewrite --binary") || !strings.Contains(file.Content, "--hook cursor") {
 			t.Fatalf("unexpected cursor hook content: %q", file.Content)
 		}
 		return
 	}
 	if strings.HasSuffix(file.Path, filepath.Join(".gemini", "hooks", "szr-rewrite.sh")) {
-		if !strings.Contains(file.Content, "\"decision\": \"allow\"") {
+		if !strings.Contains(file.Content, "rewrite --binary") || !strings.Contains(file.Content, "--hook gemini") {
 			t.Fatalf("unexpected gemini hook content: %q", file.Content)
 		}
 		return
 	}
-	if !strings.Contains(file.Content, "./dev/szr") || !strings.Contains(file.Content, "szr hint") {
+	if !strings.Contains(file.Content, "./dev/szr") || !strings.Contains(file.Content, "szr hint") || !strings.Contains(file.Content, "rewrite --binary") || !strings.Contains(file.Content, "--format hint") {
 		t.Fatalf("unexpected hook content: %q", file.Content)
 	}
 }
@@ -176,7 +176,7 @@ func assertInstallDocFile(t *testing.T, file installers.File, target installers.
 		if strings.Contains(file.Content, "Hook command:") {
 			t.Fatalf("unexpected codex install doc: %q", file.Content)
 		}
-		if !strings.Contains(file.Content, ".codex/szr.md") {
+		if !strings.Contains(file.Content, ".codex/szr.md") || !strings.Contains(file.Content, "Codex does not install a Bash rewrite hook today") || !strings.Contains(file.Content, "proxy git diff ... -- path/to/file | tail -80") || !strings.Contains(file.Content, "szr find <path> --name \"*.py\"") {
 			t.Fatalf("unexpected codex install doc: %q", file.Content)
 		}
 		return
@@ -212,7 +212,7 @@ func assertInstallInstructionFile(t *testing.T, target installers.Target, file i
 	switch target {
 	case installers.TargetCodex:
 		if strings.HasSuffix(file.Path, filepath.Join(".codex", "szr.md")) {
-			if file.Strategy != installers.StrategyWrite || !strings.Contains(file.Content, "## szr for Codex") {
+			if file.Strategy != installers.StrategyWrite || !strings.Contains(file.Content, "## szr for Codex") || !strings.Contains(file.Content, "Codex does not install a Bash rewrite hook today") || !strings.Contains(file.Content, "szr grep <pattern> <path>") {
 				t.Fatalf("unexpected Codex shared file: %#v", file)
 			}
 			return
@@ -268,7 +268,7 @@ func assertInstallInstructionFile(t *testing.T, target installers.Target, file i
 		if file.Strategy != installers.StrategyMerge || file.Marker == "" {
 			t.Fatalf("unexpected merge file: %#v", file)
 		}
-		if !strings.Contains(file.Content, "explain <cmd...>") || !strings.Contains(file.Content, "proxy <cmd...>") {
+		if !strings.Contains(file.Content, "explain <cmd...>") || !strings.Contains(file.Content, "proxy <cmd...>") || !strings.Contains(file.Content, "wrap the noisy producer instead of the whole pipeline") || !strings.Contains(file.Content, "szr find <path> --name \"*.py\"") || !strings.Contains(file.Content, "szr run /usr/bin/grep ...") {
 			t.Fatalf("unexpected instruction body: %q", file.Content)
 		}
 	}

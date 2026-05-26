@@ -3,6 +3,7 @@ package filters
 import (
 	"bufio"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -15,48 +16,240 @@ func SummarizeRipgrep(input string, maxGroups, maxLines int) string {
 }
 
 func GroupRipgrep(input string, maxGroups int) string {
-	type match struct {
-		Line int
-		Text string
-	}
-
-	groups := map[string][]match{}
-	order := []string{}
+	reducer := NewRipgrepReducer(maxGroups, maxGroups*4)
 	scanner := bufio.NewScanner(strings.NewReader(input))
 	for scanner.Scan() {
-		line := scanner.Text()
-		parts := strings.SplitN(line, ":", 3)
-		if len(parts) < 3 {
-			continue
-		}
-		file := parts[0]
-		text := strings.TrimSpace(parts[2])
-		var lineNo int
-		fmt.Sscanf(parts[1], "%d", &lineNo)
-		if _, ok := groups[file]; !ok {
-			order = append(order, file)
-		}
-		groups[file] = append(groups[file], match{Line: lineNo, Text: clip(text, 120)})
+		reducer.ingestLine(scanner.Text())
 	}
+	return reducer.render(false)
+}
 
-	if len(order) == 0 {
+type RipgrepReducer struct {
+	stdoutScanner lineScanner
+	stderrReducer *CompactLineReducer
+	maxGroups     int
+	maxLines      int
+	bytesParsed   int
+	groups        map[string]*ripgrepGroup
+	order         []string
+	totalMatches  int
+	extraFiles    int
+	suppressed    map[string]int
+}
+
+type ripgrepGroup struct {
+	count    int
+	previews []string
+}
+
+func NewRipgrepReducer(maxGroups, maxLines int) *RipgrepReducer {
+	if maxGroups <= 0 {
+		maxGroups = 4
+	}
+	if maxLines <= 0 {
+		maxLines = maxGroups * 4
+	}
+	return &RipgrepReducer{
+		stderrReducer: NewCompactLineReducer(maxLines, 0),
+		maxGroups:     maxGroups,
+		maxLines:      maxLines,
+		groups:        map[string]*ripgrepGroup{},
+		order:         make([]string, 0, maxGroups),
+		suppressed:    map[string]int{},
+	}
+}
+
+func (r *RipgrepReducer) ConsumeStdout(chunk []byte) {
+	r.bytesParsed += len(chunk)
+	r.stdoutScanner.Consume(chunk, r.ingestLine)
+}
+
+func (r *RipgrepReducer) ConsumeStderr(chunk []byte) {
+	r.bytesParsed += len(chunk)
+	r.stderrReducer.ConsumeStderr(chunk)
+}
+
+func (r *RipgrepReducer) Result() string {
+	r.stdoutScanner.Finish(r.ingestLine)
+	return r.render(false)
+}
+
+func (r *RipgrepReducer) BytesParsed() int {
+	return r.bytesParsed
+}
+
+func (r *RipgrepReducer) FallbackUsed() bool {
+	return false
+}
+
+func (r *RipgrepReducer) Done() bool {
+	if strings.TrimSpace(r.stderrReducer.Preview()) != "" || len(r.order) < r.maxGroups {
+		return false
+	}
+	if r.extraFiles == 0 && suppressedBucketTotal(r.suppressed) == 0 {
+		return false
+	}
+	totalPreviews := 0
+	for _, file := range r.order {
+		group := r.groups[file]
+		if group == nil || len(group.previews) == 0 {
+			return false
+		}
+		totalPreviews += len(group.previews)
+	}
+	return totalPreviews >= minInt(r.maxLines-len(r.order), r.maxGroups+1)
+}
+
+func (r *RipgrepReducer) Preview() string {
+	return r.render(true)
+}
+
+func (r *RipgrepReducer) ingestLine(line string) {
+	file, lineNo, text, ok := parseRipgrepMatch(line)
+	if !ok {
+		return
+	}
+	if bucket := searchReducerNoiseBucket(file); bucket != "" {
+		r.suppressed[bucket]++
+		return
+	}
+	r.totalMatches++
+	group := r.groups[file]
+	if group == nil {
+		if len(r.order) >= r.maxGroups {
+			r.extraFiles++
+			return
+		}
+		group = &ripgrepGroup{previews: make([]string, 0, 3)}
+		r.groups[file] = group
+		r.order = append(r.order, file)
+	}
+	group.count++
+	if len(group.previews) < 3 {
+		group.previews = append(group.previews, fmt.Sprintf("  %d: %s", lineNo, clip(text, 120)))
+	}
+}
+
+func (r *RipgrepReducer) render(preview bool) string {
+	if len(r.order) == 0 {
+		if stderr := strings.TrimSpace(r.stderrReducer.Preview()); stderr != "" {
+			return stderr
+		}
 		return "no matches"
 	}
-
-	var out []string
-	for idx, file := range order {
-		if idx >= maxGroups {
-			out = append(out, fmt.Sprintf("... +%d more files", len(order)-maxGroups))
+	out := make([]string, 0, r.maxLines+1)
+	for _, file := range r.order {
+		group := r.groups[file]
+		if group == nil {
+			continue
+		}
+		reserve := r.renderReserve(group)
+		if !r.canRenderGroup(out, reserve) {
 			break
 		}
-		out = append(out, fmt.Sprintf("%s (%d matches)", file, len(groups[file])))
-		for i, m := range groups[file] {
-			if i >= 3 {
-				out = append(out, fmt.Sprintf("  ... +%d more", len(groups[file])-3))
-				break
-			}
-			out = append(out, fmt.Sprintf("  %d: %s", m.Line, m.Text))
-		}
+		out = append(out, fmt.Sprintf("%s (%d matches)", file, group.count))
+		availablePreviews := r.renderPreviewCount(out, group, reserve)
+		out = append(out, group.previews[:availablePreviews]...)
+		out = r.appendExtraMatches(out, group, availablePreviews, reserve)
+	}
+	out = r.appendFooter(out)
+	if preview && len(out) > r.maxLines {
+		out = out[:r.maxLines]
 	}
 	return strings.Join(out, "\n")
+}
+
+func (r *RipgrepReducer) renderReserve(group *ripgrepGroup) int {
+	reserve := r.footerLines()
+	if group.count > len(group.previews) {
+		reserve++
+	}
+	return reserve
+}
+
+func (r *RipgrepReducer) footerLines() int {
+	lines := 0
+	if r.extraFiles > 0 {
+		lines++
+	}
+	if r.suppressedSummary() != "" {
+		lines++
+	}
+	return lines
+}
+
+func (r *RipgrepReducer) suppressedSummary() string {
+	return summarizeSuppressedSearchBuckets(r.suppressed)
+}
+
+func (r *RipgrepReducer) canRenderGroup(out []string, reserve int) bool {
+	return len(out)+1+reserve <= r.maxLines
+}
+
+func (r *RipgrepReducer) renderPreviewCount(out []string, group *ripgrepGroup, reserve int) int {
+	available := maxInt(0, r.maxLines-len(out)-reserve)
+	if available > len(group.previews) {
+		return len(group.previews)
+	}
+	return available
+}
+
+func (r *RipgrepReducer) appendExtraMatches(out []string, group *ripgrepGroup, shown, reserve int) []string {
+	extra := group.count - shown
+	if extra <= 0 || len(out) >= r.maxLines-reserve+1 {
+		return out
+	}
+	return append(out, fmt.Sprintf("  ... +%d more", extra))
+}
+
+func (r *RipgrepReducer) appendFooter(out []string) []string {
+	if r.extraFiles > 0 && len(out) < r.maxLines {
+		out = append(out, fmt.Sprintf("... +%d more files", r.extraFiles))
+	}
+	if summary := r.suppressedSummary(); summary != "" && len(out) < r.maxLines+1 {
+		out = append(out, summary)
+	}
+	return out
+}
+
+func suppressedBucketTotal(counts map[string]int) int {
+	total := 0
+	for _, count := range counts {
+		total += count
+	}
+	return total
+}
+
+func maxInt(left, right int) int {
+	if left > right {
+		return left
+	}
+	return right
+}
+
+func parseRipgrepMatch(line string) (string, int, string, bool) {
+	for idx := 0; idx < len(line)-2; idx++ {
+		if line[idx] != ':' {
+			continue
+		}
+		next := idx + 1
+		end := next
+		for end < len(line) && line[end] >= '0' && line[end] <= '9' {
+			end++
+		}
+		if end == next || end >= len(line) || line[end] != ':' {
+			continue
+		}
+		lineNo, err := strconv.Atoi(line[next:end])
+		if err != nil {
+			continue
+		}
+		file := strings.TrimSpace(line[:idx])
+		text := strings.TrimSpace(line[end+1:])
+		if file == "" {
+			return "", 0, "", false
+		}
+		return file, lineNo, text, true
+	}
+	return "", 0, "", false
 }

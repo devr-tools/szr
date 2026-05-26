@@ -76,15 +76,15 @@ Use stable semantic versions for stable releases and prerelease suffixes like `-
 
 ## Homebrew follow-up
 
-After a stable release is published, `.github/workflows/release.yml` opens or refreshes a PR that updates `Formula/szr.rb` to the released tag and pins the matching source tarball `sha256`.
+After a stable release is published, `.github/workflows/release.yml` clones `devr-tools/homebrew-tap`, updates `Formula/szr.rb` there to the released tag, and opens or refreshes a PR in `devr-tools/homebrew-tap` with the matching source tarball `sha256`.
 
-When `RELEASE_PLEASE_TOKEN` is available, the workflow pushes a branch and opens a PR against the default branch. The generated PR is expected to run the normal Homebrew validation workflow before merge.
+When `RELEASE_PLEASE_TOKEN` is available, the workflow pushes a branch in `devr-tools/homebrew-tap` and opens a PR against that repository's default branch. The generated PR is expected to run the tap repo's normal Homebrew validation workflow before merge.
 
-If `RELEASE_PLEASE_TOKEN` is missing or cannot push or open the PR, the release still succeeds and the workflow writes a manual follow-up summary with the exact tag archive URL and `sha256` to apply in `Formula/szr.rb`.
+If `RELEASE_PLEASE_TOKEN` is missing or cannot push or open the PR, the release still succeeds and the workflow writes a manual follow-up summary with the exact tag archive URL and `sha256` to apply in `devr-tools/homebrew-tap/Formula/szr.rb`.
 
 If the automation needs help, the manual fallback is still:
 
 1. Download or inspect the published source archive for the stable tag.
 2. Compute or copy the matching `sha256`.
-3. Update `Formula/szr.rb`.
-4. Run the Homebrew validation workflow or equivalent local validation before merging the formula change.
+3. Update `Formula/szr.rb` in `devr-tools/homebrew-tap`.
+4. Run the tap repo's Homebrew validation workflow or equivalent local validation before merging the formula change.

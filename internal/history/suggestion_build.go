@@ -1,83 +1,6 @@
 package history
 
-import (
-	"sort"
-	"time"
-)
-
-type BudgetSuggestionOptions struct {
-	Limit      int `json:"limit,omitempty"`
-	Lookback   int `json:"lookback,omitempty"`
-	MinSamples int `json:"min_samples,omitempty"`
-}
-
-type BudgetSuggestionDirection string
-
-const (
-	BudgetSuggestionTighten BudgetSuggestionDirection = "tighten"
-	BudgetSuggestionLoosen  BudgetSuggestionDirection = "loosen"
-)
-
-type BudgetSuggestionReason string
-
-const (
-	BudgetSuggestionNoisy                 BudgetSuggestionReason = "noisy"
-	BudgetSuggestionAggressiveCompression BudgetSuggestionReason = "aggressive_compression"
-	BudgetSuggestionFallbackHeavy         BudgetSuggestionReason = "fallback_heavy"
-)
-
-type BudgetTarget struct {
-	MaxLines  int `json:"max_lines"`
-	MaxBytes  int `json:"max_bytes"`
-	MaxTokens int `json:"max_tokens"`
-}
-
-type BudgetSuggestionEvidence struct {
-	AverageSavingsPct    float64 `json:"average_savings_pct"`
-	FallbackRate         float64 `json:"fallback_rate"`
-	FailureRate          float64 `json:"failure_rate"`
-	MedianRawTokens      int     `json:"median_raw_tokens"`
-	P95RawTokens         int     `json:"p95_raw_tokens"`
-	MedianFilteredTokens int     `json:"median_filtered_tokens"`
-	P95FilteredTokens    int     `json:"p95_filtered_tokens"`
-	MedianBytesEmitted   int     `json:"median_bytes_emitted"`
-	P95BytesEmitted      int     `json:"p95_bytes_emitted"`
-}
-
-type BudgetSuggestion struct {
-	Fingerprint string                    `json:"fingerprint"`
-	Command     string                    `json:"command"`
-	Profile     string                    `json:"profile"`
-	Samples     int                       `json:"samples"`
-	Direction   BudgetSuggestionDirection `json:"direction"`
-	Reason      BudgetSuggestionReason    `json:"reason"`
-	Confidence  string                    `json:"confidence"`
-	Scale       float64                   `json:"scale"`
-	Suggested   BudgetTarget              `json:"suggested"`
-	Evidence    BudgetSuggestionEvidence  `json:"evidence"`
-	FirstSeen   time.Time                 `json:"first_seen"`
-	LastSeen    time.Time                 `json:"last_seen"`
-}
-
-type budgetSuggestionAccumulator struct {
-	fingerprint    string
-	command        string
-	lastSeen       time.Time
-	firstSeen      time.Time
-	profileCounts  map[string]int
-	rawTokens      []int
-	filteredTokens []int
-	emittedBytes   []int
-	savedPct       float64
-	samples        int
-	failures       int
-	fallbacks      int
-}
-
-type budgetSuggestionCandidate struct {
-	suggestion BudgetSuggestion
-	severity   float64
-}
+import "sort"
 
 func SuggestBudgets(records []Record, opts BudgetSuggestionOptions) []BudgetSuggestion {
 	opts = normalizeBudgetSuggestionOptions(opts)
@@ -147,10 +70,7 @@ func updateBudgetSuggestionAccumulator(acc *budgetSuggestionAccumulator, rec Rec
 	}
 }
 
-func buildBudgetSuggestionCandidates(
-	stats map[string]*budgetSuggestionAccumulator,
-	minSamples int,
-) []budgetSuggestionCandidate {
+func buildBudgetSuggestionCandidates(stats map[string]*budgetSuggestionAccumulator, minSamples int) []budgetSuggestionCandidate {
 	candidates := make([]budgetSuggestionCandidate, 0, len(stats))
 	for _, acc := range stats {
 		if acc.samples < minSamples {
@@ -277,67 +197,4 @@ func finalizeBudgetSuggestion(
 		FirstSeen:   acc.firstSeen,
 		LastSeen:    acc.lastSeen,
 	}
-}
-
-func percentileInts(values []int, target int) int {
-	if len(values) == 0 {
-		return 0
-	}
-	sorted := append([]int(nil), values...)
-	sort.Ints(sorted)
-	if target <= 0 {
-		return sorted[0]
-	}
-	if target >= 100 {
-		return sorted[len(sorted)-1]
-	}
-	index := (len(sorted)*target + 99) / 100
-	if index <= 0 {
-		index = 1
-	}
-	if index > len(sorted) {
-		index = len(sorted)
-	}
-	return sorted[index-1]
-}
-
-func estimateBudgetLines(maxBytes, maxTokens int) int {
-	linesByBytes := scaleIntCeil(maxBytes, 1, 48)
-	linesByTokens := scaleIntCeil(maxTokens, 1, 12)
-	lines := maxInt(linesByBytes, linesByTokens)
-	if lines < 3 {
-		lines = 3
-	}
-	if lines > 40 {
-		lines = 40
-	}
-	return lines
-}
-
-func suggestionConfidence(samples int) string {
-	switch {
-	case samples >= 6:
-		return "high"
-	case samples >= 4:
-		return "medium"
-	default:
-		return "low"
-	}
-}
-
-func scaleIntCeil(value, num, den int) int {
-	if value <= 0 || num <= 0 || den <= 0 {
-		return 0
-	}
-	return (value*num + den - 1) / den
-}
-
-func maxInt(values ...int) int {
-	best := 0
-	for i, value := range values {
-		if i == 0 || value > best {
-			best = value
-		}
-	}
-	return best
 }

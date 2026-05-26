@@ -74,6 +74,7 @@ Run your normal commands through `szr`:
 szr git status
 szr git diff
 szr go test ./...
+szr find . --name "*.py"
 ```
 
 ## AI tool support
@@ -87,10 +88,41 @@ AI bootstrap targets:
 | Cursor | `szr install cursor` | `szr uninstall cursor` | Installs `~/.cursor/hooks.json` plus a `preToolUse` hook script under `~/.cursor/hooks/`. |
 | Gemini | `szr install gemini` | `szr uninstall gemini` | Installs `~/.gemini/settings.json` BeforeTool registration plus a hook script under `~/.gemini/hooks/`. |
 
+## Integration surface
+
+External agents, hooks, and plugins can call `szr rewrite --json` to reuse the same shell-routing policy that powers the built-in Claude, Cursor, and Gemini integrations.
+
+Example:
+
+```bash
+szr rewrite --json --command 'git diff HEAD~1..HEAD --stat | tail -30'
+```
+
+Example response:
+
+```json
+{
+  "command": "git diff HEAD~1..HEAD --stat | tail -30",
+  "rewrite": "szr proxy git diff HEAD~1..HEAD --stat | tail -30",
+  "hint": "szr git diff ... --stat or szr proxy git diff ... -- path/to/file | head -200",
+  "reason": "wrap noisy producer inside shell pipeline",
+  "auto_rewrite": true,
+  "wrap_mode": "proxy",
+  "producer_only": true,
+  "already_routed": false
+}
+```
+
+Use this surface when you want to:
+
+- apply the same routing logic from custom Codex tooling or future plugins
+- distinguish between safe auto-rewrites and hint-only guidance
+- avoid re-encoding `git diff`, `grep`, `find`, and pipeline policy in multiple places
+
 ## Upcoming features
 
 - stronger command recommendations based on real usage history and low-savings hotspots
-- better repository-aware noise filtering for generated files, vendor trees, and build output
+- deeper repository-aware noise filtering for generated files, vendor trees, and build output
 - more stable agent-facing output for long-running automated workflows
 - broader reducer coverage and better fallback handling for noisy real-world commands
 
@@ -100,10 +132,15 @@ AI bootstrap targets:
 | --- | --- |
 | `szr git status` | Run common Git commands through `szr` with reduced output. |
 | `szr go test ./...` | Compress noisy test output while preserving failures and anchors. |
+| `szr find <path> --name "*.py"` | Find files or directories with repo-noise suppression and a bounded match summary. |
+| `szr grep <pattern> <path>` | Group search matches by file via ripgrep-backed summaries with conservative repo-noise excludes. |
+| `szr run /usr/bin/grep ...` | Preserve exact grep semantics while still routing output through `szr`. |
+| `szr rewrite --json --command '<cmd>'` | Return the shared shell-routing decision for external agents and integrations. |
 | `szr spread` | Show token savings, usage patterns, and hotspot summaries. |
 | `szr spread --history` | Inspect savings history across recent commands. |
 | `szr doctor [--json]` | Check runtime diagnostics and local history health. |
 | `szr self doctor [--json]` | Check install state, `PATH`, config, cache, and version details. |
+| `szr settings` | Open the interactive settings menu for update checks, auto update, and other local preferences. |
 | `szr tee --latest` | Inspect the latest preserved full-output artifact. |
 | `szr explain go test ./...` | Show the matched profile, budget, and rewrite decisions for a command. |
 | `szr commands` | Show the full command catalog for power users and agents. |
@@ -133,3 +170,7 @@ AI bootstrap targets:
 - [Releasing](docs/RELEASING.md)
 - [Go package](docs/GO_PACKAGE.md)
 - [Architecture](docs/ARCHITECTURE.md)
+
+## Authors
+
+@alxxjohn

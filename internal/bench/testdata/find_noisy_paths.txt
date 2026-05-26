@@ -1,0 +1,12 @@
+./cmd/szr/main.go
+./internal/engine/run.go
+./internal/engine/fastpath.go
+./internal/profiles/search/profile.go
+./internal/filters/find.go
+./test/filters/search_test.go
+./node_modules/react/index.js
+./vendor/example/generated.pb.go
+./.venv/lib/python3.12/site.py
+./tmp/build/cache.go
+./dist/assets/app.min.js
+./src/generated/app.js.map

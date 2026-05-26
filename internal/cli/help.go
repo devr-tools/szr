@@ -34,6 +34,7 @@ func (a *App) printHelp() {
 			{"szr uninstall", "Uninstall the global szr binary from this machine."},
 			{"szr self update", "Update szr through Homebrew or go install when recognized."},
 			{"szr self doctor [--json]", "Check PATH, config, cache, version, and optional tools."},
+			{"szr settings", "Open the interactive settings menu and persist config.json changes."},
 			{"szr install", "List available repo bootstrap targets."},
 			{"szr install codex|claude-code|cursor|gemini|shell", "Install the target-specific szr bootstrap or hook integration."},
 			{"szr install --all --print", "Preview all installer outputs without writing files."},
@@ -50,6 +51,7 @@ func (a *App) printHelp() {
 			{"szr tee --latest", "Inspect the latest preserved full failure log."},
 			{"szr profiles", "List builtin reducer profiles."},
 			{"szr doctor [--history|--json]", "Check runtime diagnostics and optional history health."},
+			{"szr settings", "Interactively edit szr user settings."},
 		},
 	})
 	a.printHelpSection(ui, helpSection{
@@ -99,9 +101,16 @@ func (a *App) printCommands() {
 		},
 	})
 	a.printHelpSection(ui, helpSection{
+		title: "Integrations:",
+		rows: [][]string{
+			{"szr rewrite --json --command '<cmd>'", "Return the shared shell-routing decision as JSON for external agents and plugins."},
+		},
+	})
+	a.printHelpSection(ui, helpSection{
 		title: "Local Tools:",
 		rows: [][]string{
 			{"szr ls [path]", "Render a compact directory tree."},
+			{"szr find [path] [flags]", "Find files or directories with bounded match summaries."},
 			{"szr read <file...>", "Read files through the file-aware reducer."},
 			{"szr grep <pattern> [path]", "Search with grouped, stable match summaries."},
 			{"szr rg <pattern> [path]", "Run ripgrep with szr-aware normalization."},
@@ -173,10 +182,24 @@ func (a *App) printMenuHeader(ui spreadUI, label, subtitle string) {
 	if label != "" {
 		a.printCenteredLine(label, ui.color, true, false)
 	}
+	if version := formatMenuVersion(a.version); version != "" {
+		a.printCenteredLine(version, ui.color, false, true)
+	}
 	if subtitle != "" {
 		a.printCenteredLine(subtitle, ui.color, false, true)
 	}
 	fmt.Println()
+}
+
+func formatMenuVersion(version string) string {
+	version = strings.TrimSpace(version)
+	if version == "" {
+		return ""
+	}
+	if strings.HasPrefix(version, "v") {
+		return version
+	}
+	return "v" + version
 }
 
 func (a *App) printCenteredLine(text string, color, bold, dim bool) {

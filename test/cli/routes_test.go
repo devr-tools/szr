@@ -12,6 +12,7 @@ import (
 
 	"github.com/devr-tools/szr/internal/cli"
 	"github.com/devr-tools/szr/internal/config"
+	"github.com/devr-tools/szr/internal/history"
 	"github.com/devr-tools/szr/internal/updates"
 	"github.com/devr-tools/szr/test/testutil"
 )
@@ -56,19 +57,20 @@ func TestRunRoutes(t *testing.T) {
 		wantStderr []string
 		stdin      string
 	}{
-		{"help empty", nil, 0, []string{`szr or "sizer" is a token-aware CLI proxy built in Go`, "Setup:"}, nil, ""},
+		{"help empty", nil, 0, []string{"vtest", `szr or "sizer" is a token-aware CLI proxy built in Go`, "Setup:"}, nil, ""},
 		{"help flag", []string{"--help"}, 0, []string{"Setup:", "Insight:", "Discover:", "szr commands", "--reasoning-budget <standard|agent>", "szr uninstall", "szr uninstall codex|claude-code|cursor|..."}, nil, ""},
 		{"help ultra", []string{"-u", "help"}, 0, []string{"Setup:"}, nil, ""},
 		{"help verbose long", []string{"--verbose", "help"}, 0, []string{"Setup:"}, nil, ""},
 		{"help verbose exact", []string{"-vv", "help"}, 0, []string{"Setup:"}, nil, ""},
 		{"help verbose counted", []string{"-vvvv", "help"}, 0, []string{"Setup:"}, nil, ""},
-		{"commands", []string{"commands"}, 0, []string{"commands", "Execution:", "Local Tools:", "Install:", "szr rg <pattern> [path]", "szr uninstall codex"}, nil, ""},
+		{"commands", []string{"commands"}, 0, []string{"commands", "vtest", "Execution:", "Local Tools:", "Install:", "szr rg <pattern> [path]", "szr uninstall codex"}, nil, ""},
+		{"commands rewrite", []string{"commands"}, 0, []string{"Integrations:", "szr rewrite --json --command '<cmd>'"}, nil, ""},
 		{"version", []string{"--version"}, 0, []string{"szr test"}, nil, ""},
 		{"profiles", []string{"profiles"}, 0, []string{"git-status", "generic-summary"}, nil, ""},
 		{"doctor", []string{"doctor"}, 0, []string{"version: test", "reasoning budget mode: standard", "update checks: disabled", "go:", "git:", "rg:"}, nil, ""},
 		{"self doctor", []string{"self", "doctor"}, 0, []string{"version: test", "install target:", "config dir:", "update checks: disabled"}, nil, ""},
 		{"doctor missing tool", []string{"doctor"}, 0, []string{"go: missing"}, nil, ""},
-		{"git status", []string{"git", "status"}, 0, []string{"staged=1"}, nil, ""},
+		{"git status", []string{"git", "status"}, 0, []string{"main...origin/main", "M  README.md"}, nil, ""},
 		{"git log", []string{"git", "log"}, 0, []string{"2 commits"}, nil, ""},
 		{"git diff", []string{"git", "diff"}, 0, []string{"files=1 +0 -0", "a.go | 2 +-"}, nil, ""},
 		{"go test", []string{"go", "test", "./..."}, 0, []string{"pkg/fail", "TestSad"}, nil, ""},
@@ -79,9 +81,17 @@ func TestRunRoutes(t *testing.T) {
 		{"proxy", []string{"proxy", "echoer"}, 0, []string{"plain-output"}, nil, ""},
 		{"test wrapper", []string{"test", "noisy"}, 0, []string{"FAIL one"}, nil, ""},
 		{"summary wrapper", []string{"summary", "echoer"}, 0, []string{"plain-output"}, nil, ""},
+		{"rewrite command", []string{"rewrite", "--command", "git diff HEAD~1..HEAD --stat"}, 0, []string{"szr git diff HEAD~1..HEAD --stat"}, nil, ""},
+		{"rewrite hint", []string{"rewrite", "--format", "hint", "--command", "/usr/bin/grep -rn needle ."}, 0, []string{"szr grep <pattern> <path>"}, nil, ""},
+		{"rewrite pipeline", []string{"rewrite", "--command", "git diff HEAD~1..HEAD --stat | tail -30"}, 0, []string{"szr proxy git diff HEAD~1..HEAD --stat | tail -30"}, nil, ""},
+		{"rewrite json", []string{"rewrite", "--format", "json", "--command", "git diff HEAD~1..HEAD --stat | tail -30"}, 0, []string{`"auto_rewrite":true`, `"wrap_mode":"proxy"`, `"producer_only":true`}, nil, ""},
 		{"explain", []string{"explain", "git", "status"}, 0, []string{"profile: git-status"}, nil, ""},
 		{"ls", []string{"ls", root}, 0, []string{filepath.Base(root), "dir", "sub"}, nil, ""},
 		{"ls default root", []string{"ls"}, 0, []string{filepath.Base(".")}, nil, ""},
+		{"find", []string{"find", root, "--name", "*.go"}, 0, []string{"1 matches", "b.go"}, nil, ""},
+		{"find path filter", []string{"find", root, "--name", "*.txt", "--path", "*a.txt"}, 0, []string{"1 matches", "a.txt"}, nil, ""},
+		{"find exclude", []string{"find", root, "--exclude", "dir/*"}, 0, []string{"5 matches"}, nil, ""},
+		{"find max depth", []string{"find", root, "--type", "d", "--max-depth", "1"}, 0, []string{"1 matches", filepath.ToSlash(filepath.Join(root, "dir"))}, nil, ""},
 		{"read single", []string{"read", fileA}, 0, []string{"one", "// c"}, nil, ""},
 		{"read multi aggressive", []string{"read", "-l", "aggressive", "-n", "--max-lines", "1", fileA, fileB}, 0, []string{"== " + fileA + " ==", "== " + fileB + " ==", "func x() { ... }"}, nil, ""},
 		{"grep", []string{"grep", "match", "."}, 0, []string{"file.go (2 matches)"}, nil, ""},
@@ -161,6 +171,60 @@ func TestDoctorMarksRipgrepOptional(t *testing.T) {
 	}
 }
 
+func TestRewriteHookCursor(t *testing.T) {
+	app := testutil.NewTestApp(t)
+	var code int
+	var stdout, stderr string
+	testutil.WithStdin(t, `{"tool_name":"Bash","tool_input":{"command":"git diff HEAD~1..HEAD --stat | tail -30"}}`, func() {
+		code, stdout, stderr = testutil.RunApp(t, app, "rewrite", "--hook", "cursor")
+	})
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected rewrite hook cursor stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	for _, want := range []string{`"permission":"allow"`, `szr proxy git diff HEAD~1..HEAD --stat | tail -30`} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("expected rewrite hook output %q in %q", want, stdout)
+		}
+	}
+}
+
+func TestRewriteReadsCommandFromStdin(t *testing.T) {
+	app := testutil.NewTestApp(t)
+	var code int
+	var stdout, stderr string
+	testutil.WithStdin(t, "git diff HEAD~1..HEAD --stat\n", func() {
+		code, stdout, stderr = testutil.RunApp(t, app, "rewrite", "--stdin", "--binary", "custom-szr")
+	})
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected rewrite stdin stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	if !strings.Contains(stdout, "custom-szr git diff HEAD~1..HEAD --stat") {
+		t.Fatalf("expected stdin rewrite output, got %q", stdout)
+	}
+}
+
+func TestRewriteHookFallbacks(t *testing.T) {
+	app := testutil.NewTestApp(t)
+
+	t.Run("cursor fallback", func(t *testing.T) {
+		code, stdout, stderr := testutil.RunApp(t, app, "rewrite", "--hook", "cursor")
+		if code != 0 || stderr != "" || strings.TrimSpace(stdout) != "{}" {
+			t.Fatalf("unexpected cursor fallback stdout=%q stderr=%q code=%d", stdout, stderr, code)
+		}
+	})
+
+	t.Run("gemini fallback", func(t *testing.T) {
+		var code int
+		var stdout, stderr string
+		testutil.WithStdin(t, "not-json", func() {
+			code, stdout, stderr = testutil.RunApp(t, app, "rewrite", "--hook", "gemini")
+		})
+		if code != 0 || stderr != "" || strings.TrimSpace(stdout) != `{"decision":"allow"}` {
+			t.Fatalf("unexpected gemini fallback stdout=%q stderr=%q code=%d", stdout, stderr, code)
+		}
+	})
+}
+
 func TestDoctorShowsUpdateCheckStatusAndNotice(t *testing.T) {
 	paths := testutil.Paths(t.TempDir())
 	testutil.EnsurePaths(t, paths)
@@ -202,6 +266,65 @@ func TestDoctorShowsUpdateCheckStatusAndNotice(t *testing.T) {
 	}
 	if stderr != "" {
 		t.Fatalf("expected no inline update notice for non-interactive stderr, got stderr=%q", stderr)
+	}
+}
+
+func TestSettingsInteractivePersistsConfig(t *testing.T) {
+	paths := testutil.Paths(t.TempDir())
+	testutil.EnsurePaths(t, paths)
+	cfg := config.Default()
+	store := history.New(paths.HistoryFile)
+	app := cli.NewWithDependencies("test", cfg, paths, store, testutil.AppEngine(t, paths))
+
+	var code int
+	var stdout, stderr string
+	testutil.WithStdin(t, "1\n1\n2\n1\n3\n12\n4\n2\n5\n20\n6\n11\n7\n2\nq\n", func() {
+		code, stdout, stderr = testutil.RunApp(t, app, "settings")
+	})
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected settings stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	for _, want := range []string{
+		"settings",
+		"current: disabled",
+		"1. enable",
+		"2. disable",
+		"saved: update checks enabled",
+		"saved: auto update enabled",
+		"saved: update interval 12h",
+		"saved: tee on failure disabled",
+		"saved: max preview lines 20",
+		"saved: max match groups 11",
+		"saved: reasoning budget mode agent",
+		"settings: saved and exiting",
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("expected stdout to contain %q, got %q", want, stdout)
+		}
+	}
+
+	data := testutil.MustReadFile(t, paths.ConfigFile)
+	var saved config.Config
+	if err := json.Unmarshal(data, &saved); err != nil {
+		t.Fatalf("decode saved config: %v", err)
+	}
+	if !saved.UpdateCheck.Enabled || !saved.UpdateCheck.AutoUpdate || saved.UpdateCheck.IntervalHours != 12 {
+		t.Fatalf("unexpected update settings: %#v", saved.UpdateCheck)
+	}
+	if saved.TeeOnFailure || saved.MaxPreviewLines != 20 || saved.MaxMatchGroups != 11 || saved.ReasoningBudgetMode != config.ReasoningBudgetAgent {
+		t.Fatalf("unexpected saved config: %#v", saved)
+	}
+}
+
+func TestSettingsRejectsUnknownArgs(t *testing.T) {
+	app := testutil.NewTestApp(t)
+
+	code, stdout, stderr := testutil.RunApp(t, app, "settings", "extra")
+	if code != 2 || stdout != "" {
+		t.Fatalf("unexpected settings args stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	if !strings.Contains(stderr, "settings does not accept arguments") {
+		t.Fatalf("expected settings arg error, got %q", stderr)
 	}
 }
 

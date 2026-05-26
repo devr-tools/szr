@@ -9,6 +9,56 @@ import (
 func Profiles(maxLines int, maxGroups int) []engine.Profile {
 	return []engine.Profile{
 		{
+			Name:             "ripgrep-files",
+			Description:      "Summarizes `rg --files` output into a bounded path list.",
+			Confidence:       engine.ConfidenceHigh,
+			StreamPreference: engine.StreamStdoutFirst,
+			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 8)),
+			LatencyBudget:    profilekit.LatencyBudget(20),
+			Match: func(inv engine.Invocation) bool {
+				return isRipgrepFilesCommand(inv.Display)
+			},
+			Prepare: func(inv engine.Invocation) []string {
+				return prepareRipgrepFiles(inv.Command)
+			},
+			Render: func(_ engine.Invocation, exec engine.Execution) string {
+				return filters.SummarizeFindOutput(exec.Stdout, exec.Stderr, maxLines)
+			},
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
+				return filters.NewFindReducer(budget.MaxLines)
+			},
+			ParseBytes: profilekit.ParseCombined,
+			Explain: []string{
+				"Targets `rg --files` path-list output and preserves ripgrep ignore behavior unless the user explicitly overrides it.",
+				"Summarizes tracked paths as a bounded, deduplicated match list instead of treating the command as a generic fallback.",
+			},
+		},
+		{
+			Name:             "ripgrep-files-with-matches",
+			Description:      "Summarizes `rg --files-with-matches` output into a bounded path list.",
+			Confidence:       engine.ConfidenceHigh,
+			StreamPreference: engine.StreamStdoutFirst,
+			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 8)),
+			LatencyBudget:    profilekit.LatencyBudget(20),
+			Match: func(inv engine.Invocation) bool {
+				return isRipgrepFilesWithMatchesCommand(inv.Display)
+			},
+			Prepare: func(inv engine.Invocation) []string {
+				return prepareRipgrepFiles(inv.Command)
+			},
+			Render: func(_ engine.Invocation, exec engine.Execution) string {
+				return filters.SummarizeFindOutput(exec.Stdout, exec.Stderr, maxLines)
+			},
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
+				return filters.NewFindReducer(budget.MaxLines)
+			},
+			ParseBytes: profilekit.ParseCombined,
+			Explain: []string{
+				"Targets `rg --files-with-matches` path-list output while preserving ripgrep ignore behavior unless the user explicitly overrides it.",
+				"Summarizes matching file paths as a bounded, deduplicated list instead of routing through a generic fallback.",
+			},
+		},
+		{
 			Name:             "ripgrep",
 			Description:      "Normalizes ripgrep into stable line-oriented output and groups matches by file.",
 			Confidence:       engine.ConfidenceHigh,
@@ -25,9 +75,7 @@ func Profiles(maxLines int, maxGroups int) []engine.Profile {
 				return filters.SummarizeRipgrep(exec.Stdout+"\n"+exec.Stderr, maxGroups, maxLines)
 			},
 			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return filters.NewBufferedTextReducer(true, true, func(input string) string {
-					return filters.SummarizeRipgrep(input, maxGroups, budget.MaxLines)
-				})
+				return filters.NewRipgrepReducer(maxGroups, budget.MaxLines)
 			},
 			ParseBytes: profilekit.ParseCombined,
 			Explain: []string{
@@ -35,36 +83,30 @@ func Profiles(maxLines int, maxGroups int) []engine.Profile {
 				"Groups matches by file and falls back to error-focused output when ripgrep fails instead of returning matches.",
 			},
 		},
+		{
+			Name:             "path-find",
+			Description:      "Summarizes plain `find` output into a bounded match list.",
+			Confidence:       engine.ConfidenceMedium,
+			StreamPreference: engine.StreamStdoutFirst,
+			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 8)),
+			LatencyBudget:    profilekit.LatencyBudget(25),
+			Match: func(inv engine.Invocation) bool {
+				return isPlainFindCommand(inv.Display)
+			},
+			Prepare: func(inv engine.Invocation) []string {
+				return prepareFind(inv.Command)
+			},
+			Render: func(_ engine.Invocation, exec engine.Execution) string {
+				return filters.SummarizeFindOutput(exec.Stdout, exec.Stderr, maxLines)
+			},
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
+				return filters.NewFindReducer(budget.MaxLines)
+			},
+			ParseBytes: profilekit.ParseCombined,
+			Explain: []string{
+				"Targets plain `find` usage that emits path lists without destructive actions or custom executors.",
+				"Caps long file discovery output to a counted preview instead of replaying every path line.",
+			},
+		},
 	}
-}
-
-func isRipgrepCommand(args []string) bool {
-	if len(args) == 0 || args[0] != "rg" {
-		return false
-	}
-	if profilekit.ContainsAny(args[1:], "--json", "--files", "--files-with-matches", "-l", "--count", "-c", "--count-matches") {
-		return false
-	}
-	return true
-}
-
-func prepareRipgrep(command []string) []string {
-	if len(command) == 0 {
-		return command
-	}
-
-	out := append([]string{}, command...)
-	if !profilekit.ContainsAny(out[1:], "-n", "--line-number") {
-		out = append(out[:1], append([]string{"-n"}, out[1:]...)...)
-	}
-	if !profilekit.ContainsAny(out[1:], "-H", "--with-filename") {
-		out = append(out[:1], append([]string{"-H"}, out[1:]...)...)
-	}
-	if !profilekit.ContainsAny(out[1:], "--no-heading", "--heading") {
-		out = append(out[:1], append([]string{"--no-heading"}, out[1:]...)...)
-	}
-	if !profilekit.ContainsAny(out[1:], "--color", "never", "always", "ansi", "auto") && !profilekit.ContainsPrefix(out[1:], "--color=") {
-		out = append(out[:1], append([]string{"--color=never"}, out[1:]...)...)
-	}
-	return out
 }
