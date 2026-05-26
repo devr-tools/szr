@@ -105,6 +105,16 @@ func (a *App) handleSettingsChoice(choice string, reader *bufio.Reader, stdout, 
 			cfg.Advanced.SemanticCompaction = value
 			return enabledLabel(cfg.Advanced.SemanticCompaction)
 		})
+	case "13":
+		return a.updateBooleanSetting(reader, stdout, stderr, "compression contract", a.config.Advanced.CompressionContract, "settings: compression contract unchanged", func(cfg *config.Config, value bool) string {
+			cfg.Advanced.CompressionContract = value
+			return enabledLabel(cfg.Advanced.CompressionContract)
+		})
+	case "14":
+		return a.updateBooleanSetting(reader, stdout, stderr, "compact artifact refs", a.config.Advanced.CompactArtifactRefs, "settings: compact artifact refs unchanged", func(cfg *config.Config, value bool) string {
+			cfg.Advanced.CompactArtifactRefs = value
+			return enabledLabel(cfg.Advanced.CompactArtifactRefs)
+		})
 	case "q", "quit", "exit":
 		fmt.Fprintln(stdout, "settings: saved and exiting")
 		return 0, true
@@ -192,6 +202,8 @@ func (a *App) printSettingsMenu(w io.Writer, cfg config.Config, configFile strin
 	printSettingsRow(w, "10", "adaptive budgets", enabledLabel(cfg.Advanced.AdaptiveBudgets))
 	printSettingsRow(w, "11", "early capture stop", enabledLabel(cfg.Advanced.EarlyCaptureStop))
 	printSettingsRow(w, "12", "semantic compaction", enabledLabel(cfg.Advanced.SemanticCompaction))
+	printSettingsRow(w, "13", "compression contract", enabledLabel(cfg.Advanced.CompressionContract))
+	printSettingsRow(w, "14", "compact artifact refs", enabledLabel(cfg.Advanced.CompactArtifactRefs))
 	fmt.Fprintln(w, strings.Repeat("-", 54))
 	printSettingsRow(w, "q", "save and exit", "")
 	fmt.Fprint(w, "> ")

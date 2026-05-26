@@ -129,7 +129,7 @@ func TestExecuteTeeOnFailure(t *testing.T) {
 		Display: []string{"failcmd", strings.Repeat("x", 60)},
 		Cwd:     root,
 	}, false)
-	if err != nil || failResult.ExitCode != 3 || failResult.TeePath == "" || !strings.Contains(failResult.Display, "[full output:") {
+	if err != nil || failResult.ExitCode != 3 || failResult.TeePath == "" || !strings.Contains(failResult.Display, "[tee: ") {
 		t.Fatalf("unexpected failing result: %#v err=%v", failResult, err)
 	}
 	if _, statErr := os.Stat(failResult.TeePath); statErr != nil {

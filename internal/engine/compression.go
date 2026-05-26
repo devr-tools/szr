@@ -14,8 +14,8 @@ const (
 	compressionContractRetainedDen  = 5
 )
 
-func enforceCompressionContract(text string, rawCombined string, budget OutputBudget, plan RecoveryPlan, passthrough bool) (string, RecoveryPlan, bool) {
-	if passthrough {
+func enforceCompressionContract(text string, rawCombined string, budget OutputBudget, plan RecoveryPlan, passthrough bool, enabled bool) (string, RecoveryPlan, bool) {
+	if passthrough || !enabled {
 		return text, plan, false
 	}
 	rawTokens := history.EstimateTokens(rawCombined)
@@ -60,13 +60,21 @@ func hardCapTokens(text string, maxTokens int) string {
 		return ""
 	}
 	fields := strings.Fields(text)
-	if len(fields) <= maxTokens {
-		return strings.Join(fields, " ")
+	if len(fields) == 0 {
+		return ""
+	}
+	normalized := strings.Join(fields, " ")
+	if history.EstimateTokens(normalized) <= maxTokens {
+		return normalized
 	}
 	if maxTokens == 1 {
 		return "..."
 	}
-	for keep := maxTokens - 1; keep > 0; keep-- {
+	startKeep := maxTokens - 1
+	if startKeep > len(fields) {
+		startKeep = len(fields)
+	}
+	for keep := startKeep; keep > 0; keep-- {
 		kept := append([]string{}, fields[:keep]...)
 		kept = append(kept, "...")
 		candidate := strings.Join(kept, " ")

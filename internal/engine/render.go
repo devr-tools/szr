@@ -85,7 +85,7 @@ func RenderExecution(profile Profile, inv Invocation, exec Execution, fallbackLi
 			text = escaped
 		}
 	}
-	text, _, _ = enforceCompressionContract(text, rawCombined, budget, rendered.recoveryPlan, passthrough)
+	text, _, _ = enforceCompressionContract(text, rawCombined, budget, rendered.recoveryPlan, passthrough, inv.Advanced.CompressionContract)
 	return RenderedExecution{
 		Text:           text,
 		RawCombined:    rawCombined,

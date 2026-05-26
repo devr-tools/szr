@@ -38,7 +38,7 @@ func TestFinalizeRenderedDisplayRespectsCompressionContract(t *testing.T) {
 	final := finalizeRenderedDisplay(rendered, raw, budget, RecoveryPlan{
 		Kind:    RecoveryKindFullOutput,
 		Summary: "omitted many lines",
-	}, "/tmp/full.log", false)
+	}, "/tmp/full.log", false, true, true)
 
 	allowed := compressionContractAllowedTokens(history.EstimateTokens(raw), budget)
 	if got := history.EstimateTokens(final); got > allowed {
@@ -46,6 +46,12 @@ func TestFinalizeRenderedDisplayRespectsCompressionContract(t *testing.T) {
 	}
 	if !strings.Contains(final, "[") {
 		t.Fatalf("expected recovery or full-output suffix, got %q", final)
+	}
+}
+
+func TestArtifactDisplayRefCompact(t *testing.T) {
+	if got := artifactDisplayRef("/tmp/1234567890123456_command.log", true); got != "tee: 123456789012" {
+		t.Fatalf("unexpected compact artifact ref: %q", got)
 	}
 }
 

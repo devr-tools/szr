@@ -44,7 +44,7 @@ func assertLoadCustomConfig(t *testing.T, paths config.Paths, root string) {
 	if err != nil || cfg.TeeOnFailure || cfg.MaxPreviewLines != 7 || cfg.MaxMatchGroups != 4 || cfg.ReasoningBudgetMode != config.ReasoningBudgetAgent || !cfg.UpdateCheck.Enabled || cfg.UpdateCheck.IntervalHours != 12 || !cfg.UpdateCheck.AutoUpdate {
 		t.Fatalf("unexpected loaded config: %#v err=%v", cfg, err)
 	}
-	if !cfg.Advanced.AggressivePrepareRewrites || !cfg.Advanced.NoisePrefiltering || !cfg.Advanced.AdaptiveBudgets || cfg.Advanced.EarlyCaptureStop || !cfg.Advanced.SemanticCompaction {
+	if !cfg.Advanced.AggressivePrepareRewrites || !cfg.Advanced.NoisePrefiltering || !cfg.Advanced.AdaptiveBudgets || cfg.Advanced.EarlyCaptureStop || !cfg.Advanced.SemanticCompaction || !cfg.Advanced.CompressionContract || !cfg.Advanced.CompactArtifactRefs {
 		t.Fatalf("unexpected advanced config: %#v", cfg.Advanced)
 	}
 }

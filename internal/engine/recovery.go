@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"path/filepath"
 	"strings"
 
 	"github.com/devr-tools/szr/internal/history"
@@ -52,16 +53,16 @@ func appendRecoveryHint(rendered string, plan RecoveryPlan, artifactPath string,
 	return strings.TrimRight(rendered, "\n") + "\n" + line
 }
 
-func finalizeRenderedDisplay(rendered string, rawCombined string, budget OutputBudget, plan RecoveryPlan, artifactPath string, passthrough bool) string {
+func finalizeRenderedDisplay(rendered string, rawCombined string, budget OutputBudget, plan RecoveryPlan, artifactPath string, passthrough bool, compactArtifactRefs bool, compressionContract bool) string {
 	if passthrough {
 		return rendered
 	}
-	suffixes := displayArtifactSuffixes(plan, artifactPath)
+	suffixes := displayArtifactSuffixes(plan, artifactPath, compactArtifactRefs)
 	if len(suffixes) == 0 {
 		return rendered
 	}
 	rawTokens := history.EstimateTokens(rawCombined)
-	if rawTokens < compressionContractMinRawTokens {
+	if !compressionContract || rawTokens < compressionContractMinRawTokens {
 		return appendDisplaySuffix(rendered, suffixes[0])
 	}
 	allowedTokens := compressionContractAllowedTokens(rawTokens, budget)
@@ -83,21 +84,33 @@ func finalizeRenderedDisplay(rendered string, rawCombined string, budget OutputB
 	return suffixes[len(suffixes)-1]
 }
 
-func displayArtifactSuffixes(plan RecoveryPlan, artifactPath string) []string {
+func displayArtifactSuffixes(plan RecoveryPlan, artifactPath string, compactArtifactRefs bool) []string {
 	if artifactPath == "" {
 		return nil
 	}
+	ref := artifactDisplayRef(artifactPath, compactArtifactRefs)
 	if plan.Kind != "" && plan.Summary != "" {
 		return []string{
-			"[recovery: " + plan.Summary + "; full output: " + artifactPath + "]",
-			"[full output: " + artifactPath + "]",
+			"[recovery: " + plan.Summary + "; " + ref + "]",
+			"[" + ref + "]",
 			"[full output saved]",
 		}
 	}
 	return []string{
-		"[full output: " + artifactPath + "]",
+		"[" + ref + "]",
 		"[full output saved]",
 	}
+}
+
+func artifactDisplayRef(path string, compact bool) string {
+	if !compact {
+		return "full output: " + path
+	}
+	id := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+	if len(id) > 12 {
+		id = id[:12]
+	}
+	return "tee: " + id
 }
 
 func appendDisplaySuffix(rendered string, suffix string) string {

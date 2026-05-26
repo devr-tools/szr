@@ -44,7 +44,7 @@ func TestExecuteUsesStreamReducerAndStreamsTeeOnFailure(t *testing.T) {
 	if result.ExitCode != 7 {
 		t.Fatalf("expected exit 7, got %#v", result)
 	}
-	if !strings.Contains(result.Display, "stderr-one") || !strings.Contains(result.Display, "[full output:") {
+	if !strings.Contains(result.Display, "stderr-one") || !strings.Contains(result.Display, "[tee: ") {
 		t.Fatalf("unexpected rendered display: %q", result.Display)
 	}
 	if result.TeePath == "" {
@@ -238,7 +238,7 @@ func TestExecutePersistsRecoveryArtifactOnSuccessfulOmission(t *testing.T) {
 	if result.TeePath == "" {
 		t.Fatalf("expected recovery artifact tee path, got %#v", result)
 	}
-	if !strings.Contains(result.Display, "[recovery: omitted 2 additional matches; full output:") {
+	if !strings.Contains(result.Display, "[recovery: omitted 2 additional matches; tee: ") {
 		t.Fatalf("expected recovery hint in display, got %q", result.Display)
 	}
 	teeData := string(testutil.MustReadFile(t, result.TeePath))
@@ -282,7 +282,7 @@ func TestExecutePersistsRecoveryArtifactOnCompressionContract(t *testing.T) {
 	if result.TeePath == "" {
 		t.Fatalf("expected tee path for compressed successful output, got %#v", result)
 	}
-	if !strings.Contains(result.Display, "[full output") {
+	if !strings.Contains(result.Display, "[recovery: ") && !strings.Contains(result.Display, "[tee: ") && !strings.Contains(result.Display, "[full output saved]") {
 		t.Fatalf("expected budget-aware recovery suffix in display, got %q", result.Display)
 	}
 	allowed := 16

@@ -27,6 +27,8 @@ type Advanced struct {
 	AdaptiveBudgets           bool `json:"adaptive_budgets"`
 	EarlyCaptureStop          bool `json:"early_capture_stop"`
 	SemanticCompaction        bool `json:"semantic_compaction"`
+	CompressionContract       bool `json:"compression_contract"`
+	CompactArtifactRefs       bool `json:"compact_artifact_refs"`
 }
 
 type UpdateCheck struct {
@@ -57,6 +59,8 @@ func Default() Config {
 			AdaptiveBudgets:           false,
 			EarlyCaptureStop:          true,
 			SemanticCompaction:        true,
+			CompressionContract:       true,
+			CompactArtifactRefs:       true,
 		},
 		UpdateCheck: UpdateCheck{
 			Enabled:       false,

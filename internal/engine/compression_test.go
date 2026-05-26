@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/devr-tools/szr/internal/config"
 	"github.com/devr-tools/szr/internal/history"
 )
 
@@ -26,7 +27,7 @@ func TestEnforceCompressionContractCompressesLargeOutput(t *testing.T) {
 
 	raw := strings.Repeat("token ", 80)
 	text := strings.Repeat("token ", 40)
-	compressed, plan, changed := enforceCompressionContract(text, raw, OutputBudget{MaxTokens: 32}, RecoveryPlan{}, false)
+	compressed, plan, changed := enforceCompressionContract(text, raw, OutputBudget{MaxTokens: 32}, RecoveryPlan{}, false, true)
 	if !changed {
 		t.Fatal("expected compression contract to apply")
 	}
@@ -44,7 +45,7 @@ func TestEnforceCompressionContractSkipsSmallRawOutput(t *testing.T) {
 
 	raw := strings.Repeat("token ", 20)
 	text := strings.Repeat("token ", 18)
-	compressed, _, changed := enforceCompressionContract(text, raw, OutputBudget{MaxTokens: 8}, RecoveryPlan{}, false)
+	compressed, _, changed := enforceCompressionContract(text, raw, OutputBudget{MaxTokens: 8}, RecoveryPlan{}, false, true)
 	if changed {
 		t.Fatal("did not expect contract on small raw output")
 	}
@@ -64,9 +65,24 @@ func TestRenderExecutionAppliesCompressionContract(t *testing.T) {
 			return exec.Stdout
 		},
 	}
-	rendered := RenderExecution(profile, Invocation{}, Execution{Stdout: raw}, 12, false)
+	rendered := RenderExecution(profile, Invocation{Advanced: configAdvancedForTests()}, Execution{Stdout: raw}, 12, false)
 	allowed := compressionContractAllowedTokens(rendered.RawTokens, profile.Budget)
 	if rendered.FilteredTokens > allowed {
 		t.Fatalf("expected rendered tokens <= %d, got %d (%q)", allowed, rendered.FilteredTokens, rendered.Text)
 	}
+}
+
+func TestEnforceCompressionContractDisabled(t *testing.T) {
+	t.Parallel()
+
+	raw := strings.Repeat("token ", 80)
+	text := strings.Repeat("token ", 40)
+	compressed, _, changed := enforceCompressionContract(text, raw, OutputBudget{MaxTokens: 16}, RecoveryPlan{}, false, false)
+	if changed || compressed != text {
+		t.Fatalf("expected disabled compression contract to preserve text, got changed=%v text=%q", changed, compressed)
+	}
+}
+
+func configAdvancedForTests() config.Advanced {
+	return config.Advanced{CompressionContract: true, CompactArtifactRefs: true}
 }
