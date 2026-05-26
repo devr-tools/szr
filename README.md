@@ -170,3 +170,7 @@ Use this surface when you want to:
 - [Releasing](docs/RELEASING.md)
 - [Go package](docs/GO_PACKAGE.md)
 - [Architecture](docs/ARCHITECTURE.md)
+
+## Authors
+
+@alxxjohn
