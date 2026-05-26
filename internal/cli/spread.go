@@ -48,7 +48,7 @@ func (a *App) runSpread(args []string) int {
 		{"Tokens saved", withBar(totalSavingsPct, fmt.Sprintf("%s (%.1f%%)", formatCompactCount(summary.SavedTokens), totalSavingsPct), ui.color, true)},
 		{"Total exec time", formatDurationSummary(summary.TotalDurationMS, summary.Commands)},
 	})
-	ui.metric("duration (p50/p95)", fmt.Sprintf("%dms / %dms", summary.DurationP50MS, summary.DurationP95MS), "")
+	ui.metric("p95 duration", fmt.Sprintf("%dms", summary.DurationP95MS), "")
 	ui.metric("bytes (read/parsed/emitted)", fmt.Sprintf("%d / %d / %d", summary.RawBytesRead, summary.BytesParsed, summary.BytesEmitted), "")
 	ui.metric("failed commands", failureRate, withBar(summary.FailureRate, failureRate, ui.color, false))
 	ui.metric("fallback usage", fallbackRate, withBar(summary.FallbackRate, fallbackRate, ui.color, false))
@@ -140,14 +140,14 @@ func renderSpreadProfiles(ui spreadUI, stats []history.ProfileStat) {
 			fmt.Sprintf("%d", stat.Commands),
 			fmt.Sprintf("%d", stat.SavedTokens),
 			fmt.Sprintf("%.1f%% %s", stat.AveragePct, progressBar(stat.AveragePct, 10, false, true)),
-			fmt.Sprintf("%d/%dms", stat.DurationP50MS, stat.DurationP95MS),
+			fmt.Sprintf("%dms", stat.DurationP95MS),
 			fmt.Sprintf("%.1f%%", stat.FailureRate),
 			fmt.Sprintf("%.1f%%", stat.FallbackRate),
 			fmt.Sprintf("%.1f%%", stat.TeeRate),
 		})
 	}
 	ui.table(
-		[]string{"profile", "conf", "count", "saved", "avg", "p50/p95", "fail", "fallback", "tee"},
+		[]string{"profile", "conf", "count", "saved", "avg", "p95", "fail", "fallback", "tee"},
 		rows,
 		tableSpec{
 			alignRight: map[int]bool{2: true, 3: true, 5: true, 6: true, 7: true, 8: true},
@@ -169,12 +169,12 @@ func renderSpreadHotspots(ui spreadUI, stats []history.CommandHotspot) {
 			fmt.Sprintf("%d", stat.Commands),
 			fmt.Sprintf("%.1f%% %s", stat.AveragePct, progressBar(stat.AveragePct, 10, false, true)),
 			fmt.Sprintf("%.1f%%", stat.FallbackRate),
-			fmt.Sprintf("%d/%dms", stat.DurationP50MS, stat.DurationP95MS),
+			fmt.Sprintf("%dms", stat.DurationP95MS),
 			hotspotAction(stat),
 		})
 	}
 	ui.table(
-		[]string{"command", "profile", "count", "avg", "fallback", "p50/p95", "action"},
+		[]string{"command", "profile", "count", "avg", "fallback", "p95", "action"},
 		rows,
 		tableSpec{
 			alignRight: map[int]bool{2: true, 4: true, 5: true},
@@ -195,12 +195,12 @@ func renderSpreadFingerprints(ui spreadUI, stats []history.FingerprintStat) {
 			stat.Profile,
 			fmt.Sprintf("%d", stat.Commands),
 			fmt.Sprintf("%.1f%% %s", stat.AveragePct, progressBar(stat.AveragePct, 10, false, true)),
-			fmt.Sprintf("%d/%dms", stat.DurationP50MS, stat.DurationP95MS),
+			fmt.Sprintf("%dms", stat.DurationP95MS),
 			stat.Fingerprint,
 		})
 	}
 	ui.table(
-		[]string{"command", "profile", "count", "avg", "p50/p95", "fp"},
+		[]string{"command", "profile", "count", "avg", "p95", "fp"},
 		rows,
 		tableSpec{
 			alignRight: map[int]bool{2: true, 4: true},

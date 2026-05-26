@@ -97,7 +97,7 @@ func TestCommandErrorMatrix(t *testing.T) {
 func TestSpreadCommandOutputs(t *testing.T) {
 	app := newSpreadFixtureApp(t)
 	code, stdout, stderr := testutil.RunApp(t, app, "spread")
-	if code != 0 || !strings.Contains(stdout, "Total commands:") || !strings.Contains(stdout, "Total exec time:") || stderr != "" {
+	if code != 0 || !strings.Contains(stdout, "Total commands:") || !strings.Contains(stdout, "p95 duration:") || stderr != "" {
 		t.Fatalf("unexpected spread output stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
 
@@ -282,7 +282,7 @@ func TestSpreadReportingHistoryOutput(t *testing.T) {
 		"160 (57.1%)",
 		"Total exec time:",
 		"130ms (avg 43ms)",
-		"duration (p50/p95): 30ms / 90ms",
+		"p95 duration: 90ms",
 		"bytes (read/parsed/emitted): 390 / 260 / 120",
 		"failed commands: 66.7% (2/3)",
 		"fallback usage: 33.3% (1/3)",
@@ -293,7 +293,7 @@ func TestSpreadReportingHistoryOutput(t *testing.T) {
 		"saved",
 		"│ profile",
 		"│ conf",
-		"p50/p95",
+		"p95",
 		"profiles:",
 		"improvement hotspots:",
 		"action",
@@ -301,9 +301,9 @@ func TestSpreadReportingHistoryOutput(t *testing.T) {
 		"git-status",
 		"go-test-json",
 		"passthrough",
-		"80.0% ▕██████████░░▏",
-		"66.7% ▕████████░░░░▏",
-		"0.0% ▕░░░░░░░░░░░░▏",
+		"80.0% ██████████░░",
+		"66.7% ████████░░░░",
+		"0.0% ░░░░░░░░░░░░",
 		"recent:",
 		"2026-05-20T12:00:00Z  passthrough  confidence=low  10ms  exit=2  fallback=true  0.0%  szr custom command",
 	} {

@@ -195,7 +195,7 @@ func progressBar(value float64, width int, enabled bool, higherIsBetter bool) st
 	if filled > width {
 		filled = width
 	}
-	bar := "▕" + strings.Repeat("█", filled) + strings.Repeat("░", width-filled) + "▏"
+	bar := strings.Repeat("█", filled) + strings.Repeat("░", width-filled)
 	if !enabled {
 		return bar
 	}
@@ -253,17 +253,15 @@ func colorizeEmbeddedBar(value string, enabled bool) string {
 	if !enabled {
 		return value
 	}
-	const (
-		meterStart = "▕"
-		meterEnd   = "▏"
-	)
-	start := strings.Index(value, meterStart)
-	end := strings.Index(value, meterEnd)
-	if start < 0 || end <= start {
+	pctIndex := strings.Index(value, "%")
+	if pctIndex < 0 {
 		return value
 	}
-	pctIndex := strings.Index(value, "%")
-	if pctIndex < 0 || pctIndex > start {
+	barStart := pctIndex + 1
+	for barStart < len(value) && value[barStart] == ' ' {
+		barStart++
+	}
+	if barStart >= len(value) {
 		return value
 	}
 	numberText := strings.TrimSpace(value[:pctIndex])
@@ -275,9 +273,23 @@ func colorizeEmbeddedBar(value string, enabled bool) string {
 	if err != nil {
 		return value
 	}
-	barEnd := end + len(meterEnd)
-	bar := value[start:barEnd]
-	return value[:start] + colorizeTextByRate(rate, bar, enabled, true) + value[barEnd:]
+	barEnd := barStart
+	for barEnd < len(value) {
+		r, size := utf8.DecodeRuneInString(value[barEnd:])
+		if !isMeterRune(r) {
+			break
+		}
+		barEnd += size
+	}
+	if barEnd == barStart {
+		return value
+	}
+	bar := value[barStart:barEnd]
+	return value[:barStart] + colorizeTextByRate(rate, bar, enabled, true) + value[barEnd:]
+}
+
+func isMeterRune(r rune) bool {
+	return r == '█' || r == '░'
 }
 
 func formatTokenCount(value int) string {
