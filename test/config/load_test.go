@@ -41,12 +41,10 @@ func assertLoadDefaultConfig(t *testing.T, paths config.Paths, root string) {
 func assertLoadCustomConfig(t *testing.T, paths config.Paths, root string) {
 	t.Helper()
 	cfg, _, err := loadConfigFixture(t, paths, root, nil, nil, []byte(`{"tee_on_failure":false,"max_preview_lines":7,"max_match_groups":4,"reasoning_budget":"agent","advanced":{"adaptive_budgets":true,"early_capture_stop":false},"update_check":{"enabled":true,"interval_hours":12,"auto_update":true}}`))
-	if err != nil || cfg.TeeOnFailure || cfg.MaxPreviewLines != 7 || cfg.MaxMatchGroups != 4 || cfg.ReasoningBudgetMode != config.ReasoningBudgetAgent || !cfg.UpdateCheck.Enabled || cfg.UpdateCheck.IntervalHours != 12 || !cfg.UpdateCheck.AutoUpdate {
+	if err != nil {
 		t.Fatalf("unexpected loaded config: %#v err=%v", cfg, err)
 	}
-	if !cfg.Advanced.AggressivePrepareRewrites || !cfg.Advanced.NoisePrefiltering || !cfg.Advanced.AdaptiveBudgets || cfg.Advanced.EarlyCaptureStop || !cfg.Advanced.SemanticCompaction || !cfg.Advanced.CompressionContract || !cfg.Advanced.CompactArtifactRefs {
-		t.Fatalf("unexpected advanced config: %#v", cfg.Advanced)
-	}
+	assertCustomConfigFields(t, cfg)
 }
 
 func assertLoadAggressiveConfig(t *testing.T, paths config.Paths, root string) {
@@ -62,6 +60,65 @@ func assertLoadNormalizedUpdateCheck(t *testing.T, paths config.Paths, root stri
 	cfg, _, err := loadConfigFixture(t, paths, root, nil, nil, []byte(`{"update_check":{"enabled":true,"interval_hours":0}}`))
 	if err != nil || !cfg.UpdateCheck.Enabled || cfg.UpdateCheck.IntervalHours != 24 {
 		t.Fatalf("expected normalized update check config, got %#v err=%v", cfg.UpdateCheck, err)
+	}
+}
+
+func assertCustomConfigFields(t *testing.T, cfg config.Config) {
+	t.Helper()
+
+	if cfg.TeeOnFailure {
+		t.Fatal("expected tee_on_failure to be false")
+	}
+	if cfg.MaxPreviewLines != 7 {
+		t.Fatalf("expected max preview lines 7, got %d", cfg.MaxPreviewLines)
+	}
+	if cfg.MaxMatchGroups != 4 {
+		t.Fatalf("expected max match groups 4, got %d", cfg.MaxMatchGroups)
+	}
+	if cfg.ReasoningBudgetMode != config.ReasoningBudgetAgent {
+		t.Fatalf("expected reasoning budget %q, got %q", config.ReasoningBudgetAgent, cfg.ReasoningBudgetMode)
+	}
+	assertUpdateCheckConfig(t, cfg)
+	assertAdvancedConfigDefaults(t, cfg.Advanced)
+}
+
+func assertUpdateCheckConfig(t *testing.T, cfg config.Config) {
+	t.Helper()
+
+	if !cfg.UpdateCheck.Enabled {
+		t.Fatal("expected update check to be enabled")
+	}
+	if cfg.UpdateCheck.IntervalHours != 12 {
+		t.Fatalf("expected update interval 12, got %d", cfg.UpdateCheck.IntervalHours)
+	}
+	if !cfg.UpdateCheck.AutoUpdate {
+		t.Fatal("expected auto update to be enabled")
+	}
+}
+
+func assertAdvancedConfigDefaults(t *testing.T, advanced config.Advanced) {
+	t.Helper()
+
+	if !advanced.AggressivePrepareRewrites {
+		t.Fatal("expected aggressive prepare rewrites")
+	}
+	if !advanced.NoisePrefiltering {
+		t.Fatal("expected noise prefiltering")
+	}
+	if !advanced.AdaptiveBudgets {
+		t.Fatal("expected adaptive budgets")
+	}
+	if advanced.EarlyCaptureStop {
+		t.Fatal("expected early capture stop to be false")
+	}
+	if !advanced.SemanticCompaction {
+		t.Fatal("expected semantic compaction")
+	}
+	if !advanced.CompressionContract {
+		t.Fatal("expected compression contract")
+	}
+	if !advanced.CompactArtifactRefs {
+		t.Fatal("expected compact artifact refs")
 	}
 }
 

@@ -11,6 +11,9 @@ MIN_INTERNAL_COVERAGE="${MIN_INTERNAL_COVERAGE:-80.0}"
 GOVULNCHECK_VERSION="${GOVULNCHECK_VERSION:-v1.3.0}"
 GOVULNCHECK_MODE="${GOVULNCHECK_MODE:-warn}"
 GOCYCLO_VERSION="${GOCYCLO_VERSION:-v0.6.0}"
+SCC_VERSION="${SCC_VERSION:-v3.7.0}"
+GOLANGCI_LINT_VERSION="${GOLANGCI_LINT_VERSION:-v2.12.2}"
+MAX_GO_FILE_CODE_LINES="${MAX_GO_FILE_CODE_LINES:-400}"
 SMOKE_HOME="${SMOKE_HOME:-${ROOT_DIR}/.tmp-home}"
 COVERFILE="${COVERFILE:-.coverage.internal.out}"
 BASE_REF="${BASE_REF:-}"
@@ -182,6 +185,53 @@ if [[ "${#gocyclo_files[@]}" -gt 0 ]]; then
 	"${gocyclo_bin}" -over 15 "${gocyclo_files[@]}" | tee "${tmpdir}/gocyclo.out"
 	[[ ! -s "${tmpdir}/gocyclo.out" ]] || die "gocyclo found functions above the limit"
 fi
+
+log "scc"
+scc_files=()
+while IFS= read -r file; do
+	[[ -n "${file}" ]] || continue
+	scc_files+=("${file}")
+done < <(
+	printf '%s\n' "${changed_files}" \
+		| grep -E '^(cmd/|internal/|pkg/).+\.go$' \
+		| grep -Ev '(^|/).+_test\.go$' \
+		| sort -u || true
+)
+if [[ "${#scc_files[@]}" -gt 0 ]]; then
+	scc_bin="$(ensure_go_tool scc github.com/boyter/scc/v3 "${SCC_VERSION}")"
+	"${scc_bin}" --by-file --format json "${scc_files[@]}" > "${tmpdir}/scc.json"
+	python3 - "${MAX_GO_FILE_CODE_LINES}" "${tmpdir}/scc.json" <<'PY' || die "changed Go files exceeded the maximum code-line budget"
+import json
+import sys
+
+limit = int(sys.argv[1])
+path = sys.argv[2]
+payload = json.load(open(path, encoding="utf-8"))
+rows = payload if isinstance(payload, list) else payload.get("files", [])
+offenders = []
+
+for row in rows:
+    if not isinstance(row, dict):
+        continue
+    name = row.get("Name") or row.get("name")
+    if not name:
+        continue
+    code = int(row.get("Code", row.get("code", 0)) or 0)
+    if code > limit:
+        offenders.append((name, code))
+
+offenders.sort()
+
+if offenders:
+    for name, code in offenders:
+        print(f"{code:>5}  {name}")
+    raise SystemExit(1)
+PY
+fi
+
+log "golangci-lint"
+golangci_lint_bin="$(ensure_go_tool golangci-lint github.com/golangci/golangci-lint/v2/cmd/golangci-lint "${GOLANGCI_LINT_VERSION}")"
+env GOCACHE="${GOCACHE}" "${golangci_lint_bin}" run --config .golangci.yml --new-from-rev "${merge_base}" ./...
 
 log "test (ubuntu-latest full)"
 env GOCACHE="${GOCACHE}" "${GO}" test ./test/...

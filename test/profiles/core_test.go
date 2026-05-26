@@ -105,7 +105,23 @@ func TestSelectionPrefersSpecificConflictProfiles(t *testing.T) {
 
 func TestGoProfiles(t *testing.T) {
 	list := profiles.Builtins(3)
-	goTest := testutil.FindProfile(t, list, "go-test-json")
+	t.Run("go-test-json", func(t *testing.T) {
+		goTest := testutil.FindProfile(t, list, "go-test-json")
+		assertGoTestProfile(t, goTest)
+	})
+	t.Run("generic-summary", func(t *testing.T) {
+		genericSummary := testutil.FindProfile(t, list, "generic-summary")
+		assertGenericSummaryProfile(t, genericSummary)
+	})
+	t.Run("go-build", func(t *testing.T) {
+		goBuild := testutil.FindProfile(t, list, "go-build")
+		assertGoBuildProfile(t, goBuild)
+	})
+}
+
+func assertGoTestProfile(t *testing.T, goTest engine.Profile) {
+	t.Helper()
+
 	if !goTest.Match(engine.Invocation{Display: []string{"go", "test"}}) || !goTest.Match(engine.Invocation{Command: []string{"go", "test"}}) {
 		t.Fatal("go-test-json should match")
 	}
@@ -118,6 +134,7 @@ func TestGoProfiles(t *testing.T) {
 	if goTest.StreamPreference != engine.StreamStdoutOnly || goTest.StreamRender == nil {
 		t.Fatalf("unexpected go-test-json stream metadata: %#v", goTest)
 	}
+
 	goTestStream := goTest.StreamRender(engine.Invocation{}, goTest.Budget)
 	goTestStream.ConsumeStdout([]byte(strings.Join([]string{
 		`{"Action":"pass","Package":"github.com/acme/pass"}`,
@@ -127,26 +144,19 @@ func TestGoProfiles(t *testing.T) {
 		`{"Action":"fail","Package":"github.com/acme/fail","Test":"TestFour"}`,
 		`{"Action":"fail","Package":"github.com/acme/fail","Test":"TestFive"}`,
 	}, "\n")))
-	goTestRecovery, ok := goTestStream.(interface{ RecoveryInfo() (string, string, bool) })
-	if !ok {
-		t.Fatalf("expected recovery-capable go-test-json reducer, got %T", goTestStream)
-	}
-	if kind, summary, requireRawCapture := goTestRecovery.RecoveryInfo(); kind != filters.RecoveryKindFullOutput || summary != "omitted 1 additional test lines" || !requireRawCapture {
-		t.Fatalf("unexpected go-test-json recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
-	}
+	assertRecoveryCapableProfile(t, goTestStream, filters.RecoveryKindFullOutput, "omitted 1 additional test lines", true)
+}
 
-	genericSummary := testutil.FindProfile(t, list, "generic-summary")
+func assertGenericSummaryProfile(t *testing.T, genericSummary engine.Profile) {
+	t.Helper()
+
 	summaryStream := genericSummary.StreamRender(engine.Invocation{}, engine.OutputBudget{MaxLines: 2})
-	summaryStream.ConsumeStdout([]byte("line-1\nline-2\nline-3\n"))
-	summaryRecovery, ok := summaryStream.(interface{ RecoveryInfo() (string, string, bool) })
-	if !ok {
-		t.Fatalf("expected recovery-capable generic-summary reducer, got %T", summaryStream)
-	}
-	if kind, summary, requireRawCapture := summaryRecovery.RecoveryInfo(); kind != filters.RecoveryKindFullOutput || summary != "omitted 1 additional line" || !requireRawCapture {
-		t.Fatalf("unexpected generic-summary recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
-	}
+	assertRecoveryCapableProfileAfterStdout(t, summaryStream, "line-1\nline-2\nline-3\n", filters.RecoveryKindFullOutput, "omitted 1 additional line", true)
+}
 
-	goBuild := testutil.FindProfile(t, list, "go-build")
+func assertGoBuildProfile(t *testing.T, goBuild engine.Profile) {
+	t.Helper()
+
 	if !goBuild.Match(engine.Invocation{Display: []string{"go", "build"}}) || !goBuild.Match(engine.Invocation{Display: []string{"go", "vet"}}) {
 		t.Fatal("go-build should match build and vet")
 	}
@@ -159,11 +169,31 @@ func TestGoProfiles(t *testing.T) {
 	if goBuild.StreamPreference != engine.StreamStderrFirst || goBuild.StreamRender == nil {
 		t.Fatalf("unexpected go-build stream metadata: %#v", goBuild)
 	}
+
 	stream := goBuild.StreamRender(engine.Invocation{}, goBuild.Budget)
 	stream.ConsumeStderr([]byte("error: bad\n"))
 	stream.ConsumeStdout([]byte("noise\n"))
 	if got := stream.Result(); got != "error: bad" {
 		t.Fatalf("unexpected go-build stream output: %q", got)
+	}
+}
+
+func assertRecoveryCapableProfileAfterStdout(t *testing.T, stream engine.StreamReducer, stdout, wantKind, wantSummary string, wantRequireRawCapture bool) {
+	t.Helper()
+	stream.ConsumeStdout([]byte(stdout))
+	assertRecoveryCapableProfile(t, stream, wantKind, wantSummary, wantRequireRawCapture)
+}
+
+func assertRecoveryCapableProfile(t *testing.T, stream engine.StreamReducer, wantKind, wantSummary string, wantRequireRawCapture bool) {
+	t.Helper()
+
+	recovery, ok := stream.(interface{ RecoveryInfo() (string, string, bool) })
+	if !ok {
+		t.Fatalf("expected recovery-capable reducer, got %T", stream)
+	}
+	kind, summary, requireRawCapture := recovery.RecoveryInfo()
+	if kind != wantKind || summary != wantSummary || requireRawCapture != wantRequireRawCapture {
+		t.Fatalf("unexpected recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
 	}
 }
 
