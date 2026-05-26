@@ -16,40 +16,17 @@ func TestRipgrepProfilePrepare(t *testing.T) {
 	filesProfile := testutil.FindProfile(t, list, "ripgrep-files")
 	filesWithMatchesProfile := testutil.FindProfile(t, list, "ripgrep-files-with-matches")
 
-	if !grepProfile.Match(engine.Invocation{Display: []string{"grep", "-rn", "todo", "."}}) {
-		t.Fatal("expected recursive grep to match grep profile")
-	}
-	if grepProfile.Match(engine.Invocation{Display: []string{"grep", "-n", "todo", "."}}) {
-		t.Fatal("did not expect non-recursive grep to match grep profile")
-	}
-	if grepProfile.Match(engine.Invocation{Display: []string{"grep", "-rnh", "todo", "."}}) {
-		t.Fatal("did not expect grep with hidden filenames to match grep profile")
-	}
-
-	if !profile.Match(engine.Invocation{Display: []string{"rg", "todo", "."}}) {
-		t.Fatal("expected rg to match ripgrep profile")
-	}
-	if profile.Match(engine.Invocation{Display: []string{"rg", "--json", "todo"}}) {
-		t.Fatal("did not expect rg --json to match ripgrep profile")
-	}
-	if profile.Match(engine.Invocation{Display: []string{"rg", "--files"}}) {
-		t.Fatal("did not expect rg --files to match ripgrep profile")
-	}
-	if !filesProfile.Match(engine.Invocation{Display: []string{"rg", "--files"}}) {
-		t.Fatal("expected rg --files to match ripgrep-files profile")
-	}
-	if filesProfile.Match(engine.Invocation{Display: []string{"rg", "todo", "."}}) {
-		t.Fatal("did not expect plain rg search to match ripgrep-files profile")
-	}
-	if !filesWithMatchesProfile.Match(engine.Invocation{Display: []string{"rg", "--files-with-matches", "todo"}}) {
-		t.Fatal("expected rg --files-with-matches to match ripgrep-files-with-matches profile")
-	}
-	if !filesWithMatchesProfile.Match(engine.Invocation{Display: []string{"rg", "-l", "todo"}}) {
-		t.Fatal("expected rg -l to match ripgrep-files-with-matches profile")
-	}
-	if filesWithMatchesProfile.Match(engine.Invocation{Display: []string{"rg", "--files"}}) {
-		t.Fatal("did not expect rg --files to match ripgrep-files-with-matches profile")
-	}
+	assertProfileMatches(t, grepProfile, []string{"grep", "-rn", "todo", "."}, true)
+	assertProfileMatches(t, grepProfile, []string{"grep", "-n", "todo", "."}, false)
+	assertProfileMatches(t, grepProfile, []string{"grep", "-rnh", "todo", "."}, false)
+	assertProfileMatches(t, profile, []string{"rg", "todo", "."}, true)
+	assertProfileMatches(t, profile, []string{"rg", "--json", "todo"}, false)
+	assertProfileMatches(t, profile, []string{"rg", "--files"}, false)
+	assertProfileMatches(t, filesProfile, []string{"rg", "--files"}, true)
+	assertProfileMatches(t, filesProfile, []string{"rg", "todo", "."}, false)
+	assertProfileMatches(t, filesWithMatchesProfile, []string{"rg", "--files-with-matches", "todo"}, true)
+	assertProfileMatches(t, filesWithMatchesProfile, []string{"rg", "-l", "todo"}, true)
+	assertProfileMatches(t, filesWithMatchesProfile, []string{"rg", "--files"}, false)
 
 	got := profile.Prepare(engine.Invocation{Command: []string{"rg", "todo", "."}})
 	want := []string{
@@ -197,6 +174,13 @@ func TestRipgrepProfilePrepare(t *testing.T) {
 	grepScopedWant := []string{"grep", "--color=never", "-H", "-rn", "todo", "service/src/backend"}
 	if !reflect.DeepEqual(grepScoped, grepScopedWant) {
 		t.Fatalf("unexpected scoped grep prepare: %#v", grepScoped)
+	}
+}
+
+func assertProfileMatches(t *testing.T, profile engine.Profile, display []string, want bool) {
+	t.Helper()
+	if profile.Match(engine.Invocation{Display: display}) != want {
+		t.Fatalf("unexpected match result for %#v", display)
 	}
 }
 

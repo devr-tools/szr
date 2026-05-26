@@ -42,6 +42,12 @@ Use `make commit` if you want an interactive helper that runs `git add .`, asks 
 - `internal/filters`: shared summarizers and reducers
 - `test/`: centralized tests for CLI behavior, reducers, profiles, config, and install flows
 
+Relevant architecture docs:
+
+- [docs/ARCHITECTURE.md](/Users/alex/Documents/GitHub/szr/docs/ARCHITECTURE.md)
+- [docs/PROFILES.MD](/Users/alex/Documents/GitHub/szr/docs/PROFILES.MD)
+- [docs/PROFILE_REFACTOR_TASKS.md](/Users/alex/Documents/GitHub/szr/docs/PROFILE_REFACTOR_TASKS.md)
+
 ## Coding expectations
 
 - Keep reducers deterministic. Do not add network calls or model dependencies to the filtering path.

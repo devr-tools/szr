@@ -41,21 +41,13 @@ func TestApplyPlanMergeAndIdempotence(t *testing.T) {
 		t.Fatalf("read agents: %v", err)
 	}
 	content := string(agents)
-	if !strings.Contains(content, "# Existing") {
-		t.Fatalf("existing content lost: %q", content)
-	}
+	assertContainsAll(t, content, "# Existing", "@", "Use szr as the default wrapper")
 	if strings.Count(content, "<!-- szr-codex:begin -->") != 1 {
 		t.Fatalf("expected single codex block: %q", content)
 	}
-	if !strings.Contains(content, "@") || !strings.Contains(content, "Use szr as the default wrapper") {
-		t.Fatalf("unexpected agents content: %q", content)
-	}
 
-	doc, err := os.ReadFile(filepath.Join(root, ".szr", "install", "codex.md"))
-	if err == nil {
-		t.Fatalf("expected codex install doc to move out of repo, got %q", string(doc))
-	}
-	doc, err = os.ReadFile(filepath.Join(home, ".codex", ".szr", "install", "codex.md"))
+	assertFileMissing(t, filepath.Join(root, ".szr", "install", "codex.md"))
+	doc, err := os.ReadFile(filepath.Join(home, ".codex", ".szr", "install", "codex.md"))
 	if err != nil {
 		t.Fatalf("read install doc: %v", err)
 	}
@@ -72,6 +64,23 @@ func TestApplyPlanMergeAndIdempotence(t *testing.T) {
 	}
 	if runtime.GOOS != "windows" && hookInfo.Mode()&0o111 != 0 {
 		t.Fatalf("expected codex shared file to be non-executable: %v", hookInfo.Mode())
+	}
+}
+
+func assertContainsAll(t *testing.T, got string, wants ...string) {
+	t.Helper()
+	for _, want := range wants {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in %q", want, got)
+		}
+	}
+}
+
+func assertFileMissing(t *testing.T, path string) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err == nil {
+		t.Fatalf("expected %s to be absent, got %q", path, string(data))
 	}
 }
 

@@ -284,7 +284,7 @@ func TestSettingsInteractivePersistsConfig(t *testing.T) {
 	if code != 0 || stderr != "" {
 		t.Fatalf("unexpected settings stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
-	for _, want := range []string{
+	assertStdoutContainsAll(t, stdout,
 		"settings",
 		"current: disabled",
 		"1. enable",
@@ -302,17 +302,27 @@ func TestSettingsInteractivePersistsConfig(t *testing.T) {
 		"saved: early capture stop disabled",
 		"saved: semantic compaction disabled",
 		"settings: saved and exiting",
-	} {
-		if !strings.Contains(stdout, want) {
-			t.Fatalf("expected stdout to contain %q, got %q", want, stdout)
-		}
-	}
+	)
 
 	data := testutil.MustReadFile(t, paths.ConfigFile)
 	var saved config.Config
 	if err := json.Unmarshal(data, &saved); err != nil {
 		t.Fatalf("decode saved config: %v", err)
 	}
+	assertSavedSettingsConfig(t, saved)
+}
+
+func assertStdoutContainsAll(t *testing.T, got string, wants ...string) {
+	t.Helper()
+	for _, want := range wants {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected stdout to contain %q, got %q", want, got)
+		}
+	}
+}
+
+func assertSavedSettingsConfig(t *testing.T, saved config.Config) {
+	t.Helper()
 	if !saved.UpdateCheck.Enabled || !saved.UpdateCheck.AutoUpdate || saved.UpdateCheck.IntervalHours != 12 {
 		t.Fatalf("unexpected update settings: %#v", saved.UpdateCheck)
 	}

@@ -355,16 +355,12 @@ func TestSelfInstallCommands(t *testing.T) {
 	if code != 0 || stderr != "" {
 		t.Fatalf("unexpected self install print stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
-	for _, want := range []string{
+	assertOutputContainsAll(t, stdout,
 		"plan: self install",
 		filepath.Join(home, ".local", "bin", binaryName),
 		"path: missing",
 		`export PATH="$HOME/.local/bin:$PATH"`,
-	} {
-		if !strings.Contains(stdout, want) {
-			t.Fatalf("expected self install print stdout to contain %q, got %q", want, stdout)
-		}
-	}
+	)
 
 	code, stdout, stderr = testutil.RunApp(t, app, "self", "install")
 	if code != 0 || stderr != "" {
@@ -374,31 +370,23 @@ func TestSelfInstallCommands(t *testing.T) {
 	if _, err := os.Stat(target); err != nil {
 		t.Fatalf("expected installed szr binary at %s: %v", target, err)
 	}
-	for _, want := range []string{
-		"installed: " + target,
+	assertOutputContainsAll(t, stdout,
+		"installed: "+target,
 		"path: missing",
-		"shell rc: " + filepath.Join(home, ".zshrc"),
+		"shell rc: "+filepath.Join(home, ".zshrc"),
 		`export PATH="$HOME/.local/bin:$PATH"`,
-	} {
-		if !strings.Contains(stdout, want) {
-			t.Fatalf("expected self install stdout to contain %q, got %q", want, stdout)
-		}
-	}
+	)
 
 	code, stdout, stderr = testutil.RunApp(t, app, "uninstall", "--print")
 	if code != 0 || stderr != "" {
 		t.Fatalf("unexpected self uninstall print stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
-	for _, want := range []string{
+	assertOutputContainsAll(t, stdout,
 		"plan: self uninstall",
 		target,
 		filepath.Join(home, ".zshrc"),
 		`export PATH="$HOME/.local/bin:$PATH"`,
-	} {
-		if !strings.Contains(stdout, want) {
-			t.Fatalf("expected self uninstall print stdout to contain %q, got %q", want, stdout)
-		}
-	}
+	)
 
 	code, stdout, stderr = testutil.RunApp(t, app, "uninstall")
 	if code != 0 || stderr != "" {
@@ -409,6 +397,15 @@ func TestSelfInstallCommands(t *testing.T) {
 	}
 	if !strings.Contains(stdout, "uninstalled: "+target) {
 		t.Fatalf("expected self uninstall stdout to contain target, got %q", stdout)
+	}
+}
+
+func assertOutputContainsAll(t *testing.T, got string, wants ...string) {
+	t.Helper()
+	for _, want := range wants {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected output to contain %q, got %q", want, got)
+		}
 	}
 }
 

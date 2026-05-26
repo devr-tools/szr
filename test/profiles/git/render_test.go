@@ -13,6 +13,17 @@ func TestGitProfilesRender(t *testing.T) {
 	list := profiles.Builtins(6)
 
 	gitStatus := testutil.FindProfile(t, list, "git-status")
+	assertGitStatusRender(t, gitStatus)
+
+	gitLog := testutil.FindProfile(t, list, "git-log")
+	assertGitLogRender(t, gitLog)
+
+	gitDiff := testutil.FindProfile(t, list, "git-diff")
+	assertGitDiffRender(t, gitDiff)
+}
+
+func assertGitStatusRender(t *testing.T, gitStatus engine.Profile) {
+	t.Helper()
 	if got := gitStatus.Render(engine.Invocation{}, engine.Execution{Stdout: "\x1b[31m## main\x1b[0m\nM  a\n"}); got == "" {
 		t.Fatal("expected git-status render output")
 	}
@@ -24,16 +35,20 @@ func TestGitProfilesRender(t *testing.T) {
 	if got := gitStatusStream.Result(); got == "" || gitStatusStream.BytesParsed() == 0 {
 		t.Fatalf("expected git-status stream output, got %q", got)
 	}
+}
 
-	gitLog := testutil.FindProfile(t, list, "git-log")
+func assertGitLogRender(t *testing.T, gitLog engine.Profile) {
+	t.Helper()
 	if got := gitLog.Render(engine.Invocation{}, engine.Execution{Stdout: "abc one\ndef two\n"}); got == "" {
 		t.Fatal("expected git-log render output")
 	}
 	if gitLog.StreamPreference != engine.StreamStdoutOnly || gitLog.StreamRender == nil {
 		t.Fatalf("unexpected git-log stream metadata: %#v", gitLog)
 	}
+}
 
-	gitDiff := testutil.FindProfile(t, list, "git-diff")
+func assertGitDiffRender(t *testing.T, gitDiff engine.Profile) {
+	t.Helper()
 	if got := gitDiff.Render(engine.Invocation{}, engine.Execution{Stdout: "diff --git a/a b/a\n a | 1 +\n"}); got == "" {
 		t.Fatal("expected git-diff render output")
 	}
@@ -53,16 +68,21 @@ func TestGitProfilesRender(t *testing.T) {
 		"9 files changed, 62 insertions(+), 14 deletions(-)",
 	}, "\n")
 	got := gitDiff.Render(engine.Invocation{}, engine.Execution{Stdout: largeStat})
-	for _, want := range []string{"files=9 +62 -14", "f.txt | 20", "d.txt | 12", "b.txt | 8", "... +4 more files"} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("expected condensed git-diff output %q in %q", want, got)
-		}
-	}
+	assertRenderContainsAll(t, got, "files=9 +62 -14", "f.txt | 20", "d.txt | 12", "b.txt | 8", "... +4 more files")
 	aggressive := gitDiff.Render(engine.Invocation{ReasoningBudgetMode: "aggressive"}, engine.Execution{Stdout: largeStat})
 	if strings.Contains(aggressive, "... +4 more files") || !strings.Contains(aggressive, "... +6 more files") {
 		t.Fatalf("expected aggressive git-diff render to keep fewer files, got %q", aggressive)
 	}
 	if gitDiff.StreamPreference != engine.StreamStdoutOnly || gitDiff.StreamRender == nil {
 		t.Fatalf("unexpected git-diff stream metadata: %#v", gitDiff)
+	}
+}
+
+func assertRenderContainsAll(t *testing.T, got string, wants ...string) {
+	t.Helper()
+	for _, want := range wants {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in %q", want, got)
+		}
 	}
 }

@@ -41,19 +41,27 @@ func TestGitProfilesPrepare(t *testing.T) {
 	if !gitDiff.Match(engine.Invocation{Display: []string{"git", "diff"}}) {
 		t.Fatal("expected git diff to match")
 	}
-	if len(gitDiff.Prepare(engine.Invocation{Command: []string{"git", "diff"}, Advanced: advanced})) != 6 {
-		t.Fatal("expected git-diff to add summary flags")
+	assertPreparedLengthAndArgs(t, "git diff standard", gitDiff.Prepare(engine.Invocation{Command: []string{"git", "diff"}, Advanced: advanced}), 6, []string{"--stat=96,24", "--compact-summary", "--no-color", "--no-ext-diff"})
+	assertPreparedLengthAndArgs(t, "git diff explicit stat", gitDiff.Prepare(engine.Invocation{Command: []string{"git", "diff", "--stat"}, Advanced: advanced}), 5, []string{"--no-color", "--no-ext-diff"})
+	assertPreparedLengthAndArgs(t, "git diff aggressive", gitDiff.Prepare(engine.Invocation{Command: []string{"git", "diff"}, ReasoningBudgetMode: "aggressive", Advanced: advanced}), 6, []string{"--stat=72,12"})
+	assertPreparedLengthAndArgs(t, "git diff quiet", gitDiff.Prepare(engine.Invocation{Command: []string{"git", "diff", "--quiet"}, Advanced: advanced}), 3, nil)
+}
+
+func assertPreparedLengthAndArgs(t *testing.T, name string, got []string, wantLen int, wants []string) {
+	t.Helper()
+	if len(got) != wantLen {
+		t.Fatalf("unexpected %s prepare: %#v", name, got)
 	}
-	if prepared := gitDiff.Prepare(engine.Invocation{Command: []string{"git", "diff"}, Advanced: advanced}); len(prepared) != 6 || prepared[2] != "--stat=96,24" || prepared[3] != "--compact-summary" || prepared[4] != "--no-color" || prepared[5] != "--no-ext-diff" {
-		t.Fatalf("unexpected standard git-diff prepare: %#v", prepared)
-	}
-	if prepared := gitDiff.Prepare(engine.Invocation{Command: []string{"git", "diff", "--stat"}, Advanced: advanced}); len(prepared) != 5 || prepared[3] != "--no-color" || prepared[4] != "--no-ext-diff" {
-		t.Fatalf("expected git-diff to preserve explicit stat mode and add only noise flags: %#v", prepared)
-	}
-	if prepared := gitDiff.Prepare(engine.Invocation{Command: []string{"git", "diff"}, ReasoningBudgetMode: "aggressive", Advanced: advanced}); len(prepared) != 6 || prepared[2] != "--stat=72,12" {
-		t.Fatalf("unexpected aggressive git-diff prepare: %#v", prepared)
-	}
-	if prepared := gitDiff.Prepare(engine.Invocation{Command: []string{"git", "diff", "--quiet"}, Advanced: advanced}); len(prepared) != 3 {
-		t.Fatalf("expected quiet git-diff to pass through: %#v", prepared)
+	for _, want := range wants {
+		found := false
+		for _, arg := range got {
+			if arg == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("expected %q in %s prepare: %#v", want, name, got)
+		}
 	}
 }
