@@ -4,7 +4,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
+	pathpkg "path"
 	"sort"
 	"strings"
 	"sync"
@@ -43,10 +43,10 @@ func Builtins() (map[string]Spec, error) {
 		loaded := make(map[string]Spec, len(entries))
 		compiledLoaded := make(map[string]compiledSpec, len(entries))
 		for _, entry := range entries {
-			if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			if entry.IsDir() || pathpkg.Ext(entry.Name()) != ".json" {
 				continue
 			}
-			path := filepath.Join("builtins", entry.Name())
+			path := pathpkg.Join("builtins", entry.Name())
 			data, err := builtinFiles.ReadFile(path)
 			if err != nil {
 				builtinLoadErr = err
@@ -58,7 +58,7 @@ func Builtins() (map[string]Spec, error) {
 				return
 			}
 			if spec.Name == "" {
-				spec.Name = strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name()))
+				spec.Name = strings.TrimSuffix(entry.Name(), pathpkg.Ext(entry.Name()))
 			}
 			if err := Validate(spec); err != nil {
 				builtinLoadErr = fmt.Errorf("validate builtin reducer %s: %w", path, err)
