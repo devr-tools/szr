@@ -218,7 +218,7 @@ func genericSummaryProfile(maxLines int) engine.Profile {
 			return len(inv.Display) > 0 && inv.Display[0] == "summary"
 		},
 		Render: func(_ engine.Invocation, exec engine.Execution) string {
-			return filters.RenderDeclarativeBuiltin("compact_lines", exec.Stdout+"\n"+exec.Stderr, maxLines)
+			return renderGenericSummary(exec.Stdout+"\n"+exec.Stderr, maxLines)
 		},
 		StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
 			return filters.NewDeclarativeBuiltinReducer("compact_lines", "lines", budget.MaxLines, true, true)
@@ -229,6 +229,16 @@ func genericSummaryProfile(maxLines int) engine.Profile {
 			"Useful when the user wants a shallow preview before drilling deeper.",
 		},
 	}
+}
+
+func renderGenericSummary(input string, maxLines int) string {
+	clean := filters.StripANSI(input)
+	lines := filters.NonEmptyLines(clean)
+	folded := filters.FoldConsecutiveSimilarLines(lines)
+	if len(folded) > 0 && len(folded) < len(lines) {
+		return filters.JoinLimitedLines(folded, maxLines)
+	}
+	return filters.RenderDeclarativeBuiltin("compact_lines", clean, maxLines)
 }
 
 func isSingleFileCat(command []string) bool {

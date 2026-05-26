@@ -29,7 +29,7 @@ func TestLineHelpers(t *testing.T) {
 	}
 
 	deduped := filters.DedupeLines("a\na\nb\nc\nc\n", 2)
-	if deduped != "a (x2)\nb\n... +1 more unique lines" {
+	if deduped != "a (x2)\nb\n... +1 more folded lines" {
 		t.Fatalf("unexpected dedupe: %q", deduped)
 	}
 

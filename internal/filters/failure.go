@@ -385,6 +385,9 @@ func analyzeFailureLine(raw string, noisePrefiltering bool, semanticCompaction b
 }
 
 func failureSemanticKey(raw string, display string, kind string) string {
+	if key := failureTestCaseKey(raw); key != "" && (kind == "root" || kind == "warning") {
+		return strings.ToLower(key)
+	}
 	switch kind {
 	case "stack":
 		if key := stackKey(raw); key != "" {
@@ -398,9 +401,28 @@ func failureSemanticKey(raw string, display string, kind string) string {
 	return strings.ToLower(strings.TrimSpace(display))
 }
 
+func failureTestCaseKey(line string) string {
+	normalized := strings.ReplaceAll(strings.TrimSpace(line), "›", ">")
+	lower := strings.ToLower(normalized)
+	for _, marker := range []string{"tests/", "test/", ".spec.", ".test."} {
+		idx := strings.Index(lower, marker)
+		if idx < 0 {
+			continue
+		}
+		candidate := strings.TrimSpace(normalized[idx:])
+		if end := strings.Index(candidate, "("); end > 0 {
+			candidate = strings.TrimSpace(candidate[:end])
+		}
+		return candidate
+	}
+	return ""
+}
+
 func failureNoiseClass(line string) string {
 	lower := strings.ToLower(strings.TrimSpace(line))
 	switch {
+	case looksLikePassingTestLine(lower):
+		return "pass"
 	case looksLikeProgressLine(lower):
 		return "progress"
 	case looksLikeInstallNoise(lower):
@@ -456,6 +478,18 @@ func looksLikeInstallNoise(lower string) bool {
 	}
 }
 
+func looksLikePassingTestLine(lower string) bool {
+	switch {
+	case strings.HasPrefix(lower, "ok  "),
+		strings.HasPrefix(lower, "ok "),
+		strings.Contains(lower, " passed"),
+		strings.HasSuffix(lower, " passed"):
+		return true
+	default:
+		return false
+	}
+}
+
 func compactFailureDisplay(line string) string {
 	if anchor := failureAnchor(line); anchor != "" {
 		return strings.Replace(line, anchor, shortenFailurePath(anchor), 1)
@@ -483,6 +517,10 @@ func shortenFailurePath(anchor string) string {
 func classifyFailureLine(line string) string {
 	lower := strings.ToLower(strings.TrimSpace(line))
 	switch {
+	case strings.HasPrefix(lower, "x "),
+		strings.HasPrefix(lower, "x   "),
+		strings.HasPrefix(lower, "stderr | "):
+		return "root"
 	case strings.HasPrefix(lower, "help:"),
 		strings.HasPrefix(lower, "hint:"),
 		strings.HasPrefix(lower, "note:"),

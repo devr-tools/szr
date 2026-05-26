@@ -20,7 +20,7 @@ func TestRipgrepAndTreeHelpers(t *testing.T) {
 		"two.go:9:two",
 		"three.go:7:three",
 	}, "\n"), 2)
-	for _, want := range []string{"one.go (4 matches)", "  ... +1 more", "... +1 more files"} {
+	for _, want := range []string{"6 matches across 3 files", "one.go (4 matches)", "... +1 more files"} {
 		if !strings.Contains(grouped, want) {
 			t.Fatalf("expected %q in grouped output:\n%s", want, grouped)
 		}
@@ -63,13 +63,13 @@ func TestFindSummaries(t *testing.T) {
 		t.Fatalf("unexpected empty find summary: %q", got)
 	}
 	got := filters.SummarizeFindPaths([]string{"b.py", "a.py"}, 4)
-	for _, want := range []string{"2 matches", "a.py", "b.py"} {
+	for _, want := range []string{"2 matches across 1 dirs", "a.py", "b.py"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected %q in find summary:\n%s", want, got)
 		}
 	}
 	truncated := filters.SummarizeFindPaths([]string{"a.py", "b.py", "c.py", "d.py"}, 3)
-	if !strings.Contains(truncated, "... +2 more matches") {
+	if !strings.Contains(truncated, "4 matches across 1 dirs") {
 		t.Fatalf("expected truncated find summary, got %q", truncated)
 	}
 	suppressed := filters.SummarizeFindPaths([]string{"node_modules/a.js", "src/a.py"}, 4)
@@ -126,7 +126,7 @@ func TestStreamingSearchReducers(t *testing.T) {
 	if !find.Done() {
 		t.Fatal("expected find reducer to report done after filling sample budget")
 	}
-	if got := find.Result(); !strings.Contains(got, "... +2 more matches") {
+	if got := find.Result(); !strings.Contains(got, "... +4 more matches") {
 		t.Fatalf("expected find reducer overflow note, got %q", got)
 	}
 	if preview, result := find.Preview(), find.Result(); preview != result {
@@ -140,10 +140,10 @@ func TestStreamingSearchReducers(t *testing.T) {
 func TestStreamingRipgrepReducerMatchRecovery(t *testing.T) {
 	rg := filters.NewRipgrepReducer(2, 8)
 	rg.ConsumeStdout([]byte("a.go:1:first\na.go:2:second\na.go:3:third\na.go:4:fourth\n"))
-	if got := rg.Result(); !strings.Contains(got, "... +1 more") {
-		t.Fatalf("expected ripgrep reducer overflow note, got %q", got)
+	if got := rg.Result(); !strings.Contains(got, "a.go (4 matches)") {
+		t.Fatalf("expected ripgrep reducer count summary, got %q", got)
 	}
-	if kind, summary, requireRawCapture := rg.RecoveryInfo(); kind != filters.RecoveryKindFullOutput || summary != "omitted 1 additional matches" || !requireRawCapture {
+	if kind, summary, requireRawCapture := rg.RecoveryInfo(); kind != "" || summary != "" || requireRawCapture {
 		t.Fatalf("unexpected ripgrep match recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
 	}
 }
@@ -163,7 +163,7 @@ func TestStreamingSearchReducersSuppressReducerOnlyNoise(t *testing.T) {
 	find := filters.NewFindReducer(4)
 	find.ConsumeStdout([]byte(".venv/bin/python\ntmp/build.log\nsrc/app.go\n"))
 	got = find.Result()
-	for _, want := range []string{"1 matches", "src/app.go", ".venv", "tmp"} {
+	for _, want := range []string{"1 matches across 1 dirs", "src/app.go", ".venv", "tmp"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected %q in find reducer output:\n%s", want, got)
 		}

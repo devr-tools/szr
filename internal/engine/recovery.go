@@ -53,17 +53,27 @@ func appendRecoveryHint(rendered string, plan RecoveryPlan, artifactPath string,
 	return strings.TrimRight(rendered, "\n") + "\n" + line
 }
 
-func finalizeRenderedDisplay(rendered string, rawCombined string, budget OutputBudget, plan RecoveryPlan, artifactPath string, passthrough bool, compactArtifactRefs bool, compressionContract bool) string {
+func finalizeRenderedDisplay(rendered string, rawCombined string, budget OutputBudget, plan RecoveryPlan, artifactPath string, passthrough bool, compactArtifactRefs bool, compressionContract bool, guardSmallOutput bool) string {
 	if passthrough {
+		if guardSmallOutput {
+			return preferRawSmallOutput(rendered, rawCombined)
+		}
 		return rendered
 	}
 	suffixes := displayArtifactSuffixes(plan, artifactPath, compactArtifactRefs)
 	if len(suffixes) == 0 {
+		if guardSmallOutput {
+			return preferRawSmallOutput(rendered, rawCombined)
+		}
 		return rendered
 	}
 	rawTokens := history.EstimateTokens(rawCombined)
 	if !compressionContract || rawTokens < compressionContractMinRawTokens {
-		return appendDisplaySuffix(rendered, suffixes[0])
+		final := appendDisplaySuffix(rendered, suffixes[0])
+		if guardSmallOutput {
+			return preferRawSmallOutput(final, rawCombined)
+		}
+		return final
 	}
 	allowedTokens := compressionContractAllowedTokens(rawTokens, budget)
 	for _, suffix := range suffixes {
@@ -78,8 +88,14 @@ func finalizeRenderedDisplay(rendered string, rawCombined string, budget OutputB
 		}
 		final := appendDisplaySuffix(shrunk, suffix)
 		if history.EstimateTokens(final) <= allowedTokens {
+			if guardSmallOutput {
+				return preferRawSmallOutput(final, rawCombined)
+			}
 			return final
 		}
+	}
+	if guardSmallOutput {
+		return preferRawSmallOutput(suffixes[len(suffixes)-1], rawCombined)
 	}
 	return suffixes[len(suffixes)-1]
 }

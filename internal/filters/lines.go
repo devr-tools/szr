@@ -27,35 +27,16 @@ func InterestingErrorLines(input string, maxLines int) string {
 }
 
 func DedupeLines(input string, maxLines int) string {
-	type item struct {
-		Text  string
-		Count int
-	}
-
-	order := []item{}
-	index := map[string]int{}
-	for _, line := range nonEmptyLines(input) {
-		if pos, ok := index[line]; ok {
-			order[pos].Count++
-			continue
-		}
-		index[line] = len(order)
-		order = append(order, item{Text: line, Count: 1})
-	}
-
+	folded := FoldConsecutiveSimilarLines(nonEmptyLines(input))
 	var out []string
-	for _, item := range order {
-		line := item.Text
-		if item.Count > 1 {
-			line = fmt.Sprintf("%s (x%d)", line, item.Count)
-		}
+	for _, line := range folded {
 		out = append(out, line)
 		if len(out) >= maxLines {
 			break
 		}
 	}
-	if len(order) > maxLines {
-		out = append(out, fmt.Sprintf("... +%d more unique lines", len(order)-maxLines))
+	if len(folded) > maxLines {
+		out = append(out, fmt.Sprintf("... +%d more folded lines", len(folded)-maxLines))
 	}
 	return strings.Join(out, "\n")
 }
@@ -178,6 +159,66 @@ func FoldConsecutiveLines(lines []string) []string {
 	}
 	flush()
 	return out
+}
+
+func FoldConsecutiveSimilarLines(lines []string) []string {
+	if len(lines) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(lines))
+	current := strings.TrimSpace(lines[0])
+	currentKey := similarLineKey(current)
+	count := 0
+	flush := func() {
+		if current == "" || count == 0 {
+			return
+		}
+		if count > 1 {
+			out = append(out, fmt.Sprintf("%s (x%d)", current, count))
+			return
+		}
+		out = append(out, current)
+	}
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		key := similarLineKey(trimmed)
+		if key == currentKey {
+			count++
+			continue
+		}
+		flush()
+		current = trimmed
+		currentKey = key
+		count = 1
+	}
+	flush()
+	return out
+}
+
+func similarLineKey(line string) string {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return ""
+	}
+	parts := strings.Fields(trimmed)
+	if len(parts) >= 2 && looksLikeTimestampPrefix(parts[0]) {
+		return strings.Join(parts[1:], " ")
+	}
+	return trimmed
+}
+
+func looksLikeTimestampPrefix(value string) bool {
+	if len(value) < len("2006-01-02T15:04:05Z") {
+		return false
+	}
+	if value[4] != '-' || value[7] != '-' {
+		return false
+	}
+	return strings.Contains(value, "T") || strings.Contains(value, "_")
 }
 
 func SelectUniqueAnchoredLines(lines []string, maxFrames int) []string {

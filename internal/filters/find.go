@@ -49,24 +49,7 @@ func SummarizeFindPaths(paths []string, maxLines int) string {
 		return "no matches"
 	}
 	sort.Strings(normalized)
-	lines := []string{fmt.Sprintf("%d matches", len(normalized))}
-	visible := maxLines - 1
-	if visible < 1 {
-		visible = 1
-	}
-	if len(normalized) <= visible {
-		lines = append(lines, normalized...)
-		if line := summarizeSuppressedSearchBuckets(suppressed); line != "" && len(lines) < maxLines {
-			lines = append(lines, line)
-		}
-		return strings.Join(lines, "\n")
-	}
-	lines = append(lines, normalized[:visible]...)
-	lines = append(lines, fmt.Sprintf("... +%d more matches", len(normalized)-visible))
-	if line := summarizeSuppressedSearchBuckets(suppressed); line != "" && len(lines) < maxLines {
-		lines = append(lines, line)
-	}
-	return strings.Join(lines, "\n")
+	return renderFindSummary(normalized, summarizeTopLevelBuckets(normalized), suppressed, maxLines)
 }
 
 func SummarizeFindOutput(stdout, stderr string, maxLines int) string {
@@ -90,6 +73,7 @@ type FindReducer struct {
 	seen          map[string]struct{}
 	totalMatches  int
 	suppressed    map[string]int
+	dirCounts     map[string]int
 }
 
 func NewFindReducer(maxLines int) *FindReducer {
@@ -107,6 +91,7 @@ func NewFindReducer(maxLines int) *FindReducer {
 		matches:       make([]string, 0, sampleLimit),
 		seen:          make(map[string]struct{}, sampleLimit),
 		suppressed:    map[string]int{},
+		dirCounts:     map[string]int{},
 	}
 }
 
@@ -163,6 +148,7 @@ func (r *FindReducer) ingestPath(line string) {
 	}
 	r.seen[path] = struct{}{}
 	r.totalMatches++
+	r.dirCounts[pathTopLevelBucket(path)]++
 	if len(r.matches) < r.sampleLimit {
 		r.matches = append(r.matches, path)
 		sort.Strings(r.matches)
@@ -176,15 +162,7 @@ func (r *FindReducer) render(preview bool) string {
 	if len(r.matches) == 0 {
 		return "no matches"
 	}
-	lines := []string{fmt.Sprintf("%d matches", r.totalMatches)}
-	lines = append(lines, r.matches...)
-	if extra := r.totalMatches - len(r.matches); extra > 0 {
-		lines = append(lines, fmt.Sprintf("... +%d more matches", extra))
-	}
-	if line := summarizeSuppressedSearchBuckets(r.suppressed); line != "" && len(lines) < r.maxLines+1 {
-		lines = append(lines, line)
-	}
-	return strings.Join(lines, "\n")
+	return renderFindSummary(r.matches, r.dirCounts, r.suppressed, r.maxLines)
 }
 
 func searchReducerNoiseBucket(path string) string {
@@ -252,4 +230,93 @@ func summarizeSuppressedSearchBuckets(counts map[string]int) string {
 		labels = append(labels, item.name)
 	}
 	return fmt.Sprintf("suppressed noisy paths: %d (%s)", total, strings.Join(labels, ", "))
+}
+
+func renderFindSummary(samples []string, dirCounts map[string]int, suppressed map[string]int, maxLines int) string {
+	if maxLines <= 0 {
+		maxLines = 8
+	}
+	totalMatches := 0
+	for _, count := range dirCounts {
+		totalMatches += count
+	}
+	if totalMatches == 0 {
+		totalMatches = len(samples)
+	}
+	lines := []string{fmt.Sprintf("%d matches across %d dirs", totalMatches, len(dirCounts))}
+	if line := summarizeTopLevelBucketsLine(dirCounts); line != "" && len(lines) < maxLines {
+		lines = append(lines, line)
+	}
+	reserved := 0
+	if totalMatches > len(samples) {
+		reserved++
+	}
+	if summarizeSuppressedSearchBuckets(suppressed) != "" {
+		reserved++
+	}
+	visible := maxLines - len(lines) - reserved
+	if visible < 1 {
+		visible = 1
+	}
+	if visible > 2 {
+		visible = 2
+	}
+	if visible > len(samples) {
+		visible = len(samples)
+	}
+	lines = append(lines, samples[:visible]...)
+	if extra := totalMatches - visible; extra > 0 && len(lines) < maxLines {
+		lines = append(lines, fmt.Sprintf("... +%d more matches", extra))
+	}
+	if line := summarizeSuppressedSearchBuckets(suppressed); line != "" && len(lines) < maxLines {
+		lines = append(lines, line)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func summarizeTopLevelBuckets(paths []string) map[string]int {
+	counts := map[string]int{}
+	for _, path := range paths {
+		counts[pathTopLevelBucket(path)]++
+	}
+	return counts
+}
+
+func pathTopLevelBucket(path string) string {
+	trimmed := strings.TrimPrefix(strings.TrimSpace(path), "./")
+	if trimmed == "" {
+		return "."
+	}
+	parts := strings.Split(trimmed, "/")
+	if len(parts) <= 1 {
+		return "."
+	}
+	return parts[0] + "/"
+}
+
+func summarizeTopLevelBucketsLine(counts map[string]int) string {
+	type bucket struct {
+		name  string
+		count int
+	}
+	order := make([]bucket, 0, len(counts))
+	for name, count := range counts {
+		if count > 0 {
+			order = append(order, bucket{name: name, count: count})
+		}
+	}
+	if len(order) == 0 {
+		return ""
+	}
+	sort.Slice(order, func(i, j int) bool {
+		if order[i].count == order[j].count {
+			return order[i].name < order[j].name
+		}
+		return order[i].count > order[j].count
+	})
+	parts := make([]string, 0, minInt(3, len(order)))
+	for _, item := range order[:minInt(3, len(order))] {
+		parts = append(parts, fmt.Sprintf("%s (%d)", item.name, item.count))
+	}
+	return "top dirs: " + strings.Join(parts, ", ")
 }

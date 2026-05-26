@@ -38,7 +38,7 @@ func TestFinalizeRenderedDisplayRespectsCompressionContract(t *testing.T) {
 	final := finalizeRenderedDisplay(rendered, raw, budget, RecoveryPlan{
 		Kind:    RecoveryKindFullOutput,
 		Summary: "omitted many lines",
-	}, "/tmp/full.log", false, true, true)
+	}, "/tmp/full.log", false, true, true, false)
 
 	allowed := compressionContractAllowedTokens(history.EstimateTokens(raw), budget)
 	if got := history.EstimateTokens(final); got > allowed {

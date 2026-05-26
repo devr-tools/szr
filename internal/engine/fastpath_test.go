@@ -46,9 +46,11 @@ func TestDecideFastPathFamilyAwareBypasses(t *testing.T) {
 		wantReason string
 	}{
 		{name: "tiny ripgrep", profile: "ripgrep", command: []string{"rg", "todo", "."}, rawBytes: 320, rawTokens: 80, wantBypass: true, wantReason: "tiny ripgrep output"},
+		{name: "larger tiny ripgrep", profile: "ripgrep", command: []string{"rg", "todo", "."}, rawBytes: 384, rawTokens: 96, wantBypass: true, wantReason: "tiny ripgrep output"},
 		{name: "tiny grep", profile: "grep", command: []string{"grep", "-rn", "todo", "."}, rawBytes: 320, rawTokens: 80, wantBypass: true, wantReason: "tiny grep output"},
-		{name: "ripgrep over token limit", profile: "ripgrep", command: []string{"rg", "todo", "."}, rawBytes: 320, rawTokens: 81, wantBypass: false},
+		{name: "ripgrep over token limit", profile: "ripgrep", command: []string{"rg", "todo", "."}, rawBytes: 384, rawTokens: 97, wantBypass: false},
 		{name: "tiny find", profile: "path-find", command: []string{"find", ".", "-name", "*.go"}, rawBytes: 300, rawTokens: 72, wantBypass: true, wantReason: "tiny find output"},
+		{name: "larger tiny find", profile: "path-find", command: []string{"find", ".", "-name", "*.go"}, rawBytes: 384, rawTokens: 96, wantBypass: true, wantReason: "tiny find output"},
 		{name: "short directory listing", profile: "directory-listing", command: []string{"ls", "."}, rawBytes: 288, rawTokens: 72, wantBypass: true, wantReason: "short directory listing"},
 		{name: "directory listing over byte limit", profile: "directory-listing", command: []string{"ls", "."}, rawBytes: 289, rawTokens: 72, wantBypass: false},
 		{name: "short tree gets tree-specific threshold", profile: "directory-listing", command: []string{"tree", "."}, rawBytes: 384, rawTokens: 96, wantBypass: true, wantReason: "short tree output"},
@@ -88,11 +90,16 @@ func TestDecideFastPathFallsBackToGenericTinyOutput(t *testing.T) {
 	if !decision.BypassCompression {
 		t.Fatalf("expected generic tiny output bypass, got %+v", decision)
 	}
-	if decision.Reason != "tiny output fast path" {
+	if decision.Reason != "short summary output" {
 		t.Fatalf("unexpected reason: %q", decision.Reason)
 	}
-	if decision.BypassKind != FastPathBypassKindTinyOutput {
+	if decision.BypassKind != FastPathBypassKindFamilyRule {
 		t.Fatalf("unexpected bypass kind: %q", decision.BypassKind)
+	}
+
+	decision = DecideFastPath(Profile{Name: "generic-summary"}, Invocation{Command: []string{"summary", "tail"}}, 384, 96, 0, 0)
+	if !decision.BypassCompression || decision.Reason != "short summary output" {
+		t.Fatalf("expected family summary bypass, got %+v", decision)
 	}
 }
 

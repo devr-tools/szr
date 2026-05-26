@@ -83,6 +83,20 @@ func TestEnforceCompressionContractDisabled(t *testing.T) {
 	}
 }
 
+func TestPreferRawSmallOutput(t *testing.T) {
+	t.Parallel()
+
+	raw := "alpha\nbeta"
+	rendered := "alpha beta [tee: 123456789012]"
+	if got := preferRawSmallOutput(rendered, raw); got != raw {
+		t.Fatalf("expected raw to win for small expanded output, got %q", got)
+	}
+	largeRaw := strings.Repeat("token ", 120)
+	if got := preferRawSmallOutput("alpha", largeRaw); got == strings.TrimSpace(largeRaw) {
+		t.Fatal("did not expect raw preference for large payloads")
+	}
+}
+
 func configAdvancedForTests() config.Advanced {
 	return config.Advanced{CompressionContract: true, CompactArtifactRefs: true}
 }

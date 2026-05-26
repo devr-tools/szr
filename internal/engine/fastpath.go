@@ -32,14 +32,19 @@ type fastPathRule struct {
 
 var familyFastPathRules = map[string]fastPathRule{
 	"ripgrep": {
-		MaxBytes:  320,
-		MaxTokens: 80,
+		MaxBytes:  384,
+		MaxTokens: 96,
 		Reason:    "tiny ripgrep output",
 	},
 	"path-find": {
-		MaxBytes:  320,
-		MaxTokens: 80,
+		MaxBytes:  384,
+		MaxTokens: 96,
 		Reason:    "tiny find output",
+	},
+	"generic-summary": {
+		MaxBytes:  384,
+		MaxTokens: 96,
+		Reason:    "short summary output",
 	},
 	"directory-listing": {
 		MaxBytes:  288,
