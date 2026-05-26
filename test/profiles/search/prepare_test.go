@@ -11,9 +11,20 @@ import (
 
 func TestRipgrepProfilePrepare(t *testing.T) {
 	list := profiles.Builtins(6)
+	grepProfile := testutil.FindProfile(t, list, "grep")
 	profile := testutil.FindProfile(t, list, "ripgrep")
 	filesProfile := testutil.FindProfile(t, list, "ripgrep-files")
 	filesWithMatchesProfile := testutil.FindProfile(t, list, "ripgrep-files-with-matches")
+
+	if !grepProfile.Match(engine.Invocation{Display: []string{"grep", "-rn", "todo", "."}}) {
+		t.Fatal("expected recursive grep to match grep profile")
+	}
+	if grepProfile.Match(engine.Invocation{Display: []string{"grep", "-n", "todo", "."}}) {
+		t.Fatal("did not expect non-recursive grep to match grep profile")
+	}
+	if grepProfile.Match(engine.Invocation{Display: []string{"grep", "-rnh", "todo", "."}}) {
+		t.Fatal("did not expect grep with hidden filenames to match grep profile")
+	}
 
 	if !profile.Match(engine.Invocation{Display: []string{"rg", "todo", "."}}) {
 		t.Fatal("expected rg to match ripgrep profile")
@@ -147,6 +158,45 @@ func TestRipgrepProfilePrepare(t *testing.T) {
 	filesWithMatchesWant := append(filesWant[:len(filesWant)-1], "--files-with-matches", "todo")
 	if !reflect.DeepEqual(filesWithMatchesPrepared, filesWithMatchesWant) {
 		t.Fatalf("unexpected ripgrep-files-with-matches prepare: %#v", filesWithMatchesPrepared)
+	}
+
+	grepPrepared := grepProfile.Prepare(engine.Invocation{Command: []string{"grep", "-rn", "todo", "."}})
+	grepWant := []string{
+		"grep",
+		"--exclude-dir=.git",
+		"--exclude-dir=.next",
+		"--exclude-dir=.turbo",
+		"--exclude-dir=.cache",
+		"--exclude-dir=__pycache__",
+		"--exclude-dir=build",
+		"--exclude-dir=coverage",
+		"--exclude-dir=dist",
+		"--exclude-dir=node_modules",
+		"--exclude-dir=target",
+		"--exclude-dir=vendor",
+		"--exclude-dir=.gradle",
+		"--exclude-dir=.mypy_cache",
+		"--exclude-dir=.nox",
+		"--exclude-dir=.nuxt",
+		"--exclude-dir=.output",
+		"--exclude-dir=.parcel-cache",
+		"--exclude-dir=.pnpm-store",
+		"--exclude-dir=.ruff_cache",
+		"--exclude-dir=.svelte-kit",
+		"--exclude-dir=.venv",
+		"--exclude-dir=.yarn",
+		"--exclude-dir=out",
+		"--exclude-dir=tmp",
+		"--color=never", "-H", "-rn", "todo", ".",
+	}
+	if !reflect.DeepEqual(grepPrepared, grepWant) {
+		t.Fatalf("unexpected grep prepare: %#v", grepPrepared)
+	}
+
+	grepScoped := grepProfile.Prepare(engine.Invocation{Command: []string{"grep", "-rn", "todo", "service/src/backend"}})
+	grepScopedWant := []string{"grep", "--color=never", "-H", "-rn", "todo", "service/src/backend"}
+	if !reflect.DeepEqual(grepScoped, grepScopedWant) {
+		t.Fatalf("unexpected scoped grep prepare: %#v", grepScoped)
 	}
 }
 

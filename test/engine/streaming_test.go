@@ -95,6 +95,41 @@ func TestExecuteBypassesTinyStreamOutput(t *testing.T) {
 	}
 }
 
+func TestExecuteBypassesTinySafeHighConfidenceOutput(t *testing.T) {
+	t.Parallel()
+
+	binDir := t.TempDir()
+	tinyStatusPath := testutil.WriteExecutable(t, binDir, "tinystatus", "#!/bin/sh\nprintf '## main...origin/main\\nM  README.md\\n'\n")
+
+	root := t.TempDir()
+	paths := testutil.Paths(root)
+	testutil.EnsurePaths(t, paths)
+
+	cfg := config.Default()
+	e := engine.New(cfg, paths, history.New(paths.HistoryFile), []engine.Profile{{
+		Name:       "git-status",
+		Confidence: engine.ConfidenceHigh,
+		StreamRender: func(engine.Invocation, engine.OutputBudget) engine.StreamReducer {
+			return &staticReducer{rendered: "staged=1"}
+		},
+	}})
+
+	result, err := e.Execute(context.Background(), engine.Invocation{
+		Command: []string{tinyStatusPath},
+		Display: []string{"tinystatus"},
+		Cwd:     root,
+	}, false)
+	if err != nil {
+		t.Fatalf("execute tiny safe high-confidence output: %v", err)
+	}
+	if result.Display != "## main...origin/main\nM  README.md" {
+		t.Fatalf("expected raw bypass for safe high-confidence profile, got %#v", result)
+	}
+	if result.BypassReason == "" {
+		t.Fatalf("expected bypass reason, got %#v", result)
+	}
+}
+
 func TestExecuteRemovesIncrementalTeeOnSuccess(t *testing.T) {
 	t.Parallel()
 
@@ -252,6 +287,45 @@ func TestExecuteStopsFeedingReducerAfterDone(t *testing.T) {
 	}
 	if result.RawBytesRead <= result.BytesParsed {
 		t.Fatalf("expected raw bytes to exceed parsed bytes after early stop, got %#v", result)
+	}
+}
+
+func TestExecuteKeepsTinyRawBypassAfterReducerDone(t *testing.T) {
+	t.Parallel()
+
+	binDir := t.TempDir()
+	tinyStatusPath := testutil.WriteExecutable(t, binDir, "tinydone", "#!/bin/sh\nprintf '## main\\nM  README.md\\n'\n")
+
+	root := t.TempDir()
+	paths := testutil.Paths(root)
+	testutil.EnsurePaths(t, paths)
+
+	cfg := config.Default()
+	reducer := &doneReducer{}
+	e := engine.New(cfg, paths, history.New(paths.HistoryFile), []engine.Profile{{
+		Name:       "git-status",
+		Confidence: engine.ConfidenceHigh,
+		Match: func(inv engine.Invocation) bool {
+			return len(inv.Display) > 0 && inv.Display[0] == "tinydone"
+		},
+		StreamRender: func(engine.Invocation, engine.OutputBudget) engine.StreamReducer {
+			return reducer
+		},
+	}})
+
+	result, err := e.Execute(context.Background(), engine.Invocation{
+		Command: []string{tinyStatusPath},
+		Display: []string{"tinydone"},
+		Cwd:     root,
+	}, false)
+	if err != nil {
+		t.Fatalf("execute tiny done reducer: %v", err)
+	}
+	if result.Display != "## main\nM  README.md" {
+		t.Fatalf("expected tiny raw bypass, got %#v", result)
+	}
+	if reducer.consumeCalls != 1 {
+		t.Fatalf("expected reducer to stop after first chunk, got %d calls", reducer.consumeCalls)
 	}
 }
 

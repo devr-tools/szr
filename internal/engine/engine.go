@@ -10,6 +10,7 @@ type Engine struct {
 	config             config.Config
 	paths              config.Paths
 	history            *history.Store
+	budgetAdapter      BudgetAdapter
 	profiles           []Profile
 	projectProfiles    []Profile
 	builtinProfiles    []Profile
@@ -19,15 +20,24 @@ type Engine struct {
 func New(cfg config.Config, paths config.Paths, store *history.Store, profiles []Profile) *Engine {
 	projectProfiles := compileRuleProfiles(cfg)
 	builtinProfiles := annotateProfilesSource(profiles, SourceBuiltin)
+	var budgetAdapter BudgetAdapter
+	if cfg.Advanced.AdaptiveBudgets {
+		budgetAdapter = NewHistoryBudgetAdapter(store)
+	}
 	return &Engine{
 		config:             cfg,
 		paths:              paths,
 		history:            store,
+		budgetAdapter:      budgetAdapter,
 		profiles:           mergeProfiles(projectProfiles, builtinProfiles),
 		projectProfiles:    projectProfiles,
 		builtinProfiles:    builtinProfiles,
 		projectPreferences: append([]rules.Preference(nil), cfg.ProjectRules.Preferences...),
 	}
+}
+
+func (e *Engine) SetBudgetAdapter(adapter BudgetAdapter) {
+	e.budgetAdapter = adapter
 }
 
 func shouldApplyBypass(profile Profile, decision FastPathDecision) bool {
@@ -40,7 +50,24 @@ func shouldApplyBypass(profile Profile, decision FastPathDecision) bool {
 	if profile.StreamRender == nil {
 		return false
 	}
-	return profile.Confidence != ConfidenceHigh
+	if profile.Confidence != ConfidenceHigh {
+		return true
+	}
+	return allowsHighConfidenceBypass(profile.Name)
+}
+
+func allowsHighConfidenceBypass(name string) bool {
+	switch name {
+	case "git-ls-files",
+		"git-status",
+		"grep",
+		"path-find",
+		"ripgrep-files",
+		"ripgrep-files-with-matches":
+		return true
+	default:
+		return false
+	}
 }
 
 func bypassReason(decision FastPathDecision) string {

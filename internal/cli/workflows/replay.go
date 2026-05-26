@@ -43,6 +43,7 @@ func RunReplay(rt Runtime, args []string) int {
 		Verbose:             rt.Verbose,
 		UltraCompact:        rt.UltraCompact,
 		ReasoningBudgetMode: cfg.ReasoningBudgetMode,
+		Advanced:            cfg.Advanced,
 	}
 	effectiveInv, _ := eng.ExplainPreferences(inv)
 	profile, err := selectedProfile(eng, inv, opts.profileName)
@@ -134,6 +135,7 @@ func RunCompare(ctx context.Context, rt Runtime, args []string) int {
 		Verbose:             rt.Verbose,
 		UltraCompact:        rt.UltraCompact,
 		ReasoningBudgetMode: cfg.ReasoningBudgetMode,
+		Advanced:            cfg.Advanced,
 	}
 	effectiveInv, _ := eng.ExplainPreferences(inv)
 	profile := eng.Explain(inv)

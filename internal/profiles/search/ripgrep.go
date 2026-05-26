@@ -16,6 +16,25 @@ func isRipgrepCommand(args []string) bool {
 	return true
 }
 
+func isRecursiveGrepCommand(args []string) bool {
+	if len(args) == 0 || args[0] != "grep" {
+		return false
+	}
+	if !containsRecursiveGrepFlag(args[1:]) {
+		return false
+	}
+	for _, arg := range args[1:] {
+		switch arg {
+		case "-h", "-l", "-L", "-c", "-q", "-o", "-v", "--no-filename", "--files-with-matches", "--files-without-match", "--count", "--quiet", "--only-matching", "--invert-match":
+			return false
+		}
+		if strings.HasPrefix(arg, "-") && strings.Contains(arg[1:], "h") {
+			return false
+		}
+	}
+	return true
+}
+
 func isRipgrepFilesCommand(args []string) bool {
 	if len(args) == 0 || args[0] != "rg" {
 		return false
@@ -58,6 +77,31 @@ func prepareRipgrep(command []string) []string {
 	return out
 }
 
+func prepareGrep(command []string) []string {
+	if len(command) == 0 {
+		return command
+	}
+
+	out := append([]string{}, command...)
+	if !containsGrepLineNumberFlag(out[1:]) {
+		out = append(out[:1], append([]string{"-n"}, out[1:]...)...)
+	}
+	if !containsGrepFilenameFlag(out[1:]) {
+		out = append(out[:1], append([]string{"-H"}, out[1:]...)...)
+	}
+	if !containsGrepColorFlag(out[1:]) {
+		out = append(out[:1], append([]string{"--color=never"}, out[1:]...)...)
+	}
+	if shouldInjectDefaultGrepExcludes(out[1:]) {
+		injected := []string{out[0]}
+		for _, dir := range defaultSearchExcludeDirs() {
+			injected = append(injected, "--exclude-dir="+dir)
+		}
+		out = append(injected, out[1:]...)
+	}
+	return out
+}
+
 func prepareRipgrepFiles(command []string) []string {
 	if len(command) == 0 {
 		return command
@@ -72,6 +116,86 @@ func prepareRipgrepFiles(command []string) []string {
 		out = append(injected, out[1:]...)
 	}
 	return out
+}
+
+func containsRecursiveGrepFlag(args []string) bool {
+	for _, arg := range args {
+		switch arg {
+		case "-r", "-R", "--recursive", "--dereference-recursive":
+			return true
+		}
+		if strings.HasPrefix(arg, "-") && strings.Contains(arg[1:], "r") {
+			return true
+		}
+		if strings.HasPrefix(arg, "-") && strings.Contains(arg[1:], "R") {
+			return true
+		}
+	}
+	return false
+}
+
+func containsGrepLineNumberFlag(args []string) bool {
+	for _, arg := range args {
+		switch arg {
+		case "-n", "--line-number":
+			return true
+		}
+		if strings.HasPrefix(arg, "-") && strings.Contains(arg[1:], "n") {
+			return true
+		}
+	}
+	return false
+}
+
+func containsGrepFilenameFlag(args []string) bool {
+	for _, arg := range args {
+		switch arg {
+		case "-H", "--with-filename":
+			return true
+		case "-h", "--no-filename":
+			return false
+		}
+		if strings.HasPrefix(arg, "-") && strings.Contains(arg[1:], "H") {
+			return true
+		}
+		if strings.HasPrefix(arg, "-") && strings.Contains(arg[1:], "h") {
+			return false
+		}
+	}
+	return false
+}
+
+func containsGrepColorFlag(args []string) bool {
+	for _, arg := range args {
+		if arg == "--color" || strings.HasPrefix(arg, "--color=") {
+			return true
+		}
+	}
+	return false
+}
+
+func shouldInjectDefaultGrepExcludes(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	hasRecursive := containsRecursiveGrepFlag(args)
+	positionals := 0
+	for _, arg := range args {
+		switch {
+		case arg == "--exclude-dir" || strings.HasPrefix(arg, "--exclude-dir="):
+			return false
+		case arg == "--":
+			return false
+		case strings.HasPrefix(arg, "-"):
+			continue
+		default:
+			positionals++
+			if positionals > 1 && arg != "." && arg != "./" {
+				return false
+			}
+		}
+	}
+	return hasRecursive
 }
 
 func shouldInjectDefaultRipgrepExcludes(args []string) bool {

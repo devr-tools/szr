@@ -61,3 +61,11 @@ func (s *Store) SuggestBudgets(opts BudgetSuggestionOptions) ([]BudgetSuggestion
 	}
 	return SuggestBudgets(records, opts), nil
 }
+
+func (s *Store) FindBudgetSuggestion(fingerprint string, opts BudgetSuggestionOptions) (*BudgetSuggestion, error) {
+	records, err := s.LoadAll()
+	if err != nil {
+		return nil, err
+	}
+	return FindBudgetSuggestion(records, fingerprint, opts), nil
+}

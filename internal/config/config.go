@@ -16,8 +16,17 @@ type Config struct {
 	MaxPreviewLines     int         `json:"max_preview_lines"`
 	MaxMatchGroups      int         `json:"max_match_groups"`
 	ReasoningBudgetMode string      `json:"reasoning_budget_mode"`
+	Advanced            Advanced    `json:"advanced"`
 	UpdateCheck         UpdateCheck `json:"update_check"`
 	ProjectRules        rules.File  `json:"-"`
+}
+
+type Advanced struct {
+	AggressivePrepareRewrites bool `json:"aggressive_prepare_rewrites"`
+	NoisePrefiltering         bool `json:"noise_prefiltering"`
+	AdaptiveBudgets           bool `json:"adaptive_budgets"`
+	EarlyCaptureStop          bool `json:"early_capture_stop"`
+	SemanticCompaction        bool `json:"semantic_compaction"`
 }
 
 type UpdateCheck struct {
@@ -42,6 +51,13 @@ func Default() Config {
 		MaxPreviewLines:     12,
 		MaxMatchGroups:      8,
 		ReasoningBudgetMode: ReasoningBudgetStandard,
+		Advanced: Advanced{
+			AggressivePrepareRewrites: true,
+			NoisePrefiltering:         true,
+			AdaptiveBudgets:           false,
+			EarlyCaptureStop:          true,
+			SemanticCompaction:        true,
+		},
 		UpdateCheck: UpdateCheck{
 			Enabled:       false,
 			IntervalHours: 24,

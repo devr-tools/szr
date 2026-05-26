@@ -1,6 +1,7 @@
 package profiles_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/devr-tools/szr/internal/engine"
@@ -38,6 +39,28 @@ func TestGitProfilesRender(t *testing.T) {
 	}
 	if got := gitDiff.Render(engine.Invocation{}, engine.Execution{Stdout: "diff --git a/a.go b/a.go\n@@ -1 +1 @@ func demo() {\n+foo\n-bar\n"}); got == "" || got == "no diff" {
 		t.Fatalf("expected git-diff patch render output, got %q", got)
+	}
+	largeStat := strings.Join([]string{
+		"a.txt | 1 +",
+		"b.txt | 8 ++++++--",
+		"c.txt | 3 ++-",
+		"d.txt | 12 +++++++++---",
+		"e.txt | 2 +-",
+		"f.txt | 20 ++++++++++++++------",
+		"g.txt | 5 +++--",
+		"h.txt | 7 +++++--",
+		"i.txt | 4 ++--",
+		"9 files changed, 62 insertions(+), 14 deletions(-)",
+	}, "\n")
+	got := gitDiff.Render(engine.Invocation{}, engine.Execution{Stdout: largeStat})
+	for _, want := range []string{"files=9 +62 -14", "f.txt | 20", "d.txt | 12", "b.txt | 8", "... +4 more files"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected condensed git-diff output %q in %q", want, got)
+		}
+	}
+	aggressive := gitDiff.Render(engine.Invocation{ReasoningBudgetMode: "aggressive"}, engine.Execution{Stdout: largeStat})
+	if strings.Contains(aggressive, "... +4 more files") || !strings.Contains(aggressive, "... +6 more files") {
+		t.Fatalf("expected aggressive git-diff render to keep fewer files, got %q", aggressive)
 	}
 	if gitDiff.StreamPreference != engine.StreamStdoutOnly || gitDiff.StreamRender == nil {
 		t.Fatalf("unexpected git-diff stream metadata: %#v", gitDiff)

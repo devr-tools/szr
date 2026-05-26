@@ -194,7 +194,7 @@ func SelectUniqueAnchoredLines(lines []string, maxFrames int) []string {
 
 func DiagnosticAnchor(line string) string {
 	lower := strings.ToLower(line)
-	for _, ext := range []string{".go:", ".py:", ".rs:", ".ts:", ".tsx:", ".js:", ".jsx:", ".java:", ".c:", ".cc:", ".cpp:", ".h:", ".hpp:"} {
+	for _, ext := range []string{".go:", ".py:", ".rs:", ".ts:", ".tsx:", ".mts:", ".cts:", ".js:", ".jsx:", ".mjs:", ".cjs:", ".php:", ".phtml:", ".java:", ".c:", ".cc:", ".cpp:", ".h:", ".hpp:"} {
 		idx := strings.Index(lower, ext)
 		if idx < 0 {
 			continue

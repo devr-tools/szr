@@ -142,7 +142,15 @@ func goBuildProfile(maxLines int) engine.Profile {
 			return filters.SummarizeGenericFailure(exec.Stderr+"\n"+exec.Stdout, maxLines)
 		},
 		StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-			return filters.NewGenericFailureReducerWithContract(budget.MaxLines, budget.MaxBytes, budget.MinFailures, budget.MinAnchors, budget.MinHints)
+			return filters.NewGenericFailureReducerWithOptions(filters.GenericFailureReducerOptions{
+				MaxLines:           budget.MaxLines,
+				MaxBytes:           budget.MaxBytes,
+				MinFailures:        budget.MinFailures,
+				MinAnchors:         budget.MinAnchors,
+				MinHints:           budget.MinHints,
+				NoisePrefiltering:  budget.NoisePrefiltering,
+				SemanticCompaction: budget.SemanticCompaction,
+			})
 		},
 		ParseBytes: profilekit.ParseStderrFirst,
 		Explain: []string{
@@ -167,7 +175,15 @@ func genericTestProfile(maxLines int) engine.Profile {
 			return filters.SummarizeGenericFailure(exec.Stdout+"\n"+exec.Stderr, maxLines)
 		},
 		StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-			return filters.NewGenericFailureReducerWithContract(budget.MaxLines, budget.MaxBytes, budget.MinFailures, budget.MinAnchors, budget.MinHints)
+			return filters.NewGenericFailureReducerWithOptions(filters.GenericFailureReducerOptions{
+				MaxLines:           budget.MaxLines,
+				MaxBytes:           budget.MaxBytes,
+				MinFailures:        budget.MinFailures,
+				MinAnchors:         budget.MinAnchors,
+				MinHints:           budget.MinHints,
+				NoisePrefiltering:  budget.NoisePrefiltering,
+				SemanticCompaction: budget.SemanticCompaction,
+			})
 		},
 		ParseBytes: profilekit.ParseCombined,
 		Explain: []string{

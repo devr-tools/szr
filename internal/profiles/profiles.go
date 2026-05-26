@@ -12,6 +12,7 @@ import (
 	javascriptprofiles "github.com/devr-tools/szr/internal/profiles/javascript"
 	kubernetesprofiles "github.com/devr-tools/szr/internal/profiles/kubernetes"
 	patchprofiles "github.com/devr-tools/szr/internal/profiles/patch"
+	phpprofiles "github.com/devr-tools/szr/internal/profiles/php"
 	pythonprofiles "github.com/devr-tools/szr/internal/profiles/python"
 	rustprofiles "github.com/devr-tools/szr/internal/profiles/rust"
 	searchprofiles "github.com/devr-tools/szr/internal/profiles/search"
@@ -29,6 +30,7 @@ func Builtins(maxLines int) []engine.Profile {
 	list = append(list, kubernetesprofiles.Profiles(maxLines)...)
 	list = append(list, githubprofiles.Profiles(maxLines)...)
 	list = append(list, javascriptprofiles.Profiles(maxLines)...)
+	list = append(list, phpprofiles.Profiles(maxLines)...)
 	list = append(list, searchprofiles.Profiles(maxLines, 4)...)
 	return list
 }

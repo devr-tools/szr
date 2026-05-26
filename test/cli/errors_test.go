@@ -296,7 +296,7 @@ func TestSpreadReportingHistoryOutput(t *testing.T) {
 		"p95",
 		"profiles:",
 		"improvement hotspots:",
-		"action",
+		"top action:",
 		"loosen budget or improve fallback path",
 		"git-status",
 		"go-test-json",

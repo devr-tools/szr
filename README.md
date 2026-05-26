@@ -146,6 +146,12 @@ Use this surface when you want to:
 | `szr commands` | Show the full command catalog for power users and agents. |
 | `szr profiles` | List built-in reducer profiles. |
 
+Reasoning budget modes:
+
+- `standard`: balanced for human readability
+- `agent`: tighter defaults for agent loops
+- `aggressive`: smallest previews for spread-heavy workflows, including terser `git diff` summaries
+
 ## Update notices
 
 - Interactive shells: `szr` can print update notices on `stderr` when update checks are enabled.
@@ -170,7 +176,3 @@ Use this surface when you want to:
 - [Releasing](docs/RELEASING.md)
 - [Go package](docs/GO_PACKAGE.md)
 - [Architecture](docs/ARCHITECTURE.md)
-
-## Authors
-
-Alex John [@alxxjohn]

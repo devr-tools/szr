@@ -105,6 +105,7 @@ func RunRulesTest(rt Runtime, args []string) int {
 		Verbose:             rt.Verbose,
 		UltraCompact:        rt.UltraCompact,
 		ReasoningBudgetMode: cfg.ReasoningBudgetMode,
+		Advanced:            cfg.Advanced,
 	}
 	effectiveInv, preferences := eng.ExplainPreferences(inv)
 	profile := eng.Explain(inv)

@@ -27,13 +27,15 @@ func (a *App) runExternal(ctx context.Context, flags globalFlags, name string, a
 	}
 
 	cwd, _ := os.Getwd()
+	cfg := a.configForFlags(flags)
 	inv := engine.Invocation{
 		Command:             command,
 		Display:             display,
 		Cwd:                 cwd,
 		Verbose:             flags.verbose,
 		UltraCompact:        flags.ultra,
-		ReasoningBudgetMode: a.configForFlags(flags).ReasoningBudgetMode,
+		ReasoningBudgetMode: cfg.ReasoningBudgetMode,
+		Advanced:            cfg.Advanced,
 	}
 	result, err := a.engineForFlags(flags).Execute(ctx, inv, passthrough)
 	if flags.verbose >= 2 {
@@ -80,13 +82,16 @@ func (a *App) runExplain(flags globalFlags, args []string) int {
 		Verbose:             flags.verbose,
 		UltraCompact:        flags.ultra,
 		ReasoningBudgetMode: cfg.ReasoningBudgetMode,
+		Advanced:            cfg.Advanced,
 	}
 	effectiveInv, preferences := a.engineForFlags(flags).ExplainPreferences(inv)
 	profile := a.engineForFlags(flags).Explain(inv)
+	resolvedBudget, budgetAdaptation := a.engineForFlags(flags).ExplainBudget(inv)
 	decisions := a.engineForFlags(flags).ExplainDecisions(inv)
 	printExplainProfile(profile, a.paths.ProjectRuleFile, cfg.ReasoningBudgetMode)
 	printExplainEffectiveCommand(effectiveInv.Command, preferences)
-	printExplainBudget(profile, inv, cfg.MaxPreviewLines)
+	printExplainBudget(resolvedBudget)
+	printExplainBudgetAdaptation(budgetAdaptation)
 	printExplainLatency(profile)
 	printExplainSuggestion(a.findBudgetSuggestion(args))
 	printExplainPreferences(preferences, a.paths.ProjectRuleFile)
@@ -116,8 +121,7 @@ func printExplainEffectiveCommand(command []string, preferences []engine.Prefere
 	}
 }
 
-func printExplainBudget(profile engine.Profile, inv engine.Invocation, maxPreviewLines int) {
-	resolvedBudget := engine.ResolveBudget(profile, inv, maxPreviewLines)
+func printExplainBudget(resolvedBudget engine.OutputBudget) {
 	if resolvedBudget.MaxLines > 0 || resolvedBudget.MaxBytes > 0 || resolvedBudget.MaxTokens > 0 {
 		fmt.Printf(
 			"budget: lines=%d bytes=%d tokens=%d\n",
@@ -129,6 +133,20 @@ func printExplainBudget(profile engine.Profile, inv engine.Invocation, maxPrevie
 	if resolvedBudget.MinFailures > 0 || resolvedBudget.MinAnchors > 0 || resolvedBudget.MinHints > 0 {
 		fmt.Printf("contract: failures=%d anchors=%d hints=%d\n", resolvedBudget.MinFailures, resolvedBudget.MinAnchors, resolvedBudget.MinHints)
 	}
+}
+
+func printExplainBudgetAdaptation(adaptation *engine.BudgetAdaptation) {
+	if adaptation == nil {
+		return
+	}
+	fmt.Printf(
+		"budget adaptation: %s %s confidence=%s samples=%d source=%s\n",
+		adaptation.Direction,
+		adaptation.Reason,
+		adaptation.Confidence,
+		adaptation.Samples,
+		adaptation.Source,
+	)
 }
 
 func printExplainLatency(profile engine.Profile) {
@@ -182,17 +200,12 @@ func (a *App) findBudgetSuggestion(command []string) *history.BudgetSuggestion {
 	if a.history == nil {
 		return nil
 	}
-	suggestions, err := a.history.SuggestBudgets(history.BudgetSuggestionOptions{Limit: 16})
+	fingerprint := history.Fingerprint(strings.Join(command, " "))
+	suggestion, err := a.history.FindBudgetSuggestion(fingerprint, history.BudgetSuggestionOptions{Limit: 16})
 	if err != nil {
 		return nil
 	}
-	fingerprint := history.Fingerprint(strings.Join(command, " "))
-	for i := range suggestions {
-		if suggestions[i].Fingerprint == fingerprint {
-			return &suggestions[i]
-		}
-	}
-	return nil
+	return suggestion
 }
 
 func describeProfileSource(source string, projectRuleFile string) string {

@@ -256,6 +256,59 @@ func TestBudgetSuggestions(t *testing.T) {
 	}
 }
 
+func TestFindBudgetSuggestion(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.jsonl")
+	store := history.New(path)
+	fingerprint := history.Fingerprint("szr go test ./...")
+	for i := 0; i < 4; i++ {
+		if err := store.Append(history.Record{
+			Timestamp:          time.Date(2026, 5, 24, 10+i, 0, 0, 0, time.UTC),
+			Command:            "szr go test ./...",
+			CommandFingerprint: fingerprint,
+			Profile:            "go-test-json",
+			RawTokens:          120,
+			FilteredTokens:     88,
+			SavedTokens:        32,
+			SavingsPct:         26.67,
+			BytesEmitted:       360,
+		}); err != nil {
+			t.Fatalf("append %d: %v", i, err)
+		}
+	}
+	if err := store.Append(history.Record{
+		Timestamp:          time.Date(2026, 5, 24, 15, 0, 0, 0, time.UTC),
+		Command:            "szr git status",
+		CommandFingerprint: history.Fingerprint("szr git status"),
+		Profile:            "git-status",
+		RawTokens:          40,
+		FilteredTokens:     8,
+		SavedTokens:        32,
+		SavingsPct:         80,
+		BytesEmitted:       64,
+	}); err != nil {
+		t.Fatalf("append unrelated: %v", err)
+	}
+
+	suggestion, err := store.FindBudgetSuggestion(fingerprint, history.BudgetSuggestionOptions{})
+	if err != nil {
+		t.Fatalf("find suggestion: %v", err)
+	}
+	if suggestion == nil {
+		t.Fatal("expected suggestion")
+	}
+	if suggestion.Fingerprint != fingerprint || suggestion.Direction != history.BudgetSuggestionTighten {
+		t.Fatalf("unexpected suggestion: %#v", suggestion)
+	}
+
+	missing, err := store.FindBudgetSuggestion(history.Fingerprint("szr missing"), history.BudgetSuggestionOptions{})
+	if err != nil {
+		t.Fatalf("find missing suggestion: %v", err)
+	}
+	if missing != nil {
+		t.Fatalf("expected missing suggestion to be nil, got %#v", missing)
+	}
+}
+
 func TestSummaryHydratesLegacyFields(t *testing.T) {
 	records := []history.Record{{
 		Timestamp:      time.Date(2026, 5, 22, 10, 0, 0, 0, time.UTC),

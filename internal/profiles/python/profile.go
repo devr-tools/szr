@@ -22,7 +22,7 @@ func Profiles(maxLines int) []engine.Profile {
 				return isPytestCommand(inv.Display)
 			},
 			Prepare: func(inv engine.Invocation) []string {
-				return preparePytestCommand(inv.Command)
+				return preparePytestCommandWithMode(inv.Command, inv.Advanced.AggressivePrepareRewrites)
 			},
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return pyfilter.SummarizePytest(exec.Stdout+"\n"+exec.Stderr, maxLines)
@@ -148,6 +148,10 @@ func detectPythonTool(command []string) string {
 }
 
 func preparePytestCommand(command []string) []string {
+	return preparePytestCommandWithMode(command, true)
+}
+
+func preparePytestCommandWithMode(command []string, aggressive bool) []string {
 	if len(command) == 0 {
 		return command
 	}
@@ -156,11 +160,17 @@ func preparePytestCommand(command []string) []string {
 	if !hasPytestVerbosityArg(command) {
 		out = append(out, "-q")
 	}
+	if aggressive && !profilekit.ContainsAny(command[1:], "--no-header") {
+		out = append(out, "--no-header")
+	}
 	if !profilekit.ContainsPrefix(command[1:], "--tb=") {
 		out = append(out, "--tb=short")
 	}
 	if !profilekit.ContainsPrefix(command[1:], "--color=") {
 		out = append(out, "--color=no")
+	}
+	if aggressive && !profilekit.ContainsAny(command[1:], "--disable-warnings", "--disable-pytest-warnings") {
+		out = append(out, "--disable-warnings")
 	}
 	if !hasPytestReportChars(command) {
 		out = append(out, "-ra")

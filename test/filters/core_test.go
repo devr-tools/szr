@@ -78,8 +78,42 @@ func TestFailureHelpers(t *testing.T) {
 			t.Fatalf("expected %q in ranked failure output:\n%s", want, stack)
 		}
 	}
-	if !strings.Contains(stack, "warning: retrying connection (x2)") {
+	if !strings.Contains(stack, "warning: retrying connection (+1 similar warnings)") {
 		t.Fatalf("expected repeated warning folding, got %q", stack)
+	}
+
+	phpAnchor := filters.SummarizeGenericFailure(strings.Join([]string{
+		"Fatal error: Uncaught RuntimeException",
+		"at /srv/app/src/Kernel.php:27",
+		"help: rerun with APP_ENV=test",
+	}, "\n"), 3)
+	for _, want := range []string{"Fatal error: Uncaught RuntimeException", "Kernel.php:27", "help: rerun with APP_ENV=test"} {
+		if !strings.Contains(phpAnchor, want) {
+			t.Fatalf("expected %q in php anchored failure output:\n%s", want, phpAnchor)
+		}
+	}
+
+	prefiltered := filters.SummarizeGenericFailure(strings.Join([]string{
+		"Downloading registry index",
+		"Resolving: total 12, reused 0, downloaded 6",
+		"added 487 packages in 8s",
+		"error: build failed",
+		"/Users/alex/Documents/GitHub/szr/internal/filters/failure.go:201:3 undefined: noiseGate",
+		"/Users/alex/Documents/GitHub/szr/internal/filters/failure.go:201:3 undefined: noiseGate",
+		"help: rerun with --verbose",
+	}, "\n"), 5)
+	for _, want := range []string{
+		"error: build failed",
+		".../internal/filters/failure.go:201:3",
+		"help: rerun with --verbose",
+		"... omitted 2 progress lines, 1 install lines",
+	} {
+		if !strings.Contains(prefiltered, want) {
+			t.Fatalf("expected %q in prefiltered failure output:\n%s", want, prefiltered)
+		}
+	}
+	if !strings.Contains(prefiltered, "(+1 similar frames)") {
+		t.Fatalf("expected repeated stack frame compaction, got %q", prefiltered)
 	}
 }
 

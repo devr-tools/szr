@@ -1,11 +1,6 @@
 package javascript
 
 import (
-	"encoding/json"
-	"os"
-	"path/filepath"
-	"strings"
-
 	"github.com/devr-tools/szr/internal/engine"
 	shared "github.com/devr-tools/szr/internal/filters"
 	jsfilter "github.com/devr-tools/szr/internal/filters/javascript"
@@ -25,7 +20,7 @@ func Profiles(maxLines int) []engine.Profile {
 				return profilekit.HasCommand(inv.Command, "bun", "test") || profilekit.HasCommand(inv.Display, "bun", "test")
 			},
 			Prepare: func(inv engine.Invocation) []string {
-				return inv.Command
+				return prepareBunTestCommand(inv.Command, inv.Advanced.AggressivePrepareRewrites)
 			},
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return jsfilter.SummarizeJSTest(exec.Stdout+"\n"+exec.Stderr, maxLines)
@@ -52,11 +47,18 @@ func Profiles(maxLines int) []engine.Profile {
 				return isPackageManagerTest(inv.Command) || isPackageManagerTest(inv.Display)
 			},
 			Prepare: func(inv engine.Invocation) []string {
-				runner := detectPackageTestRunner(inv.Cwd, inv.Command)
-				if runner == "" || hasStructuredJSArgs(inv.Command, runner) {
+				if len(inv.Command) == 0 {
 					return inv.Command
 				}
-				return appendPackageManagerArgs(inv.Command, runnerArgs(runner)...)
+				runner := detectPackageTestRunner(inv.Cwd, inv.Command)
+				if runner == "" {
+					return prepareJSPackageManagerCommand(inv.Command, inv.Advanced.AggressivePrepareRewrites)
+				}
+				command := prepareJSPackageManagerCommand(inv.Command, inv.Advanced.AggressivePrepareRewrites)
+				if !hasStructuredJSArgs(command, runner) {
+					command = appendPackageManagerArgs(command, runnerArgs(runner)...)
+				}
+				return prepareJSRunnerCommand(command, runner, inv.Advanced.AggressivePrepareRewrites)
 			},
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return jsfilter.SummarizeJSTest(exec.Stdout+"\n"+exec.Stderr, maxLines)
@@ -83,7 +85,7 @@ func Profiles(maxLines int) []engine.Profile {
 				return isJSWorkspaceCommand(inv.Display)
 			},
 			Prepare: func(inv engine.Invocation) []string {
-				return inv.Command
+				return prepareJSPackageManagerCommand(inv.Command, inv.Advanced.AggressivePrepareRewrites)
 			},
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return jsfilter.SummarizeJSTooling(exec.Stdout+"\n"+exec.Stderr, maxLines)
@@ -111,9 +113,9 @@ func Profiles(maxLines int) []engine.Profile {
 			},
 			Prepare: func(inv engine.Invocation) []string {
 				if hasStructuredJSArgs(inv.Command, "vitest") {
-					return inv.Command
+					return prepareVitestCommand(inv.Command, inv.Advanced.AggressivePrepareRewrites)
 				}
-				return append(inv.Command, runnerArgs("vitest")...)
+				return prepareVitestCommand(append(inv.Command, runnerArgs("vitest")...), inv.Advanced.AggressivePrepareRewrites)
 			},
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return jsfilter.SummarizeJSTest(exec.Stdout+"\n"+exec.Stderr, maxLines)
@@ -141,9 +143,9 @@ func Profiles(maxLines int) []engine.Profile {
 			},
 			Prepare: func(inv engine.Invocation) []string {
 				if hasStructuredJSArgs(inv.Command, "jest") {
-					return inv.Command
+					return prepareJestCommand(inv.Command, inv.Advanced.AggressivePrepareRewrites)
 				}
-				return append(inv.Command, runnerArgs("jest")...)
+				return prepareJestCommand(append(inv.Command, runnerArgs("jest")...), inv.Advanced.AggressivePrepareRewrites)
 			},
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return jsfilter.SummarizeJSTest(exec.Stdout+"\n"+exec.Stderr, maxLines)
@@ -162,131 +164,100 @@ func Profiles(maxLines int) []engine.Profile {
 	}
 }
 
-func isPackageManagerTest(args []string) bool {
-	return len(args) >= 2 &&
-		(args[0] == "npm" || args[0] == "pnpm" || args[0] == "yarn") &&
-		(args[1] == "test" || len(args) >= 3 && args[1] == "run" && args[2] == "test")
+func prepareBunTestCommand(command []string, aggressive bool) []string {
+	out := append([]string{}, command...)
+	if aggressive && !containsAny(command, "--no-color", "--color=false") && !containsPrefix(command, "--color=") {
+		out = append(out, "--no-color")
+	}
+	return out
 }
 
-func isJSWorkspaceCommand(args []string) bool {
-	if len(args) == 0 {
-		return false
+func prepareVitestCommand(command []string, aggressive bool) []string {
+	out := append([]string{}, command...)
+	if aggressive && !containsAny(command, "--no-color", "--color=false") && !containsPrefix(command, "--color=") {
+		out = append(out, "--color=false")
 	}
-	switch args[0] {
-	case "npm", "pnpm", "yarn":
-		return !isPackageManagerTest(args)
-	case "turbo", "nx", "vite", "eslint", "tsc", "bun":
-		return true
+	return out
+}
+
+func prepareJestCommand(command []string, aggressive bool) []string {
+	out := append([]string{}, command...)
+	if aggressive && !containsAny(command, "--color=false", "--colors=false") && !containsPrefix(command, "--color=") && !containsPrefix(command, "--colors=") {
+		out = append(out, "--color=false")
+	}
+	if aggressive && !containsAny(command, "--silent") {
+		out = append(out, "--silent")
+	}
+	return out
+}
+
+func prepareJSRunnerCommand(command []string, runner string, aggressive bool) []string {
+	switch runner {
+	case "jest":
+		return prepareJestCommand(command, aggressive)
+	case "vitest":
+		return prepareVitestCommand(command, aggressive)
 	default:
-		return false
+		return command
 	}
 }
 
-func appendPackageManagerArgs(command []string, extra ...string) []string {
-	if len(command) == 0 || len(extra) == 0 {
+func prepareJSPackageManagerCommand(command []string, aggressive bool) []string {
+	if len(command) == 0 {
 		return command
 	}
 
-	if command[0] == "npm" || command[0] == "pnpm" {
-		if containsAny(command, "--") {
-			return append(command, extra...)
-		}
-		out := append([]string{}, command...)
-		out = append(out, "--")
-		return append(out, extra...)
+	insertAt := jsCommandInsertIndex(command)
+	out := append([]string{}, command[:insertAt]...)
+	switch command[0] {
+	case "npm":
+		out = prepareNPMCommand(out, command, aggressive)
+	case "pnpm":
+		out = preparePNPMCommand(out, command, aggressive)
+	case "yarn":
+		out = prepareYarnCommand(out, command, aggressive)
 	}
-
-	return append(command, extra...)
+	return append(out, command[insertAt:]...)
 }
 
-func runnerArgs(runner string) []string {
-	if runner == "jest" {
-		return []string{"--json"}
-	}
-	return []string{"--reporter=json"}
-}
-
-func hasStructuredJSArgs(args []string, runner string) bool {
-	if runner == "jest" {
-		return containsAny(args, "--json") || containsPrefix(args, "--outputFile") || containsPrefix(args, "--reporters")
-	}
-	return containsAny(args, "--reporter=json", "--reporter", "json") || containsPrefix(args, "--reporter=") || containsPrefix(args, "--outputFile")
-}
-
-func detectPackageTestRunner(cwd string, command []string) string {
-	if runner := detectPackageTestRunnerFromPackageJSON(cwd); runner != "" {
-		return runner
-	}
-	return detectPackageTestRunnerFromArgs(command)
-}
-
-func detectPackageTestRunnerFromPackageJSON(cwd string) string {
-	if cwd == "" {
-		return ""
-	}
-
-	type packageJSON struct {
-		Scripts map[string]string `json:"scripts"`
-	}
-
-	for dir := cwd; dir != "" && dir != string(filepath.Separator); dir = filepath.Dir(dir) {
-		path := filepath.Join(dir, "package.json")
-		data, err := os.ReadFile(path)
-		if err != nil {
-			if next := filepath.Dir(dir); next == dir {
-				break
-			}
-			continue
-		}
-
-		var pkg packageJSON
-		if err := json.Unmarshal(data, &pkg); err != nil {
-			return ""
-		}
-
-		script := strings.ToLower(strings.TrimSpace(pkg.Scripts["test"]))
-		switch {
-		case strings.Contains(script, "vitest"):
-			return "vitest"
-		case strings.Contains(script, "jest"):
-			return "jest"
-		default:
-			return ""
+func jsCommandInsertIndex(command []string) int {
+	for i, arg := range command {
+		if arg == "--" {
+			return i
 		}
 	}
-	return ""
+	return len(command)
 }
 
-func detectPackageTestRunnerFromArgs(command []string) string {
-	script := strings.ToLower(strings.Join(command, " "))
-	switch {
-	case strings.Contains(script, "--runinband"):
-		return "jest"
-	case strings.Contains(script, "vitest"):
-		return "vitest"
-	case strings.Contains(script, "jest"):
-		return "jest"
-	default:
-		return ""
-	}
+func prepareNPMCommand(out, command []string, aggressive bool) []string {
+	out = appendIfAggressive(out, command, aggressive, "--no-progress")
+	out = appendIfAggressive(out, command, aggressive, "--no-fund")
+	out = appendIfAggressive(out, command, aggressive, "--no-audit")
+	return appendJSColorFlag(out, command, aggressive)
 }
 
-func containsAny(args []string, needles ...string) bool {
-	for _, arg := range args {
-		for _, needle := range needles {
-			if arg == needle {
-				return true
-			}
-		}
+func preparePNPMCommand(out, command []string, aggressive bool) []string {
+	if aggressive && !containsAny(command, "--reporter=silent", "--reporter=append-only") && !containsPrefix(command, "--reporter=") {
+		out = append(out, "--reporter=append-only")
 	}
-	return false
+	return appendJSColorFlag(out, command, aggressive)
 }
 
-func containsPrefix(args []string, prefix string) bool {
-	for _, arg := range args {
-		if strings.HasPrefix(arg, prefix) {
-			return true
-		}
+func prepareYarnCommand(out, command []string, aggressive bool) []string {
+	out = appendIfAggressive(out, command, aggressive, "--silent")
+	return appendJSColorFlag(out, command, aggressive)
+}
+
+func appendIfAggressive(out, command []string, aggressive bool, arg string) []string {
+	if aggressive && !containsAny(command, arg) {
+		out = append(out, arg)
 	}
-	return false
+	return out
+}
+
+func appendJSColorFlag(out, command []string, aggressive bool) []string {
+	if aggressive && !containsAny(command, "--color=false") && !containsPrefix(command, "--color=") {
+		out = append(out, "--color=false")
+	}
+	return out
 }

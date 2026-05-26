@@ -57,7 +57,11 @@ func Profiles(maxLines int) []engine.Profile {
 			},
 			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
 				return newBufferedCombinedReducer(func(input string) string {
-					return shared.SummarizeGenericFailure(input, budget.MaxLines)
+					return shared.SummarizeGenericFailureWithOptions(input, shared.GenericFailureReducerOptions{
+						MaxLines:           budget.MaxLines,
+						NoisePrefiltering:  budget.NoisePrefiltering,
+						SemanticCompaction: budget.SemanticCompaction,
+					})
 				})
 			},
 			ParseBytes: profilekit.ParseCombined,

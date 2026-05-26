@@ -9,6 +9,31 @@ import (
 func Profiles(maxLines int, maxGroups int) []engine.Profile {
 	return []engine.Profile{
 		{
+			Name:             "grep",
+			Description:      "Normalizes recursive grep into stable line-oriented output and groups matches by file.",
+			Confidence:       engine.ConfidenceHigh,
+			StreamPreference: engine.StreamStdoutFirst,
+			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 10)),
+			LatencyBudget:    profilekit.LatencyBudget(25),
+			Match: func(inv engine.Invocation) bool {
+				return isRecursiveGrepCommand(inv.Display)
+			},
+			Prepare: func(inv engine.Invocation) []string {
+				return prepareGrep(inv.Command)
+			},
+			Render: func(_ engine.Invocation, exec engine.Execution) string {
+				return filters.SummarizeRipgrep(exec.Stdout+"\n"+exec.Stderr, maxGroups, maxLines)
+			},
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
+				return filters.NewRipgrepReducer(maxGroups, budget.MaxLines)
+			},
+			ParseBytes: profilekit.ParseCombined,
+			Explain: []string{
+				"Targets recursive plain-text `grep` usage and adds filename plus line-number flags when the user did not already request them.",
+				"Groups matches by file and keeps grep as a viable fallback when `rg` is unavailable.",
+			},
+		},
+		{
 			Name:             "ripgrep-files",
 			Description:      "Summarizes `rg --files` output into a bounded path list.",
 			Confidence:       engine.ConfidenceHigh,

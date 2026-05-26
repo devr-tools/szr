@@ -2,7 +2,7 @@
 
 This document tracks the builtin profiles currently registered by `internal/profiles.Builtins()`.
 
-Current coverage: `34` builtin profiles across `13` categories.
+Current coverage: `41` builtin profiles across `14` categories.
 
 Anything not listed here does not currently have a dedicated builtin profile in `szr`.
 
@@ -16,6 +16,7 @@ Anything not listed here does not currently have a dedicated builtin profile in 
 | Git | 3 | `git status`, `git log`, `git diff` |
 | GitHub CLI | 5 | `gh pr view`, `gh pr checks`, `gh run list`, `gh run view`, GitHub Actions logs |
 | JavaScript | 5 | `npm`, `pnpm`, `yarn`, `bun`, `turbo`, `nx`, `vite`, `vitest`, `jest`, `eslint`, `tsc` |
+| PHP | 1 | `composer`, `phpunit`, `pest`, `phpstan`, `psalm`, `phpcs`, `phpcbf`, `php-cs-fixer`, `php artisan` |
 | Python | 2 | `uv`, `poetry`, `pip`, `pytest`, `ruff`, `mypy` |
 | Build systems | 1 | `make`, `just`, `task`, `bazel`, `ninja`, `cmake` |
 | C/C++ tooling | 2 | `ctest`, `clang-tidy`, `clang-format`, `bear` |
@@ -63,7 +64,7 @@ Anything not listed here does not currently have a dedicated builtin profile in 
   - Focus: compact oneline history preview
 - `git-diff`
   - Matches: `git diff`
-  - Focus: file churn and `--stat` style diff summaries
+  - Focus: file churn and `--stat` style diff summaries, with top-churn truncation for large diffs and a tighter aggressive mode
 
 ### GitHub CLI
 
@@ -92,7 +93,7 @@ Anything not listed here does not currently have a dedicated builtin profile in 
   - Matches: `npm test`, `pnpm test`, `yarn test`, plus `run test` variants
   - Focus: detects `vitest` or `jest` behind package scripts and forwards structured reporter flags
 - `js-workspace`
-  - Matches: non-test `npm`, `pnpm`, `yarn`, and `bun` commands plus `turbo`, `nx`, `vite`, `eslint`, and `tsc`
+  - Matches: non-test `npm`, `pnpm`, `yarn`, and `bun` commands plus direct workspace and toolchain entrypoints such as `turbo`, `nx`, `vite`, `eslint`, `tsc`, `tsx`, `ts-node`, `tsup`, `esbuild`, `rollup`, `webpack`, `next`, and `biome`
   - Focus: package-manager failures, workspace task failures, and file-anchored Vite or build diagnostics
 - `vitest-json`
   - Matches: direct `vitest` commands
@@ -100,6 +101,12 @@ Anything not listed here does not currently have a dedicated builtin profile in 
 - `jest-json`
   - Matches: direct `jest` commands
   - Focus: requests JSON output and condenses failing suite signal
+
+### PHP
+
+- `php-tooling`
+  - Matches: `composer`, `phpunit`, `pest`, `phpstan`, `psalm`, `phpcs`, `phpcbf`, `php-cs-fixer`, and `php artisan` style entrypoints
+  - Focus: dependency-resolution errors, failing assertions, static-analysis diagnostics, and PHP file anchors
 
 ### Python
 

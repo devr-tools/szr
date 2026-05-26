@@ -2,6 +2,8 @@ package git
 
 import (
 	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 
 	shared "github.com/devr-tools/szr/internal/filters"
@@ -21,8 +23,7 @@ func SummarizeGitLog(input string) string {
 
 func SummarizeGitDiff(input string) string {
 	reducer := NewGitDiffReducer(9, 0)
-	reducer.ConsumeStdout([]byte(input))
-	return reducer.Result()
+	return reducer.Reduce(input)
 }
 
 type GitStatusReducer struct {
@@ -358,16 +359,30 @@ func bucketLabel(path string) string {
 }
 
 type GitDiffReducer struct {
-	scanner      scanner
-	maxSummary   int
-	bytesParsed  int
-	fileCount    int
-	additions    int
-	deletions    int
-	summary      []string
-	fallback     *shared.CompactLineReducer
-	patchFiles   []gitDiffPatchFile
-	currentPatch *gitDiffPatchFile
+	scanner               scanner
+	maxSummary            int
+	bytesParsed           int
+	fileCount             int
+	additions             int
+	deletions             int
+	summary               []string
+	fallback              *shared.CompactLineReducer
+	patchFiles            []gitDiffPatchFile
+	currentPatch          *gitDiffPatchFile
+	statEntries           []gitDiffStatEntry
+	aggressive            bool
+	largeFileThreshold    int
+	largeSummaryTopN      int
+	aggressiveSummaryTopN int
+}
+
+type GitDiffReducerOptions struct {
+	MaxLines              int
+	MaxBytes              int
+	Aggressive            bool
+	LargeFileThreshold    int
+	LargeSummaryTopN      int
+	AggressiveSummaryTopN int
 }
 
 type gitDiffPatchFile struct {
@@ -384,16 +399,45 @@ type gitDiffPatchFile struct {
 }
 
 func NewGitDiffReducer(maxLines, maxBytes int) *GitDiffReducer {
-	maxSummary := maxLines - 1
+	return NewGitDiffReducerWithOptions(GitDiffReducerOptions{
+		MaxLines:              maxLines,
+		MaxBytes:              maxBytes,
+		LargeFileThreshold:    8,
+		LargeSummaryTopN:      5,
+		AggressiveSummaryTopN: 3,
+	})
+}
+
+func NewGitDiffReducerWithOptions(opts GitDiffReducerOptions) *GitDiffReducer {
+	maxSummary := opts.MaxLines - 1
 	if maxSummary <= 0 {
 		maxSummary = 8
 	}
-	return &GitDiffReducer{
-		maxSummary: maxSummary,
-		summary:    make([]string, 0, maxSummary),
-		fallback:   shared.NewCompactLineReducer(12, maxBytes),
-		patchFiles: make([]gitDiffPatchFile, 0, maxSummary),
+	if opts.LargeFileThreshold <= 0 {
+		opts.LargeFileThreshold = 8
 	}
+	if opts.LargeSummaryTopN <= 0 {
+		opts.LargeSummaryTopN = 5
+	}
+	if opts.AggressiveSummaryTopN <= 0 {
+		opts.AggressiveSummaryTopN = 3
+	}
+	return &GitDiffReducer{
+		maxSummary:            maxSummary,
+		summary:               make([]string, 0, maxSummary),
+		fallback:              shared.NewCompactLineReducer(12, opts.MaxBytes),
+		patchFiles:            make([]gitDiffPatchFile, 0, maxSummary),
+		statEntries:           make([]gitDiffStatEntry, 0, maxSummary),
+		aggressive:            opts.Aggressive,
+		largeFileThreshold:    opts.LargeFileThreshold,
+		largeSummaryTopN:      opts.LargeSummaryTopN,
+		aggressiveSummaryTopN: opts.AggressiveSummaryTopN,
+	}
+}
+
+func (r *GitDiffReducer) Reduce(input string) string {
+	r.ConsumeStdout([]byte(input))
+	return r.Result()
 }
 
 func (r *GitDiffReducer) ConsumeStdout(chunk []byte) {
@@ -408,9 +452,12 @@ func (r *GitDiffReducer) ConsumeStderr(chunk []byte) {
 
 func (r *GitDiffReducer) Result() string {
 	r.scanner.Finish(r.recordLine)
-	header := fmt.Sprintf("files=%d +%d -%d", r.fileCount, r.additions, r.deletions)
+	header := fmt.Sprintf("files=%d +%d -%d", r.displayFileCount(), r.additions, r.deletions)
 	if r.fileCount == 0 && r.additions == 0 && r.deletions == 0 && len(r.summary) == 0 {
 		return "no diff"
+	}
+	if r.shouldCondenseStatSummary() {
+		return header + "\n" + strings.Join(r.renderCondensedSummary(), "\n")
 	}
 	if len(r.summary) == 0 && len(r.patchFiles) > 0 {
 		return header + "\n" + strings.Join(r.renderPatchSummary(), "\n")
@@ -433,7 +480,10 @@ func (r *GitDiffReducer) Preview() string {
 	if r.fileCount == 0 && r.additions == 0 && r.deletions == 0 && len(r.summary) == 0 {
 		return ""
 	}
-	header := fmt.Sprintf("files=%d +%d -%d", r.fileCount, r.additions, r.deletions)
+	header := fmt.Sprintf("files=%d +%d -%d", r.displayFileCount(), r.additions, r.deletions)
+	if r.shouldCondenseStatSummary() {
+		return header + "\n" + strings.Join(r.renderCondensedSummary(), "\n")
+	}
 	if len(r.summary) == 0 {
 		if len(r.patchFiles) > 0 {
 			return header + "\n" + strings.Join(r.renderPatchSummary(), "\n")
@@ -441,6 +491,13 @@ func (r *GitDiffReducer) Preview() string {
 		return header
 	}
 	return header + "\n" + strings.Join(r.summary, "\n")
+}
+
+func (r *GitDiffReducer) displayFileCount() int {
+	if r.fileCount > 0 {
+		return r.fileCount
+	}
+	return len(r.statEntries)
 }
 
 func (r *GitDiffReducer) consume(chunk []byte) {
@@ -464,6 +521,12 @@ func (r *GitDiffReducer) recordLine(line string) {
 		return
 	}
 	r.recordPatchDelta(line)
+	if isDiffSummaryLine(line) {
+		r.recordSummaryTotals(line)
+		if entry, ok := parseDiffStatEntry(line); ok {
+			r.statEntries = append(r.statEntries, entry)
+		}
+	}
 	if len(r.summary) >= r.maxSummary {
 		return
 	}
@@ -625,6 +688,104 @@ func formatPatchFileSummary(file gitDiffPatchFile) string {
 		parts = append(parts, strings.Join(file.Anchors, " | "))
 	}
 	return strings.Join(parts, "  ")
+}
+
+type gitDiffStatEntry struct {
+	Line    string
+	Path    string
+	Changes int
+}
+
+func (r *GitDiffReducer) shouldCondenseStatSummary() bool {
+	if len(r.statEntries) == 0 {
+		return false
+	}
+	if r.aggressive {
+		return len(r.statEntries) > 3
+	}
+	return len(r.statEntries) > r.largeFileThreshold
+}
+
+func (r *GitDiffReducer) renderCondensedSummary() []string {
+	entries := append([]gitDiffStatEntry(nil), r.statEntries...)
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].Changes == entries[j].Changes {
+			return entries[i].Path < entries[j].Path
+		}
+		return entries[i].Changes > entries[j].Changes
+	})
+	limit := r.largeSummaryTopN
+	if r.aggressive {
+		limit = r.aggressiveSummaryTopN
+	}
+	if limit > r.maxSummary {
+		limit = r.maxSummary
+	}
+	if limit <= 0 {
+		limit = 1
+	}
+	if len(entries) < limit {
+		limit = len(entries)
+	}
+	out := make([]string, 0, limit+1)
+	for _, entry := range entries[:limit] {
+		out = append(out, entry.Line)
+	}
+	if len(entries) > limit {
+		out = append(out, fmt.Sprintf("... +%d more files", len(entries)-limit))
+	}
+	return out
+}
+
+func parseDiffStatEntry(line string) (gitDiffStatEntry, bool) {
+	left, right, ok := strings.Cut(line, "|")
+	if !ok {
+		return gitDiffStatEntry{}, false
+	}
+	path := strings.TrimSpace(left)
+	if path == "" {
+		return gitDiffStatEntry{}, false
+	}
+	fields := strings.Fields(strings.TrimSpace(right))
+	for _, field := range fields {
+		value, err := strconv.Atoi(field)
+		if err != nil {
+			continue
+		}
+		return gitDiffStatEntry{
+			Line:    strings.TrimSpace(line),
+			Path:    path,
+			Changes: value,
+		}, true
+	}
+	return gitDiffStatEntry{}, false
+}
+
+func (r *GitDiffReducer) recordSummaryTotals(line string) {
+	if !strings.Contains(line, "file changed") && !strings.Contains(line, "files changed") {
+		return
+	}
+	fields := strings.Fields(strings.ReplaceAll(line, ",", " "))
+	for i := 0; i < len(fields)-1; i++ {
+		value, err := strconv.Atoi(fields[i])
+		if err != nil {
+			continue
+		}
+		switch fields[i+1] {
+		case "file", "files":
+			if r.fileCount == 0 {
+				r.fileCount = value
+			}
+		case "insertion(+)", "insertions(+)":
+			if r.additions == 0 {
+				r.additions = value
+			}
+		case "deletion(-)", "deletions(-)":
+			if r.deletions == 0 {
+				r.deletions = value
+			}
+		}
+	}
 }
 
 type scanner struct {

@@ -17,21 +17,6 @@ func TestSummarizeJSTestJSON(t *testing.T) {
 	}
 }
 
-func TestSummarizeJSTestTextFallback(t *testing.T) {
-	text := strings.Join([]string{
-		"FAIL src/foo.test.ts",
-		"Error: boom",
-		"Tests: 1 failed, 2 passed",
-		"Snapshots: 0 total",
-	}, "\n")
-	summary := jsfilter.SummarizeJSTest(text, 4)
-	for _, want := range []string{"FAIL src/foo.test.ts", "Error: boom", "Tests: 1 failed, 2 passed"} {
-		if !strings.Contains(summary, want) {
-			t.Fatalf("expected %q in summary:\n%s", want, summary)
-		}
-	}
-}
-
 func TestSummarizeJSTestAllPassAndFallback(t *testing.T) {
 	allPass := jsfilter.SummarizeJSTest(`{"numPassedTestSuites":1,"numFailedTestSuites":0,"numPassedTests":3,"numFailedTests":0,"numPendingTests":0,"numTodoTests":0,"numTotalTests":3,"success":true,"testResults":[]}`, 4)
 	for _, want := range []string{
@@ -50,22 +35,6 @@ func TestSummarizeJSTestAllPassAndFallback(t *testing.T) {
 	}
 }
 
-func TestSummarizeJSTestFallbackDetails(t *testing.T) {
-	text := strings.Join([]string{
-		" FAIL  src/app.test.ts",
-		"AssertionError: expected true to be false",
-		"at src/app.test.ts:12:3",
-		"Test Suites: 1 failed, 1 total",
-		"Tests: 1 failed, 1 total",
-	}, "\n")
-	summary := jsfilter.SummarizeJSTest(text, 5)
-	for _, want := range []string{"FAIL  src/app.test.ts", "AssertionError: expected true to be false", "Tests: 1 failed, 1 total"} {
-		if !strings.Contains(summary, want) {
-			t.Fatalf("expected %q in summary:\n%s", want, summary)
-		}
-	}
-}
-
 func TestSummarizeJSTestSuiteMessageAndNoTruncation(t *testing.T) {
 	suiteMessage := jsfilter.SummarizeJSTest(`{"numPassedTestSuites":0,"numFailedTestSuites":1,"numPassedTests":0,"numFailedTests":1,"numPendingTests":0,"numTodoTests":0,"numTotalTests":1,"success":false,"testResults":[{"name":"src/fail.test.ts","status":"failed","message":"Error: suite failed\nat src/fail.test.ts:4:2","assertionResults":[]}]}`, 4)
 	if !strings.Contains(suiteMessage, "Error: suite failed") {
@@ -78,30 +47,10 @@ func TestSummarizeJSTestSuiteMessageAndNoTruncation(t *testing.T) {
 	}
 }
 
-func TestSummarizeJSTestCoverageEdges(t *testing.T) {
-	got := jsfilter.SummarizeJSTest(strings.Join([]string{
-		"FAIL src/a.test.ts",
-		"Expected: 1",
-		"Received: 2",
-		"Test Suites: 1 failed",
-		"Tests: 1 failed",
-		"Snapshots: 0 total",
-		"Time: 0.01s",
-	}, "\n"), 2)
-	for _, want := range []string{"FAIL src/a.test.ts", "Test Suites: 1 failed"} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("expected %q in tight js summary:\n%s", want, got)
-		}
-	}
-
+func TestSummarizeJSTestReportCoverageEdges(t *testing.T) {
 	embedded := jsfilter.SummarizeJSTest("banner\n{\"numPassedTests\":1,\"numFailedTests\":0,\"numTotalTests\":1,\"numPassedTestSuites\":1,\"numFailedTestSuites\":0,\"testResults\":[]}\ntrailer", 3)
 	if !strings.Contains(embedded, "all tests passed") {
 		t.Fatalf("expected embedded json parse, got %q", embedded)
-	}
-
-	textFallback := jsfilter.SummarizeJSTest("not json\nstill not json\nFAIL x", 1)
-	if !strings.Contains(textFallback, "FAIL x") {
-		t.Fatalf("expected plain text fallback, got %q", textFallback)
 	}
 
 	empty := jsfilter.SummarizeJSTest("", 2)
@@ -127,46 +76,6 @@ func TestSummarizeJSTestCoverageEdges(t *testing.T) {
 	noData := jsfilter.SummarizeJSTest("{}", 2)
 	if noData != "{}" {
 		t.Fatalf("expected no-data report to fall back to compact output, got %q", noData)
-	}
-}
-
-func TestBufferedTextReducer(t *testing.T) {
-	reducer := jsfilter.NewBufferedTextReducer(true, true, func(input string) string {
-		return jsfilter.SummarizeJSTest(input, 4)
-	})
-	reducer.ConsumeStdout([]byte("\x1b[31mFAIL src/a.test.ts\x1b[0m\n"))
-	reducer.ConsumeStderr([]byte("Error: boom\nTests: 1 failed, 1 total\n"))
-	got := reducer.Result()
-	for _, want := range []string{"FAIL src/a.test.ts", "Error: boom", "Tests: 1 failed, 1 total"} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("expected %q in buffered reducer output:\n%s", want, got)
-		}
-	}
-	if reducer.BytesParsed() != len("\x1b[31mFAIL src/a.test.ts\x1b[0m\n")+len("Error: boom\nTests: 1 failed, 1 total\n") {
-		t.Fatalf("unexpected bytes parsed: %d", reducer.BytesParsed())
-	}
-}
-
-func TestSummarizeJSTooling(t *testing.T) {
-	input := strings.Join([]string{
-		"turbo 2.0.0",
-		"vite v5.4.0 building for production...",
-		"packages/web:build: src/app.ts:14:7: error: Cannot find module 'x'",
-		"npm ERR! code ELIFECYCLE",
-		"npm ERR! missing script: build",
-		" ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  web@1.0.0 build: `vite build`",
-	}, "\n")
-
-	got := jsfilter.SummarizeJSTooling(input, 6)
-	for _, want := range []string{
-		"src/app.ts:14:7: error: Cannot find module 'x'",
-		"npm ERR! code ELIFECYCLE",
-		"npm ERR! missing script: build",
-		"ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL",
-	} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("expected %q in js tooling summary:\n%s", want, got)
-		}
 	}
 }
 

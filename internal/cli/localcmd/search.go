@@ -254,6 +254,12 @@ func adjustCountForReasoningMode(mode string, value int) int {
 			return 4
 		}
 		return scaled
+	case config.ReasoningBudgetAggressive:
+		scaled := (value + 1) / 2
+		if scaled < 3 {
+			return 3
+		}
+		return scaled
 	default:
 		return value
 	}

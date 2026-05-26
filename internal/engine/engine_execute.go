@@ -53,7 +53,7 @@ func (e *Engine) prepareStreamingExecution(
 	if profile.Prepare != nil {
 		command = profile.Prepare(preparedInv)
 	}
-	budget := ResolveBudget(profile, preparedInv, e.config.MaxPreviewLines)
+	budget, _ := ResolveBudgetWithAdapter(profile, preparedInv, e.config.MaxPreviewLines, e.budgetAdapter)
 	streamReducer := streamingReducer(profile, preparedInv, budget, passthrough)
 	profileConfidence := normalizedProfileConfidence(profile)
 	options := buildRunOptions(preparedInv, profile, passthrough, streamReducer != nil)
@@ -319,47 +319,84 @@ const rawPreviewBytes = defaultTinyOutputBypassBytes * 2
 func buildRunOptions(inv Invocation, profile Profile, passthrough bool, hasStreamReducer bool) runOptions {
 	options := runOptions{}
 	fullCapture := passthrough || inv.Verbose >= 3 || (!hasStreamReducer && profile.Render != nil) || profile.Confidence != ConfidenceHigh
-	if fullCapture {
-		options.captureStdout = true
-		options.captureStderr = true
-	} else {
-		options.stdoutPreviewBytes = rawPreviewBytes
-		options.stderrPreviewBytes = rawPreviewBytes
-	}
+	applyCaptureMode(&options, fullCapture)
 
 	if !hasStreamReducer {
 		return options
 	}
 
-	switch profile.StreamPreference {
+	applyStreamPreference(&options, profile.StreamPreference, fullCapture)
+	applyEarlyCaptureStop(&options, inv, profile, fullCapture)
+
+	return options
+}
+
+func applyCaptureMode(options *runOptions, fullCapture bool) {
+	if fullCapture {
+		options.captureStdout = true
+		options.captureStderr = true
+		return
+	}
+	options.stdoutPreviewBytes = rawPreviewBytes
+	options.stderrPreviewBytes = rawPreviewBytes
+}
+
+func applyStreamPreference(options *runOptions, pref string, fullCapture bool) {
+	switch pref {
 	case StreamStdoutOnly:
 		options.reduceStdoutLive = true
-		if !fullCapture {
-			options.stderrPreviewBytes = 0
-		}
+		disableStderrPreview(options, fullCapture)
 	case StreamStderrOnly:
 		options.reduceStderrLive = true
-		if !fullCapture {
-			options.stdoutPreviewBytes = 0
-		}
+		disableStdoutPreview(options, fullCapture)
 	case StreamStdoutFirst:
 		options.reduceStdoutLive = true
 		options.reduceStderrLater = true
 		options.captureStderr = true
-		if !fullCapture {
-			options.stderrPreviewBytes = 0
-		}
+		disableStderrPreview(options, fullCapture)
 	case StreamStderrFirst:
 		options.reduceStderrLive = true
 		options.reduceStdoutLater = true
 		options.captureStdout = true
-		if !fullCapture {
-			options.stdoutPreviewBytes = 0
-		}
+		disableStdoutPreview(options, fullCapture)
 	default:
 		options.reduceStdoutLive = true
 		options.reduceStderrLive = true
 	}
+}
 
-	return options
+func disableStdoutPreview(options *runOptions, fullCapture bool) {
+	if !fullCapture {
+		options.stdoutPreviewBytes = 0
+	}
+}
+
+func disableStderrPreview(options *runOptions, fullCapture bool) {
+	if !fullCapture {
+		options.stderrPreviewBytes = 0
+	}
+}
+
+func applyEarlyCaptureStop(options *runOptions, inv Invocation, profile Profile, fullCapture bool) {
+	if fullCapture || !inv.Advanced.EarlyCaptureStop {
+		return
+	}
+	bypassBytes, bypassTokens := fastPathBypassLimits(profile, inv)
+	if options.reduceStdoutLive && !options.captureStdout {
+		options.stopStdoutEarly = true
+		options.stdoutBypassBytes = bypassBytes
+		options.stdoutBypassTokens = bypassTokens
+	}
+	if options.reduceStderrLive && !options.captureStderr {
+		options.stopStderrEarly = true
+		options.stderrBypassBytes = bypassBytes
+		options.stderrBypassTokens = bypassTokens
+	}
+}
+
+func fastPathBypassLimits(profile Profile, inv Invocation) (int, int) {
+	if rule, ok := familyFastPathRules[fastPathRuleKey(profile, inv)]; ok {
+		return rule.MaxBytes, rule.MaxTokens
+	}
+	return defaultTinyOutputBypassBytes, defaultTinyOutputBypassTokens
 }

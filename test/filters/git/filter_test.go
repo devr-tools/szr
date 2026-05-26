@@ -89,9 +89,7 @@ func TestGitSummaries(t *testing.T) {
 			" eight | 1 +",
 			" nine | 1 +",
 		}, "\n"))
-		if strings.Count(diffLong, "\n") != 8 {
-			t.Fatalf("expected truncated diff summary, got %q", diffLong)
-		}
+		assertContainsAll(t, diffLong, "files=1 +0 -0", "eight | 1 +", "five | 1 +", "... +4 more files")
 	})
 
 	t.Run("reducers", func(t *testing.T) {

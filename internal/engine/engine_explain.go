@@ -9,6 +9,12 @@ func (e *Engine) Explain(inv Invocation) Profile {
 	return e.match(preparedInv)
 }
 
+func (e *Engine) ExplainBudget(inv Invocation) (OutputBudget, *BudgetAdaptation) {
+	preparedInv, _ := e.prepareInvocation(inv)
+	profile := e.match(preparedInv)
+	return ResolveBudgetWithAdapter(profile, preparedInv, e.config.MaxPreviewLines, e.budgetAdapter)
+}
+
 func (e *Engine) ExplainDecisions(inv Invocation) []ExplainDecision {
 	preparedInv, _ := e.prepareInvocation(inv)
 	selected := e.match(preparedInv)
@@ -38,6 +44,7 @@ func (e *Engine) prepareInvocation(inv Invocation) (Invocation, []PreferenceDeci
 	effective := inv
 	effective.Command = append([]string(nil), inv.Command...)
 	effective.Display = append([]string(nil), inv.Display...)
+	effective.Advanced = e.config.Advanced
 
 	decisions := make([]PreferenceDecision, 0, len(e.projectPreferences))
 	for _, preference := range e.projectPreferences {
