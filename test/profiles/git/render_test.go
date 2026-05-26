@@ -36,6 +36,9 @@ func TestGitProfilesRender(t *testing.T) {
 	if got := gitDiff.Render(engine.Invocation{}, engine.Execution{Stdout: "diff --git a/a b/a\n a | 1 +\n"}); got == "" {
 		t.Fatal("expected git-diff render output")
 	}
+	if got := gitDiff.Render(engine.Invocation{}, engine.Execution{Stdout: "diff --git a/a.go b/a.go\n@@ -1 +1 @@ func demo() {\n+foo\n-bar\n"}); got == "" || got == "no diff" {
+		t.Fatalf("expected git-diff patch render output, got %q", got)
+	}
 	if gitDiff.StreamPreference != engine.StreamStdoutOnly || gitDiff.StreamRender == nil {
 		t.Fatalf("unexpected git-diff stream metadata: %#v", gitDiff)
 	}

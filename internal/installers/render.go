@@ -120,35 +120,11 @@ if [ "$1" = "szr" ]; then
   exit 0
 fi
 
-hint=""
-
-case "$1" in
-  git)
-    case "${2:-}" in
-      status|diff|log|show)
-        hint="%s git ${2:-}"
-        ;;
-    esac
-    ;;
-  go)
-    case "${2:-}" in
-      test|build|vet|list)
-        hint="%s go ${2:-}"
-        ;;
-    esac
-    ;;
-  npm|pnpm|yarn|bun)
-    hint="%s $*"
-    ;;
-  pytest|cargo|docker)
-    hint="%s $*"
-    ;;
-esac
-
+hint=$(%s rewrite --binary %q --format hint --command "$*" 2>/dev/null || true)
 if [ -n "$hint" ]; then
   printf 'szr hint: prefer %%s\n' "$hint" >&2
 fi
-`, binary, binary, binary, binary)
+`, binary, binary)
 }
 
 func renderSharedHookScript(path, binary string) string {
@@ -170,184 +146,24 @@ func renderClaudeGlobalHookScript(binary string) string {
 	return fmt.Sprintf(`#!/bin/sh
 set -eu
 
-if ! command -v python3 >/dev/null 2>&1; then
-  exit 0
-fi
-
-python3 -c '
-import json
-import shlex
-import sys
-
-binary = %q
-
-def rewrite(command):
-    try:
-        parts = shlex.split(command)
-    except ValueError:
-        return command
-    if not parts:
-        return command
-    if parts[0] == binary:
-        return command
-    if parts[0] in {"git", "npm", "pnpm", "yarn", "bun", "pytest", "cargo", "docker"}:
-        return binary + " " + command
-    if parts[0] == "go" and len(parts) > 1 and parts[1] in {"test", "build", "vet", "list"}:
-        return binary + " " + command
-    return command
-
-try:
-    payload = json.load(sys.stdin)
-except Exception:
-    sys.exit(0)
-
-tool_name = payload.get("tool_name")
-tool_input = payload.get("tool_input")
-if tool_name != "Bash" or not isinstance(tool_input, dict):
-    sys.exit(0)
-
-command = tool_input.get("command")
-if not isinstance(command, str):
-    sys.exit(0)
-
-updated = rewrite(command)
-if updated == command:
-    sys.exit(0)
-
-json.dump({
-    "hookSpecificOutput": {
-        "hookEventName": "PreToolUse",
-        "permissionDecision": "allow",
-        "permissionDecisionReason": "szr auto-rewrite",
-        "updatedInput": {"command": updated},
-    }
-}, sys.stdout)
-' || true
-`, binary)
+%s rewrite --binary %q --hook claude || true
+`, binary, binary)
 }
 
 func renderCursorHookScript(binary string) string {
 	return fmt.Sprintf(`#!/bin/sh
 set -eu
 
-if ! command -v python3 >/dev/null 2>&1; then
-  printf '{}'
-  exit 0
-fi
-
-python3 -c '
-import json
-import shlex
-import sys
-
-binary = %q
-
-def rewrite(command):
-    try:
-        parts = shlex.split(command)
-    except ValueError:
-        return command
-    if not parts:
-        return command
-    if parts[0] == binary:
-        return command
-    if parts[0] in {"git", "npm", "pnpm", "yarn", "bun", "pytest", "cargo", "docker"}:
-        return binary + " " + command
-    if parts[0] == "go" and len(parts) > 1 and parts[1] in {"test", "build", "vet", "list"}:
-        return binary + " " + command
-    return command
-
-try:
-    payload = json.load(sys.stdin)
-except Exception:
-    print("{}")
-    sys.exit(0)
-
-tool_name = payload.get("tool_name")
-tool_input = payload.get("tool_input")
-if tool_name != "Bash" or not isinstance(tool_input, dict):
-    print("{}")
-    sys.exit(0)
-
-command = tool_input.get("command")
-if not isinstance(command, str):
-    print("{}")
-    sys.exit(0)
-
-updated = rewrite(command)
-if updated == command:
-    print("{}")
-    sys.exit(0)
-
-json.dump({
-    "permission": "allow",
-    "updated_input": {"command": updated},
-}, sys.stdout)
-' || printf '{}'
-`, binary)
+%s rewrite --binary %q --hook cursor || printf '{}'
+`, binary, binary)
 }
 
 func renderGeminiHookScript(binary string) string {
 	return fmt.Sprintf(`#!/bin/sh
 set -eu
 
-if ! command -v python3 >/dev/null 2>&1; then
-  printf '{"decision":"allow"}'
-  exit 0
-fi
-
-python3 -c '
-import json
-import shlex
-import sys
-
-binary = %q
-
-def rewrite(command):
-    try:
-        parts = shlex.split(command)
-    except ValueError:
-        return command
-    if not parts:
-        return command
-    if parts[0] == binary:
-        return command
-    if parts[0] in {"git", "npm", "pnpm", "yarn", "bun", "pytest", "cargo", "docker"}:
-        return binary + " " + command
-    if parts[0] == "go" and len(parts) > 1 and parts[1] in {"test", "build", "vet", "list"}:
-        return binary + " " + command
-    return command
-
-try:
-    payload = json.load(sys.stdin)
-except Exception:
-    print("{\"decision\":\"allow\"}")
-    sys.exit(0)
-
-tool_name = payload.get("tool_name")
-tool_input = payload.get("tool_input")
-if tool_name != "run_shell_command" or not isinstance(tool_input, dict):
-    print("{\"decision\":\"allow\"}")
-    sys.exit(0)
-
-command = tool_input.get("command")
-if not isinstance(command, str):
-    print("{\"decision\":\"allow\"}")
-    sys.exit(0)
-
-updated = rewrite(command)
-if updated == command:
-    print("{\"decision\":\"allow\"}")
-    sys.exit(0)
-
-json.dump({
-    "decision": "allow",
-    "hookSpecificOutput": {
-        "tool_input": {"command": updated},
-    }
-}, sys.stdout)
-' || printf '{"decision":"allow"}'
-`, binary)
+%s rewrite --binary %q --hook gemini || printf '{"decision":"allow"}'
+`, binary, binary)
 }
 
 func renderInstructionBody(paths Paths) string {
@@ -363,6 +179,10 @@ func renderInstructionBodyForHook(paths Paths, hookPath string) string {
 		"Use `szr` as the default entrypoint for noisy repository commands.",
 		"",
 		fmt.Sprintf("- Prefer `%s git status`, `%s git diff`, `%s git log`, and `%s go test ./...` over raw shell commands.", paths.Binary, paths.Binary, paths.Binary, paths.Binary),
+		fmt.Sprintf("- When using pipes or redirection, wrap the noisy producer instead of the whole pipeline, for example `%s proxy git diff --stat HEAD~1..HEAD 2>&1 | tail -80`.", paths.Binary),
+		fmt.Sprintf("- For git diff review loops, use `%s git diff ... --stat` or `%s proxy git diff ... -- path/to/file | head -200` rather than a raw piped `git diff` call.", paths.Binary, paths.Binary),
+		fmt.Sprintf("- Prefer `%s find <path> --name \"*.py\"` for file discovery, and `%s grep <pattern> <path>` or `%s rg <pattern> <path>` for grouped code search.", paths.Binary, paths.Binary, paths.Binary),
+		fmt.Sprintf("- When exact `/usr/bin/find` or `/usr/bin/grep` flags matter, wrap them explicitly with `%s run /usr/bin/find ...` or `%s run /usr/bin/grep ...` instead of expecting an auto-rewrite.", paths.Binary, paths.Binary),
 		fmt.Sprintf("- Use `%s explain <cmd...>` when you need to inspect the active profile before bypassing it.", paths.Binary),
 		fmt.Sprintf("- Use `%s proxy <cmd...>` when raw output matters more than compression.", paths.Binary),
 		"- If `szr` reports a tee artifact for a failure, inspect that full artifact path instead of rerunning the command unfiltered.",
@@ -376,6 +196,11 @@ func renderCodexInstructionBody(paths Paths) string {
 		"Use `szr` as the default entrypoint for noisy repository commands.",
 		"",
 		fmt.Sprintf("- Prefer `%s git status`, `%s git diff`, `%s git log`, and `%s go test ./...` over raw shell commands.", paths.Binary, paths.Binary, paths.Binary, paths.Binary),
+		fmt.Sprintf("- Codex does not install a Bash rewrite hook today, so tool calls must invoke `%s` explicitly.", paths.Binary),
+		fmt.Sprintf("- When using pipes, redirection, or absolute-path binaries, keep `%s` on the noisy command itself, for example `%s proxy git diff --stat HEAD~1..HEAD 2>&1 | head -200`.", paths.Binary, paths.Binary),
+		fmt.Sprintf("- For git diff review loops, prefer `%s git diff ... --stat` and `%s proxy git diff ... -- path/to/file | tail -80` instead of raw piped `git diff` calls.", paths.Binary, paths.Binary),
+		fmt.Sprintf("- Prefer `%s find <path> --name \"*.py\"` for file discovery, and `%s grep <pattern> <path>` or `%s rg <pattern> <path>` for grouped code search.", paths.Binary, paths.Binary, paths.Binary),
+		fmt.Sprintf("- If exact `/usr/bin/find` or `/usr/bin/grep` flags matter, wrap them explicitly with `%s run /usr/bin/find ...` or `%s run /usr/bin/grep ...`.", paths.Binary, paths.Binary),
 		fmt.Sprintf("- Use `%s explain <cmd...>` when you need to inspect the active profile before bypassing it.", paths.Binary),
 		fmt.Sprintf("- Use `%s proxy <cmd...>` when raw output matters more than compression.", paths.Binary),
 		"- If `szr` reports a tee artifact for a failure, inspect that full artifact path instead of rerunning the command unfiltered.",

@@ -19,6 +19,7 @@ import (
 	"github.com/devr-tools/szr/internal/filters"
 	"github.com/devr-tools/szr/internal/history"
 	"github.com/devr-tools/szr/internal/profiles"
+	"github.com/devr-tools/szr/internal/rewrite"
 	"github.com/devr-tools/szr/internal/rules"
 	"github.com/devr-tools/szr/internal/teeindex"
 )
@@ -774,6 +775,14 @@ func buildRecommendations(records []history.Record, limit int) []recommendation 
 	for _, hotspot := range hotspots {
 		appendHotspotRecommendations(&items, seen, hotspot)
 	}
+	for _, item := range routingExpansionRecommendations(hotspots) {
+		key := recommendationKey(item)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		items = append(items, item)
+		seen[key] = struct{}{}
+	}
 
 	sort.Slice(items, func(i, j int) bool {
 		if items[i].Priority == items[j].Priority {
@@ -825,7 +834,13 @@ func hotspotRecommendations(hotspot hotspotStat) []recommendation {
 	if customProfileRecommendation(hotspot).Kind != "" {
 		items = append(items, customProfileRecommendation(hotspot))
 	}
+	if item, ok := directRoutingRecommendation(hotspot); ok {
+		items = append(items, item)
+	}
 	if item, ok := structuredRewriteRecommendation(hotspot); ok {
+		items = append(items, item)
+	}
+	if item, ok := wrapperGuidanceRecommendation(hotspot); ok {
 		items = append(items, item)
 	}
 	if item, ok := teeReviewRecommendation(hotspot); ok {
@@ -872,6 +887,27 @@ func structuredRewriteRecommendation(hotspot hotspotStat) (recommendation, bool)
 	}, true
 }
 
+func directRoutingRecommendation(hotspot hotspotStat) (recommendation, bool) {
+	if !isGenericHotspot(hotspot) {
+		return recommendation{}, false
+	}
+	decision := rewrite.Analyze(hotspot.Command, "szr")
+	if !decision.AutoRewrite || decision.Rewrite == "" || hotspot.Samples < 2 {
+		return recommendation{}, false
+	}
+	return recommendation{
+		Kind:        "routing-coverage",
+		Priority:    68,
+		Command:     hotspot.Command,
+		Profile:     hotspot.Profile,
+		Samples:     hotspot.Samples,
+		Confidence:  "high",
+		Reason:      "this command family is already safe to rewrite, but history shows it still bypasses szr",
+		Action:      fmt.Sprintf("route this family through szr by default; e.g. `%s`", decision.Rewrite),
+		Fingerprint: hotspot.Fingerprint,
+	}, true
+}
+
 func teeReviewRecommendation(hotspot hotspotStat) (recommendation, bool) {
 	if hotspot.Failures <= 0 || hotspot.TeeRate < 50 {
 		return recommendation{}, false
@@ -889,12 +925,87 @@ func teeReviewRecommendation(hotspot hotspotStat) (recommendation, bool) {
 	}, true
 }
 
+func wrapperGuidanceRecommendation(hotspot hotspotStat) (recommendation, bool) {
+	if !isGenericHotspot(hotspot) {
+		return recommendation{}, false
+	}
+	decision := rewrite.Analyze(hotspot.Command, "szr")
+	if decision.AutoRewrite || decision.Hint == "" {
+		return recommendation{}, false
+	}
+	if hotspot.AveragePct > 25 && hotspot.FallbackRate == 0 && hotspot.FailureRate == 0 {
+		return recommendation{}, false
+	}
+	return recommendation{
+		Kind:        "wrapper-guidance",
+		Priority:    60,
+		Command:     hotspot.Command,
+		Profile:     hotspot.Profile,
+		Samples:     hotspot.Samples,
+		Confidence:  "medium",
+		Reason:      "this command family is noisy, but auto-rewriting it would risk changing shell semantics",
+		Action:      decision.Hint,
+		Fingerprint: hotspot.Fingerprint,
+	}, true
+}
+
 func isGenericHotspot(hotspot hotspotStat) bool {
 	return hotspot.Profile == "passthrough" || strings.HasPrefix(hotspot.Profile, "generic-")
 }
 
 func recommendationKey(item recommendation) string {
 	return item.Kind + ":" + item.Fingerprint
+}
+
+func routingExpansionRecommendations(hotspots []hotspotStat) []recommendation {
+	type familyAggregate struct {
+		samples int
+		count   int
+		rep     hotspotStat
+	}
+	grouped := map[string]*familyAggregate{}
+	for _, hotspot := range hotspots {
+		if !isGenericHotspot(hotspot) {
+			continue
+		}
+		family := rewrite.Family(hotspot.Command)
+		if family == "" {
+			continue
+		}
+		acc := grouped[family]
+		if acc == nil {
+			acc = &familyAggregate{rep: hotspot}
+			grouped[family] = acc
+		}
+		acc.samples += hotspot.Samples
+		acc.count++
+		if hotspotSeverity(hotspot) > hotspotSeverity(acc.rep) {
+			acc.rep = hotspot
+		}
+	}
+
+	items := make([]recommendation, 0, len(grouped))
+	for family, acc := range grouped {
+		if acc.samples < 3 || (acc.count < 2 && acc.samples < 4) {
+			continue
+		}
+		decision := rewrite.Analyze(acc.rep.Command, "szr")
+		if !decision.AutoRewrite || decision.Rewrite == "" {
+			continue
+		}
+		items = append(items, recommendation{
+			Kind:        "routing-expansion",
+			Priority:    72,
+			Command:     family,
+			Profile:     acc.rep.Profile,
+			Samples:     acc.samples,
+			Confidence:  "high",
+			Reason:      "multiple history hotspots show this family repeatedly bypassing szr despite a safe rewrite path",
+			Action:      fmt.Sprintf("expand default routing for this family; representative rewrite: `%s`", decision.Rewrite),
+			Fingerprint: "family:" + family,
+		})
+	}
+	return items
 }
 
 func buildHotspots(records []history.Record, limit int) []hotspotStat {

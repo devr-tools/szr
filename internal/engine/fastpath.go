@@ -79,11 +79,38 @@ func DecideFastPath(profile Profile, rawBytes, rawTokens int, duration time.Dura
 		decision.Reason = "stderr-only profile with empty stderr payload"
 		return decision
 	}
+	if bypass, reason := commandFamilyMicroBypass(profile.Name, rawBytes, rawTokens); bypass {
+		decision.BypassCompression = true
+		decision.Reason = reason
+		return decision
+	}
 	if rawBytes <= defaultTinyOutputBypassBytes && rawTokens <= defaultTinyOutputBypassTokens {
 		decision.BypassCompression = true
 		decision.Reason = "tiny output fast path"
 	}
 	return decision
+}
+
+func commandFamilyMicroBypass(profileName string, rawBytes, rawTokens int) (bool, string) {
+	switch profileName {
+	case "ripgrep":
+		if rawBytes <= 320 && rawTokens <= 80 {
+			return true, "tiny ripgrep output"
+		}
+	case "path-find":
+		if rawBytes <= 320 && rawTokens <= 80 {
+			return true, "tiny find output"
+		}
+	case "git-diff":
+		if rawBytes <= 256 && rawTokens <= 64 {
+			return true, "tiny git diff output"
+		}
+	case "git-log":
+		if rawBytes <= 224 && rawTokens <= 56 {
+			return true, "tiny git log output"
+		}
+	}
+	return false, ""
 }
 
 func tuneBudgetByProfile(profile Profile, budget OutputBudget) OutputBudget {

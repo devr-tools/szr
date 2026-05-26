@@ -30,9 +30,11 @@ type GitStatusReducer struct {
 	maxPreview     int
 	bytesParsed    int
 	branch         string
+	changedEntries int
 	staged         int
 	unstaged       int
 	untracked      int
+	entries        []string
 	stagedPaths    []string
 	unstagedPaths  []string
 	untrackedPaths []string
@@ -45,6 +47,7 @@ func NewGitStatusReducer(maxLines, _ int) *GitStatusReducer {
 	}
 	return &GitStatusReducer{
 		maxPreview:     maxPreview,
+		entries:        make([]string, 0, maxPreview),
 		stagedPaths:    make([]string, 0, maxPreview),
 		unstagedPaths:  make([]string, 0, maxPreview),
 		untrackedPaths: make([]string, 0, maxPreview),
@@ -63,6 +66,9 @@ func (r *GitStatusReducer) Result() string {
 	r.scanner.Finish(r.recordLine)
 	if r.branch == "" && r.staged == 0 && r.unstaged == 0 && r.untracked == 0 && len(r.stagedPaths) == 0 && len(r.unstagedPaths) == 0 && len(r.untrackedPaths) == 0 {
 		return "clean"
+	}
+	if compact := r.compactSummary(); compact != "" {
+		return compact
 	}
 	summary := []string{}
 	if r.branch != "" {
@@ -90,6 +96,9 @@ func (r *GitStatusReducer) FallbackUsed() bool {
 }
 
 func (r *GitStatusReducer) Preview() string {
+	if compact := r.compactSummary(); compact != "" {
+		return compact
+	}
 	summary := []string{}
 	if r.branch != "" {
 		summary = append(summary, r.branch)
@@ -122,6 +131,8 @@ func (r *GitStatusReducer) recordLine(line string) {
 	if len(line) < 3 {
 		return
 	}
+	r.changedEntries++
+	r.entries = appendPreview(r.entries, strings.TrimRight(line, " "), r.maxPreview)
 	x := line[0]
 	y := line[1]
 	path := strings.TrimSpace(line[3:])
@@ -139,6 +150,21 @@ func (r *GitStatusReducer) recordLine(line string) {
 			r.unstagedPaths = appendPreview(r.unstagedPaths, path, r.maxPreview)
 		}
 	}
+}
+
+func (r *GitStatusReducer) compactSummary() string {
+	if r.changedEntries == 0 {
+		return r.branch
+	}
+	if r.changedEntries <= 2 && len(r.entries) == r.changedEntries {
+		summary := []string{}
+		if r.branch != "" {
+			summary = append(summary, r.branch)
+		}
+		summary = append(summary, r.entries...)
+		return strings.Join(summary, "\n")
+	}
+	return ""
 }
 
 type GitLogReducer struct {
@@ -332,14 +358,29 @@ func bucketLabel(path string) string {
 }
 
 type GitDiffReducer struct {
-	scanner     scanner
-	maxSummary  int
-	bytesParsed int
-	fileCount   int
-	additions   int
-	deletions   int
-	summary     []string
-	fallback    *shared.CompactLineReducer
+	scanner      scanner
+	maxSummary   int
+	bytesParsed  int
+	fileCount    int
+	additions    int
+	deletions    int
+	summary      []string
+	fallback     *shared.CompactLineReducer
+	patchFiles   []gitDiffPatchFile
+	currentPatch *gitDiffPatchFile
+}
+
+type gitDiffPatchFile struct {
+	Path      string
+	Hunks     int
+	Anchors   []string
+	Additions int
+	Deletions int
+	IsNew     bool
+	IsDeleted bool
+	IsRenamed bool
+	OldPath   string
+	NewPath   string
 }
 
 func NewGitDiffReducer(maxLines, maxBytes int) *GitDiffReducer {
@@ -351,6 +392,7 @@ func NewGitDiffReducer(maxLines, maxBytes int) *GitDiffReducer {
 		maxSummary: maxSummary,
 		summary:    make([]string, 0, maxSummary),
 		fallback:   shared.NewCompactLineReducer(12, maxBytes),
+		patchFiles: make([]gitDiffPatchFile, 0, maxSummary),
 	}
 }
 
@@ -370,6 +412,9 @@ func (r *GitDiffReducer) Result() string {
 	if r.fileCount == 0 && r.additions == 0 && r.deletions == 0 && len(r.summary) == 0 {
 		return "no diff"
 	}
+	if len(r.summary) == 0 && len(r.patchFiles) > 0 {
+		return header + "\n" + strings.Join(r.renderPatchSummary(), "\n")
+	}
 	if len(r.summary) == 0 {
 		return header + "\n" + r.fallback.Result()
 	}
@@ -381,7 +426,7 @@ func (r *GitDiffReducer) BytesParsed() int {
 }
 
 func (r *GitDiffReducer) FallbackUsed() bool {
-	return len(r.summary) == 0
+	return len(r.summary) == 0 && len(r.patchFiles) == 0
 }
 
 func (r *GitDiffReducer) Preview() string {
@@ -390,6 +435,9 @@ func (r *GitDiffReducer) Preview() string {
 	}
 	header := fmt.Sprintf("files=%d +%d -%d", r.fileCount, r.additions, r.deletions)
 	if len(r.summary) == 0 {
+		if len(r.patchFiles) > 0 {
+			return header + "\n" + strings.Join(r.renderPatchSummary(), "\n")
+		}
 		return header
 	}
 	return header + "\n" + strings.Join(r.summary, "\n")
@@ -403,14 +451,46 @@ func (r *GitDiffReducer) consume(chunk []byte) {
 func (r *GitDiffReducer) recordLine(line string) {
 	if strings.HasPrefix(line, "diff --git ") {
 		r.fileCount++
+		r.startPatchFile(line)
+	}
+	if strings.HasPrefix(line, "rename from ") && r.currentPatch != nil {
+		r.currentPatch.IsRenamed = true
+		r.currentPatch.OldPath = strings.TrimSpace(strings.TrimPrefix(line, "rename from "))
+		return
+	}
+	if strings.HasPrefix(line, "rename to ") && r.currentPatch != nil {
+		r.currentPatch.IsRenamed = true
+		r.currentPatch.NewPath = strings.TrimSpace(strings.TrimPrefix(line, "rename to "))
+		if r.currentPatch.Path == "" {
+			r.currentPatch.Path = r.currentPatch.NewPath
+		}
+		return
+	}
+	if strings.HasPrefix(line, "new file mode ") && r.currentPatch != nil {
+		r.currentPatch.IsNew = true
+		return
+	}
+	if strings.HasPrefix(line, "deleted file mode ") && r.currentPatch != nil {
+		r.currentPatch.IsDeleted = true
+		return
 	}
 	if strings.HasPrefix(line, "+++ ") || strings.HasPrefix(line, "--- ") {
 		return
 	}
+	if strings.HasPrefix(line, "@@ ") {
+		r.recordPatchAnchor(line)
+		return
+	}
 	if strings.HasPrefix(line, "+") {
 		r.additions++
+		if r.currentPatch != nil {
+			r.currentPatch.Additions++
+		}
 	} else if strings.HasPrefix(line, "-") {
 		r.deletions++
+		if r.currentPatch != nil {
+			r.currentPatch.Deletions++
+		}
 	}
 	if len(r.summary) >= r.maxSummary {
 		return
@@ -418,6 +498,100 @@ func (r *GitDiffReducer) recordLine(line string) {
 	if strings.Contains(line, "|") || strings.Contains(line, "files changed") || strings.Contains(line, "file changed") {
 		r.summary = append(r.summary, line)
 	}
+}
+
+func (r *GitDiffReducer) startPatchFile(line string) {
+	parts := strings.Fields(line)
+	if len(parts) < 4 {
+		r.currentPatch = nil
+		return
+	}
+	left := strings.TrimPrefix(parts[2], "a/")
+	right := strings.TrimPrefix(parts[3], "b/")
+	path := right
+	if path == "" || path == "/dev/null" {
+		path = left
+	}
+	file := gitDiffPatchFile{
+		Path:    path,
+		OldPath: left,
+		NewPath: right,
+		Anchors: make([]string, 0, 3),
+	}
+	r.patchFiles = append(r.patchFiles, file)
+	r.currentPatch = &r.patchFiles[len(r.patchFiles)-1]
+}
+
+func (r *GitDiffReducer) recordPatchAnchor(line string) {
+	if r.currentPatch == nil {
+		return
+	}
+	r.currentPatch.Hunks++
+	anchor := parseDiffAnchor(line)
+	if anchor == "" {
+		return
+	}
+	for _, existing := range r.currentPatch.Anchors {
+		if existing == anchor {
+			return
+		}
+	}
+	if len(r.currentPatch.Anchors) < 3 {
+		r.currentPatch.Anchors = append(r.currentPatch.Anchors, anchor)
+	}
+}
+
+func parseDiffAnchor(line string) string {
+	idx := strings.LastIndex(line, "@@")
+	if idx < 0 {
+		return ""
+	}
+	anchor := strings.TrimSpace(line[idx+2:])
+	if anchor == "" {
+		return ""
+	}
+	return anchor
+}
+
+func (r *GitDiffReducer) renderPatchSummary() []string {
+	visible := r.maxSummary
+	if visible <= 0 {
+		visible = 1
+	}
+	out := make([]string, 0, visible)
+	for _, file := range r.patchFiles {
+		if len(out) >= visible {
+			break
+		}
+		out = append(out, formatPatchFileSummary(file))
+	}
+	if len(r.patchFiles) > visible {
+		out = append(out, fmt.Sprintf("... +%d more files", len(r.patchFiles)-visible))
+	}
+	return out
+}
+
+func formatPatchFileSummary(file gitDiffPatchFile) string {
+	label := file.Path
+	switch {
+	case file.IsRenamed && file.OldPath != "" && file.NewPath != "":
+		label = file.OldPath + " -> " + file.NewPath
+	case file.IsDeleted:
+		label = label + " [deleted]"
+	case file.IsNew:
+		label = label + " [new]"
+	}
+	parts := []string{label}
+	if file.Hunks > 0 {
+		parts = append(parts, fmt.Sprintf("hunks=%d", file.Hunks))
+	}
+	if file.Additions > 0 || file.Deletions > 0 {
+		parts = append(parts, fmt.Sprintf("+%d -%d", file.Additions, file.Deletions))
+	}
+	if len(file.Anchors) > 0 {
+		parts = append(parts, strings.Join(file.Anchors, " | "))
+	}
+	return strings.Join(parts, "  ")
 }
 
 type scanner struct {

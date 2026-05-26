@@ -1,5 +1,7 @@
 GOCACHE ?= $(CURDIR)/.gocache
+GOMODCACHE ?= $(CURDIR)/.gomodcache
 GO ?= go
+GO_ENV = env -u GOROOT GOCACHE=$(GOCACHE) GOMODCACHE=$(GOMODCACHE)
 TESTPKG := ./test/...
 COVERPKG := ./internal/...
 COVERFILE := .coverage.internal.out
@@ -16,7 +18,7 @@ CI_DOCKER_GOMODCACHE ?= /tmp/.gomodcache-docker
 CI_DOCKER_HOME ?= /tmp/szr-ci-home
 CI_DOCKER_SMOKE_HOME ?= /tmp/szr-smoke-home
 
-.PHONY: help fmt test cover cover-func cover-html build smoke ci ci-docker prepush clean
+.PHONY: help fmt test cover cover-func cover-html build smoke settings spread spread-history spread-json ci ci-docker prepush clean
 
 help:
 	@printf '%s\n' \
@@ -27,6 +29,10 @@ help:
 		'make cover-html - render HTML coverage report' \
 		'make build      - build ./bin/szr and ./bin/szr-dev' \
 		'make smoke      - run quick local CLI smoke checks for szr and szr-dev, including bench/install flows' \
+		'make settings   - open the local interactive SZR settings menu' \
+		'make spread     - run the local spread summary' \
+		'make spread-history - run the local spread summary with recent history' \
+		'make spread-json - print the local spread summary as JSON' \
 		'make ci         - run the host-mode local reproduction of the GitHub CI pipeline (override BASE_REF=...)' \
 		'make ci-docker  - build and run the pinned Linux CI container with semgrep, govulncheck, and gocyclo preinstalled' \
 		'make commit     - interactively git add ., choose commit type, commit, and push the current branch' \
@@ -34,38 +40,51 @@ help:
 		'make clean      - remove local build and coverage artifacts'
 
 fmt:
-	env GOCACHE=$(GOCACHE) $(GO) fmt ./...
+	$(GO_ENV) $(GO) fmt ./...
 
 test:
-	env GOCACHE=$(GOCACHE) $(GO) test $(TESTPKG)
+	$(GO_ENV) $(GO) test $(TESTPKG)
 
 cover:
-	env GOCACHE=$(GOCACHE) $(GO) test $(TESTPKG) -coverpkg=$(COVERPKG) -coverprofile=$(COVERFILE)
-	@total=$$(env GOCACHE=$(GOCACHE) $(GO) tool cover -func=$(COVERFILE) | awk '/^total:/ {print $$3}'); \
+	$(GO_ENV) $(GO) test $(TESTPKG) -coverpkg=$(COVERPKG) -coverprofile=$(COVERFILE)
+	@total=$$($(GO_ENV) $(GO) tool cover -func=$(COVERFILE) | awk '/^total:/ {print $$3}'); \
 	if ! awk -v total="$$total" -v min="$(MIN_INTERNAL_COVERAGE)%" 'BEGIN { gsub(/%/, "", total); gsub(/%/, "", min); exit !(total + 0 >= min + 0) }'; then \
 		echo "coverage gate failed: $$total (min $(MIN_INTERNAL_COVERAGE)%)"; \
 		exit 1; \
 	fi
 
 cover-func:
-	env GOCACHE=$(GOCACHE) $(GO) tool cover -func=$(COVERFILE)
+	$(GO_ENV) $(GO) tool cover -func=$(COVERFILE)
 
 cover-html:
-	env GOCACHE=$(GOCACHE) $(GO) tool cover -html=$(COVERFILE) -o coverage.html
+	$(GO_ENV) $(GO) tool cover -html=$(COVERFILE) -o coverage.html
 
 build:
 	mkdir -p bin
-	env GOCACHE=$(GOCACHE) $(GO) build -o ./bin/szr ./cmd/szr
-	env GOCACHE=$(GOCACHE) $(GO) build -o ./bin/szr-dev ./cmd/szr-dev
+	$(GO_ENV) $(GO) build -o ./bin/szr ./cmd/szr
+	$(GO_ENV) $(GO) build -o ./bin/szr-dev ./cmd/szr-dev
 
 smoke:
 	mkdir -p $(SMOKE_HOME)
-	env HOME=$(SMOKE_HOME) GOCACHE=$(GOCACHE) $(GO) run ./cmd/szr --help >/dev/null
-	env HOME=$(SMOKE_HOME) GOCACHE=$(GOCACHE) $(GO) run ./cmd/szr profiles >/dev/null
-	env HOME=$(SMOKE_HOME) GOCACHE=$(GOCACHE) $(GO) run ./cmd/szr explain git status >/dev/null
-	env HOME=$(SMOKE_HOME) GOCACHE=$(GOCACHE) $(GO) run ./cmd/szr bench clean-pass >/dev/null
-	env HOME=$(SMOKE_HOME) GOCACHE=$(GOCACHE) $(GO) run ./cmd/szr install codex --print >/dev/null
-	env HOME=$(SMOKE_HOME) GOCACHE=$(GOCACHE) $(GO) run ./cmd/szr-dev --version >/dev/null
+	env -u GOROOT HOME=$(SMOKE_HOME) GOCACHE=$(GOCACHE) $(GO) run ./cmd/szr --help >/dev/null
+	env -u GOROOT HOME=$(SMOKE_HOME) GOCACHE=$(GOCACHE) $(GO) run ./cmd/szr profiles >/dev/null
+	env -u GOROOT HOME=$(SMOKE_HOME) GOCACHE=$(GOCACHE) $(GO) run ./cmd/szr explain git status >/dev/null
+	env -u GOROOT HOME=$(SMOKE_HOME) GOCACHE=$(GOCACHE) $(GO) run ./cmd/szr bench clean-pass >/dev/null
+	env -u GOROOT HOME=$(SMOKE_HOME) GOCACHE=$(GOCACHE) $(GO) run ./cmd/szr install codex --print >/dev/null
+	env -u GOROOT HOME=$(SMOKE_HOME) GOCACHE=$(GOCACHE) $(GO) run ./cmd/szr-dev --version >/dev/null
+
+settings:
+	mkdir -p $(SMOKE_HOME) $(GOMODCACHE)
+	env -u GOROOT HOME=$(SMOKE_HOME) GOCACHE=$(GOCACHE) GOMODCACHE=$(GOMODCACHE) $(GO) run ./cmd/szr settings
+
+spread:
+	$(GO_ENV) $(GO) run ./cmd/szr spread
+
+spread-history:
+	$(GO_ENV) $(GO) run ./cmd/szr spread --history
+
+spread-json:
+	$(GO_ENV) $(GO) run ./cmd/szr spread --json
 
 ci:
 	env \

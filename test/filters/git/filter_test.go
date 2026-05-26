@@ -12,6 +12,12 @@ func TestGitSummaries(t *testing.T) {
 		if got := gitfilter.SummarizeGitStatus(""); got != "clean" {
 			t.Fatalf("unexpected clean status: %q", got)
 		}
+		if got := gitfilter.SummarizeGitStatus("## main\n"); got != "main" {
+			t.Fatalf("unexpected compact clean branch status: %q", got)
+		}
+		if got := gitfilter.SummarizeGitStatus("## main\nM  a\n"); got != "main\nM  a" {
+			t.Fatalf("unexpected compact single-file status: %q", got)
+		}
 		status := gitfilter.SummarizeGitStatus("## main\nM  a\n A b\n?? c\nx\n")
 		assertContainsAll(t, status, "staged=1 unstaged=1 untracked=1", "staged: a", "unstaged: b", "untracked: c")
 
@@ -53,9 +59,23 @@ func TestGitSummaries(t *testing.T) {
 		assertContainsAll(t, diffStat, "files=1 +1 -1", "1 file changed")
 
 		diffFallback := gitfilter.SummarizeGitDiff("diff --git a/a b/a\n+foo\n-bar")
-		if !strings.Contains(diffFallback, "... +") && !strings.Contains(diffFallback, "diff --git") {
+		if !strings.Contains(diffFallback, "a  +1 -1") {
 			t.Fatalf("unexpected diff fallback: %q", diffFallback)
 		}
+
+		perFilePatch := gitfilter.SummarizeGitDiff(strings.Join([]string{
+			"diff --git a/internal/parser/lexer.go b/internal/parser/lexer.go",
+			"index 1234567..89abcde 100644",
+			"--- a/internal/parser/lexer.go",
+			"+++ b/internal/parser/lexer.go",
+			"@@ -10,7 +10,16 @@ func lex(input string) []token {",
+			"-\treturn nil",
+			"+\tbuf := make([]token, 0, 128)",
+			"+\treturn compact(buf)",
+			"@@ -42,6 +42,10 @@ func parse(tokens []token) node {",
+			"+\treturn root",
+		}, "\n"))
+		assertContainsAll(t, perFilePatch, "files=1 +3 -1", "internal/parser/lexer.go", "hunks=2", "func lex(input string) []token {", "func parse(tokens []token) node {")
 
 		diffLong := gitfilter.SummarizeGitDiff(strings.Join([]string{
 			"diff --git a/a b/a",
@@ -79,7 +99,9 @@ func TestGitSummaries(t *testing.T) {
 		statusReducer.ConsumeStdout([]byte("\x1b[32m## main\x1b[0m\nM  a\n"))
 		statusReducer.ConsumeStdout([]byte("?? b\n"))
 		statusStream := statusReducer.Result()
-		assertContainsAll(t, statusStream, "main", "staged=1 unstaged=0 untracked=1")
+		if statusStream != "main\nM  a\n?? b" {
+			t.Fatalf("unexpected compact git status stream: %q", statusStream)
+		}
 
 		logReducer := gitfilter.NewGitLogReducer(4, 0)
 		logReducer.ConsumeStdout([]byte("one\n"))
@@ -93,6 +115,13 @@ func TestGitSummaries(t *testing.T) {
 		diffReducer.ConsumeStdout([]byte(" a.go | 2 +-\n+foo\n-bar\n"))
 		diffStream := diffReducer.Result()
 		assertContainsAll(t, diffStream, "files=1 +1 -1", "a.go | 2 +-")
+
+		patchReducer := gitfilter.NewGitDiffReducer(4, 0)
+		patchReducer.ConsumeStdout([]byte("diff --git a/a.go b/a.go\n"))
+		patchReducer.ConsumeStdout([]byte("@@ -1,2 +1,3 @@ func demo() {\n+foo\n-bar\n"))
+		if got := patchReducer.Result(); !strings.Contains(got, "a.go  hunks=1  +1 -1  func demo() {") {
+			t.Fatalf("unexpected git diff patch summary: %q", got)
+		}
 	})
 }
 

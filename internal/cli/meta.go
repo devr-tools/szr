@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,7 +22,8 @@ func (a *App) runSpread(args []string) int {
 		fmt.Fprintf(os.Stderr, "szr: failed to read history: %v\n", err)
 		return 1
 	}
-	summary := history.Summarize(records, 8)
+	summaryRecords := filterSpreadRecords(records)
+	summary := history.Summarize(summaryRecords, 8)
 	if asJSON {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
@@ -40,16 +42,17 @@ func (a *App) runSpread(args []string) int {
 	fallbackRate := fmt.Sprintf("%.1f%% (%d/%d)", summary.FallbackRate, summary.Fallbacks, summary.Commands)
 	teeRate := fmt.Sprintf("%.1f%% (%d/%d)", summary.TeeRate, summary.TeeCount, summary.Commands)
 	ui.header("Spread Summary")
-	ui.metric("commands", fmt.Sprintf("%d", summary.Commands), "")
-	ui.metric("avg savings", avgSavings, withBar(summary.AveragePct, avgSavings, ui.color, true))
-	ui.metric("tokens saved", fmt.Sprintf("%d", summary.SavedTokens), "")
-	ui.metric("duration p50/p95", fmt.Sprintf("%dms / %dms", summary.DurationP50MS, summary.DurationP95MS), "")
-	ui.metric("bytes read/parsed/emitted", fmt.Sprintf("%d / %d / %d", summary.RawBytesRead, summary.BytesParsed, summary.BytesEmitted), "")
-	ui.metric("failure rate", failureRate, withBar(summary.FailureRate, failureRate, ui.color, false))
-	ui.metric("fallback rate", fallbackRate, withBar(summary.FallbackRate, fallbackRate, ui.color, false))
-	ui.metric("tee rate", teeRate, withBar(summary.TeeRate, teeRate, ui.color, false))
+	ui.metric("commands run", fmt.Sprintf("%d", summary.Commands), "")
+	ui.metric("average token savings", avgSavings, withBar(summary.AveragePct, avgSavings, ui.color, true))
+	ui.metric("total tokens saved", formatTokenCount(summary.SavedTokens), "")
+	ui.metric("duration (p50/p95)", fmt.Sprintf("%dms / %dms", summary.DurationP50MS, summary.DurationP95MS), "")
+	ui.metric("bytes (read/parsed/emitted)", fmt.Sprintf("%d / %d / %d", summary.RawBytesRead, summary.BytesParsed, summary.BytesEmitted), "")
+	ui.metric("failed commands", failureRate, withBar(summary.FailureRate, failureRate, ui.color, false))
+	ui.metric("fallback usage", fallbackRate, withBar(summary.FallbackRate, fallbackRate, ui.color, false))
+	ui.metric("tee usage", teeRate, withBar(summary.TeeRate, teeRate, ui.color, false))
 	renderSpreadTopCommands(ui, summary.TopCommands)
 	renderSpreadProfiles(ui, summary.ProfileStats)
+	renderSpreadHotspots(ui, summary.CommandHotspots)
 	renderSpreadFingerprints(ui, summary.FingerprintHotspots)
 	renderSpreadBudgetSuggestions(ui, summary.BudgetSuggestions)
 	renderSpreadHistory(ui, summary.Recent, showHistory)
@@ -71,6 +74,28 @@ func parseSpreadArgs(args []string) (bool, bool, int) {
 		}
 	}
 	return showHistory, asJSON, 0
+}
+
+func filterSpreadRecords(records []history.Record) []history.Record {
+	filtered := make([]history.Record, 0, len(records))
+	for _, rec := range records {
+		if isSpreadExcludedCommand(rec.Command) {
+			continue
+		}
+		filtered = append(filtered, rec)
+	}
+	return filtered
+}
+
+func isSpreadExcludedCommand(command string) bool {
+	fields := strings.Fields(strings.ToLower(command))
+	if len(fields) == 0 {
+		return false
+	}
+	if fields[0] == "szr" && len(fields) > 1 {
+		fields = fields[1:]
+	}
+	return fields[0] == "uninstall"
 }
 
 func renderSpreadTopCommands(ui spreadUI, commands []history.CommandStat) {
@@ -128,6 +153,33 @@ func renderSpreadProfiles(ui spreadUI, stats []history.ProfileStat) {
 	)
 }
 
+func renderSpreadHotspots(ui spreadUI, stats []history.CommandHotspot) {
+	if len(stats) == 0 {
+		return
+	}
+	ui.section("improvement hotspots:")
+	rows := make([][]string, 0, len(stats))
+	for _, stat := range stats {
+		rows = append(rows, []string{
+			stat.Command,
+			stat.Profile,
+			fmt.Sprintf("%d", stat.Commands),
+			fmt.Sprintf("%.1f%% %s", stat.AveragePct, progressBar(stat.AveragePct, 10, false, true)),
+			fmt.Sprintf("%.1f%%", stat.FallbackRate),
+			fmt.Sprintf("%d/%dms", stat.DurationP50MS, stat.DurationP95MS),
+			hotspotAction(stat),
+		})
+	}
+	ui.table(
+		[]string{"command", "profile", "count", "avg", "fallback", "p50/p95", "action"},
+		rows,
+		tableSpec{
+			alignRight: map[int]bool{2: true, 4: true, 5: true},
+			maxWidth:   map[int]int{0: 30, 1: 18, 3: 22, 6: 38},
+		},
+	)
+}
+
 func renderSpreadFingerprints(ui spreadUI, stats []history.FingerprintStat) {
 	if len(stats) == 0 {
 		return
@@ -171,6 +223,21 @@ func renderSpreadBudgetSuggestions(ui spreadUI, suggestions []history.BudgetSugg
 			target,
 			suggestion.Confidence,
 		)
+	}
+}
+
+func hotspotAction(stat history.CommandHotspot) string {
+	switch {
+	case stat.FallbackRate >= 20:
+		return "loosen budget or improve fallback path"
+	case stat.AveragePct <= 0:
+		return "tiny output overhead; bypass or shorten summary"
+	case stat.AveragePct <= 20:
+		return "tighten reducer or prefer a terser mode"
+	case stat.AveragePct <= 35:
+		return "review budget before adding more structure"
+	default:
+		return "monitor"
 	}
 }
 
@@ -282,7 +349,7 @@ func (ui spreadUI) table(headers []string, rows [][]string, spec tableSpec) {
 			if i < len(row) {
 				value = clipTableValue(row[i], spec.maxWidth[i])
 			}
-			cells = append(cells, padCell(value, widths[i], spec.alignRight[i]))
+			cells = append(cells, colorizeEmbeddedBar(padCell(value, widths[i], spec.alignRight[i]), ui.color))
 		}
 		rowLine := "  │" + strings.Join(cells, "│") + "│"
 		if ui.color {
@@ -301,6 +368,7 @@ const (
 	ansiReset   = "\033[0m"
 	ansiBold    = "\033[1m"
 	ansiDim     = "\033[2m"
+	ansiGreen   = "\033[32m"
 	ansiRed     = "\033[31m"
 	ansiYellow  = "\033[33m"
 	ansiSkyBlue = "\033[38;2;32;171;246m"
@@ -336,18 +404,16 @@ func colorizeTextByRate(value float64, text string, enabled bool, higherIsBetter
 	}
 	color := ansiYellow
 	switch {
-	case higherIsBetter && value >= 75:
-		color = ansiSkyBlue
-	case higherIsBetter && value >= 50:
-		color = ansiSkyBlue
-	case higherIsBetter:
-		color = ansiYellow
-	case value >= 50:
+	case higherIsBetter && value > 0:
+		color = ansiGreen
+	case higherIsBetter && value < 0:
 		color = ansiRed
-	case value >= 15:
+	case !higherIsBetter && value >= 50:
+		color = ansiRed
+	case !higherIsBetter && value >= 15:
 		color = ansiYellow
-	default:
-		color = ansiSkyBlue
+	case !higherIsBetter:
+		color = ansiGreen
 	}
 	return color + text + ansiReset
 }
@@ -417,6 +483,51 @@ func colorizeTableFrame(line string) string {
 		}
 	}
 	return out.String()
+}
+
+func colorizeEmbeddedBar(value string, enabled bool) string {
+	if !enabled {
+		return value
+	}
+	start := strings.Index(value, "[")
+	end := strings.Index(value, "]")
+	if start < 0 || end <= start {
+		return value
+	}
+	pctIndex := strings.Index(value, "%")
+	if pctIndex < 0 || pctIndex > start {
+		return value
+	}
+	numberText := strings.TrimSpace(value[:pctIndex])
+	parts := strings.Fields(numberText)
+	if len(parts) == 0 {
+		return value
+	}
+	rate, err := strconv.ParseFloat(parts[len(parts)-1], 64)
+	if err != nil {
+		return value
+	}
+	bar := value[start : end+1]
+	return value[:start] + colorizeTextByRate(rate, bar, enabled, true) + value[end+1:]
+}
+
+func formatTokenCount(value int) string {
+	sign := ""
+	if value < 0 {
+		sign = "-"
+		value = -value
+	}
+	text := strconv.Itoa(value)
+	if len(text) <= 3 {
+		return sign + text + " tokens"
+	}
+	var parts []string
+	for len(text) > 3 {
+		parts = append([]string{text[len(text)-3:]}, parts...)
+		text = text[:len(text)-3]
+	}
+	parts = append([]string{text}, parts...)
+	return sign + strings.Join(parts, ",") + " tokens"
 }
 
 func (a *App) runProfiles() int {

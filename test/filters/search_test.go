@@ -58,6 +58,26 @@ func TestRipgrepAndTreeHelpers(t *testing.T) {
 	}
 }
 
+func TestFindSummaries(t *testing.T) {
+	if got := filters.SummarizeFindPaths(nil, 4); got != "no matches" {
+		t.Fatalf("unexpected empty find summary: %q", got)
+	}
+	got := filters.SummarizeFindPaths([]string{"b.py", "a.py"}, 4)
+	for _, want := range []string{"2 matches", "a.py", "b.py"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in find summary:\n%s", want, got)
+		}
+	}
+	truncated := filters.SummarizeFindPaths([]string{"a.py", "b.py", "c.py", "d.py"}, 3)
+	if !strings.Contains(truncated, "... +2 more matches") {
+		t.Fatalf("expected truncated find summary, got %q", truncated)
+	}
+	suppressed := filters.SummarizeFindPaths([]string{"node_modules/a.js", "src/a.py"}, 4)
+	if !strings.Contains(suppressed, "suppressed noisy paths") {
+		t.Fatalf("expected suppressed-path note, got %q", suppressed)
+	}
+}
+
 func TestSummarizeRipgrep(t *testing.T) {
 	grouped := filters.SummarizeRipgrep(strings.Join([]string{
 		"one.go:1:first",
@@ -73,5 +93,27 @@ func TestSummarizeRipgrep(t *testing.T) {
 	fallback := filters.SummarizeRipgrep("rg: ./vendor: Permission denied (os error 13)\n", 4, 4)
 	if !strings.Contains(fallback, "Permission denied") {
 		t.Fatalf("expected ripgrep error fallback, got %q", fallback)
+	}
+}
+
+func TestStreamingSearchReducers(t *testing.T) {
+	rg := filters.NewRipgrepReducer(2, 8)
+	rg.ConsumeStdout([]byte("a.go:1:first\na.go:2:second\n"))
+	rg.ConsumeStdout([]byte("b.go:9:third\n"))
+	rg.ConsumeStdout([]byte("node_modules/pkg/c.go:1:ignored\n"))
+	if !rg.Done() {
+		t.Fatal("expected ripgrep reducer to report done after filling visible groups")
+	}
+	if got := rg.Result(); !strings.Contains(got, "suppressed noisy paths") {
+		t.Fatalf("expected ripgrep reducer suppression note, got %q", got)
+	}
+
+	find := filters.NewFindReducer(4)
+	find.ConsumeStdout([]byte("/tmp/a.py\n/tmp/b.py\n/tmp/c.py\n/tmp/d.py\n/tmp/e.py\n"))
+	if !find.Done() {
+		t.Fatal("expected find reducer to report done after filling sample budget")
+	}
+	if got := find.Result(); !strings.Contains(got, "... +2 more matches") {
+		t.Fatalf("expected find reducer overflow note, got %q", got)
 	}
 }

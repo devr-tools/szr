@@ -10,8 +10,8 @@ import (
 
 func TestBuiltInProfileCount(t *testing.T) {
 	list := profiles.Builtins(3)
-	if len(list) != 35 {
-		t.Fatalf("expected 35 profiles, got %d", len(list))
+	if len(list) != 36 {
+		t.Fatalf("expected 36 profiles, got %d", len(list))
 	}
 }
 

@@ -34,6 +34,8 @@ func TestCommandErrorMatrix(t *testing.T) {
 		wantStderr []string
 	}{
 		{"proxy missing", []string{"proxy"}, 2, nil, []string{"missing command for proxy"}},
+		{"rewrite missing", []string{"rewrite"}, 2, nil, []string{"rewrite requires a command"}},
+		{"rewrite bad format", []string{"rewrite", "--format", "wat", "--command", "git diff"}, 2, nil, []string{"unknown rewrite format"}},
 		{"explain missing", []string{"explain"}, 2, nil, []string{"explain requires a command"}},
 		{"spread bad flag", []string{"spread", "--bad"}, 2, nil, []string{"unknown spread flag"}},
 		{"install mixed targets", []string{"install", "--all", "codex"}, 2, nil, []string{"either --all or explicit targets"}},
@@ -43,6 +45,14 @@ func TestCommandErrorMatrix(t *testing.T) {
 		{"bench bad flag", []string{"bench", "--bad"}, 2, nil, []string{"unknown bench flag"}},
 		{"bench no fixtures", []string{"bench", "missing-fixture"}, 2, nil, []string{"no benchmark fixtures matched"}},
 		{"read missing", []string{"read"}, 2, nil, []string{"read requires a file"}},
+		{"find missing name", []string{"find", "--name"}, 2, nil, []string{"find requires a value for --name"}},
+		{"find missing path", []string{"find", "--path"}, 2, nil, []string{"find requires a value for --path"}},
+		{"find missing exclude", []string{"find", "--exclude"}, 2, nil, []string{"find requires a value for --exclude"}},
+		{"find bad type", []string{"find", "--type", "x"}, 2, nil, []string{"unsupported find type"}},
+		{"find missing type", []string{"find", "--type"}, 2, nil, []string{"find requires a value for --type"}},
+		{"find missing max-depth", []string{"find", "--max-depth"}, 2, nil, []string{"find requires a value for --max-depth"}},
+		{"find invalid max-depth", []string{"find", "--max-depth", "-1"}, 2, nil, []string{"invalid find max-depth"}},
+		{"find extra root", []string{"find", root, "two"}, 2, nil, []string{"unexpected find argument two"}},
 		{"read missing level", []string{"read", "-l"}, 2, nil, []string{"missing value for --level"}},
 		{"read missing max-lines", []string{"read", "--max-lines"}, 2, nil, []string{"missing value for --max-lines"}},
 		{"read file error", []string{"read", filepath.Join(root, "missing.txt")}, 1, nil, []string{"no such file"}},
@@ -55,6 +65,10 @@ func TestCommandErrorMatrix(t *testing.T) {
 		{"ls error", []string{"ls", filepath.Join(root, "missing-dir")}, 1, nil, []string{"no such file"}},
 		{"run exec error", []string{"run", "missing-binary"}, 1, nil, []string{"executable file not found"}},
 		{"grep no match", []string{"grep", "nomatch", "."}, 0, []string{"no matches"}, nil},
+		{"rewrite missing format value", []string{"rewrite", "--format"}, 2, nil, []string{"rewrite requires a value for --format"}},
+		{"rewrite missing hook value", []string{"rewrite", "--hook"}, 2, nil, []string{"rewrite requires a value for --hook"}},
+		{"rewrite missing command value", []string{"rewrite", "--command"}, 2, nil, []string{"rewrite requires a value for --command"}},
+		{"rewrite missing binary value", []string{"rewrite", "--binary"}, 2, nil, []string{"rewrite requires a value for --binary"}},
 	}
 
 	for _, tc := range errorCases {
@@ -83,7 +97,7 @@ func TestCommandErrorMatrix(t *testing.T) {
 func TestSpreadCommandOutputs(t *testing.T) {
 	app := newSpreadFixtureApp(t)
 	code, stdout, stderr := testutil.RunApp(t, app, "spread")
-	if code != 0 || !strings.Contains(stdout, "commands:") || !strings.Contains(stdout, "duration p50/p95:") || stderr != "" {
+	if code != 0 || !strings.Contains(stdout, "commands run:") || !strings.Contains(stdout, "duration (p50/p95):") || stderr != "" {
 		t.Fatalf("unexpected spread output stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
 
@@ -129,7 +143,7 @@ func TestSpreadCommandEmptyAndErrorCases(t *testing.T) {
 	}
 
 	code, stdout, stderr = testutil.RunApp(t, app, "gain")
-	if code != 0 || !strings.Contains(stdout, "commands:") || stderr != "" {
+	if code != 0 || !strings.Contains(stdout, "commands run:") || stderr != "" {
 		t.Fatalf("unexpected gain alias output stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
 }
@@ -261,12 +275,13 @@ func TestSpreadReportingHistoryOutput(t *testing.T) {
 		t.Fatalf("unexpected spread output stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
 	for _, want := range []string{
-		"commands: 3",
-		"duration p50/p95: 30ms / 90ms",
-		"bytes read/parsed/emitted: 390 / 260 / 120",
-		"failure rate: 66.7% (2/3)",
-		"fallback rate: 33.3% (1/3)",
-		"tee rate: 33.3% (1/3)",
+		"commands run: 3",
+		"total tokens saved: 160 tokens",
+		"duration (p50/p95): 30ms / 90ms",
+		"bytes (read/parsed/emitted): 390 / 260 / 120",
+		"failed commands: 66.7% (2/3)",
+		"fallback usage: 33.3% (1/3)",
+		"tee usage: 33.3% (1/3)",
 		"command",
 		"count",
 		"avg savings",
@@ -275,15 +290,15 @@ func TestSpreadReportingHistoryOutput(t *testing.T) {
 		"│ conf",
 		"p50/p95",
 		"profiles:",
+		"improvement hotspots:",
+		"action",
+		"loosen budget or improve fallback path",
 		"git-status",
 		"go-test-json",
 		"passthrough",
 		"80.0% [==========--]",
 		"66.7% [========----]",
 		"0.0% [------------]",
-		"poor savings fingerprints:",
-		"fp",
-		"7702efc76ed96fd0",
 		"recent:",
 		"2026-05-20T12:00:00Z  passthrough  confidence=low  10ms  exit=2  fallback=true  0.0%  szr custom command",
 	} {
@@ -364,6 +379,75 @@ func TestSpreadReportingJSONOutput(t *testing.T) {
 	}
 	if len(payload.ProfileStats) != 3 {
 		t.Fatalf("unexpected json profile stats: %#v", payload.ProfileStats)
+	}
+}
+
+func TestSpreadIgnoresUninstallCommands(t *testing.T) {
+	paths := testutil.Paths(t.TempDir())
+	testutil.EnsurePaths(t, paths)
+	store := history.New(paths.HistoryFile)
+	for _, rec := range []history.Record{
+		{
+			Timestamp:         time.Date(2026, 5, 20, 10, 0, 0, 0, time.UTC),
+			Command:           "szr git status --short",
+			Profile:           "git-status",
+			ProfileConfidence: "high",
+			DurationMS:        30,
+			ExitCode:          0,
+			RawBytesRead:      120,
+			BytesParsed:       60,
+			BytesEmitted:      20,
+			RawTokens:         100,
+			FilteredTokens:    20,
+			SavedTokens:       80,
+			SavingsPct:        80,
+		},
+		{
+			Timestamp:         time.Date(2026, 5, 20, 11, 0, 0, 0, time.UTC),
+			Command:           "uninstall claude-code",
+			Profile:           "passthrough",
+			ProfileConfidence: "low",
+			DurationMS:        1,
+			ExitCode:          0,
+			RawTokens:         1,
+			FilteredTokens:    1,
+			SavedTokens:       0,
+			SavingsPct:        0,
+			FallbackUsed:      true,
+		},
+		{
+			Timestamp:         time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC),
+			Command:           "szr uninstall",
+			Profile:           "passthrough",
+			ProfileConfidence: "low",
+			DurationMS:        1,
+			ExitCode:          0,
+			RawTokens:         1,
+			FilteredTokens:    1,
+			SavedTokens:       0,
+			SavingsPct:        0,
+			FallbackUsed:      true,
+		},
+	} {
+		if err := store.Append(rec); err != nil {
+			t.Fatalf("append history record: %v", err)
+		}
+	}
+
+	app := cli.NewWithDependencies("test", config.Default(), paths, store, testutil.AppEngine(t, paths))
+	code, stdout, stderr := testutil.RunApp(t, app, "spread", "--json")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected spread json stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	var payload history.Summary
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("unmarshal spread json: %v", err)
+	}
+	if payload.Commands != 1 {
+		t.Fatalf("expected uninstall commands to be excluded, got %#v", payload)
+	}
+	if len(payload.Recent) != 1 || payload.Recent[0].Command != "szr git status --short" {
+		t.Fatalf("unexpected recent records after uninstall filtering: %#v", payload.Recent)
 	}
 }
 

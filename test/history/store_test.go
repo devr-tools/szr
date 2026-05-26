@@ -63,6 +63,9 @@ func TestStoreSummaryProfileStats(t *testing.T) {
 	if stat := statsByName["passthrough"]; stat.SavedTokens != 0 || stat.Failures != 1 || stat.DurationP50MS != 10 {
 		t.Fatalf("unexpected passthrough stat: %#v", stat)
 	}
+	if len(summary.CommandHotspots) != 1 || summary.CommandHotspots[0].Command != "szr custom command" || !closeEnough(summary.CommandHotspots[0].FallbackRate, 100, 0.01) {
+		t.Fatalf("unexpected command hotspots: %#v", summary.CommandHotspots)
+	}
 }
 
 func TestStoreEmptySummary(t *testing.T) {
@@ -170,6 +173,12 @@ func TestLoadAllErrorsAndHelpers(t *testing.T) {
 	if got := history.EstimateTokens("abcdefgh"); got != 2 {
 		t.Fatalf("expected 2, got %d", got)
 	}
+	if got := history.EstimateTokens("M  a"); got != 2 {
+		t.Fatalf("expected tiny status output to estimate as 2, got %d", got)
+	}
+	if got := history.EstimateTokens("service/src/backend/api/routes/accounts.py"); got != 11 {
+		t.Fatalf("expected path-like output to estimate as 11, got %d", got)
+	}
 
 	summary := history.Summarize([]history.Record{
 		{Command: "alpha beta gamma delta"},
@@ -274,8 +283,56 @@ func TestSummaryHydratesLegacyFields(t *testing.T) {
 	if len(summary.ProfileStats) != 1 || summary.ProfileStats[0].Confidence != "low" || !closeEnough(summary.ProfileStats[0].FallbackRate, 100, 0.01) {
 		t.Fatalf("unexpected hydrated profile stats: %#v", summary.ProfileStats)
 	}
-	if len(summary.FingerprintHotspots) != 1 || summary.FingerprintHotspots[0].Fingerprint == "" {
-		t.Fatalf("unexpected fingerprint hotspots: %#v", summary.FingerprintHotspots)
+	if len(summary.CommandHotspots) != 1 || summary.CommandHotspots[0].FallbackRate != 100 {
+		t.Fatalf("unexpected command hotspots: %#v", summary.CommandHotspots)
+	}
+	if len(summary.FingerprintHotspots) != 0 {
+		t.Fatalf("expected singleton fingerprint hotspot to be suppressed, got %#v", summary.FingerprintHotspots)
+	}
+}
+
+func TestSummaryPrioritizesMaterialHotspotsOverTinyNoise(t *testing.T) {
+	records := []history.Record{
+		{
+			Command:        "szr git status",
+			Profile:        "git-status",
+			DurationMS:     18,
+			RawTokens:      8,
+			FilteredTokens: 12,
+			SavedTokens:    -4,
+			SavingsPct:     -50,
+		},
+		{
+			Command:            "szr git diff --stat",
+			CommandFingerprint: history.Fingerprint("szr git diff --stat"),
+			Profile:            "git-diff",
+			DurationMS:         34,
+			RawTokens:          1200,
+			FilteredTokens:     420,
+			SavedTokens:        780,
+			SavingsPct:         65,
+		},
+		{
+			Command:            "szr git diff --stat",
+			CommandFingerprint: history.Fingerprint("szr git diff --stat"),
+			Profile:            "git-diff",
+			DurationMS:         37,
+			RawTokens:          1000,
+			FilteredTokens:     410,
+			SavedTokens:        590,
+			SavingsPct:         59,
+		},
+	}
+
+	summary := history.Summarize(records, 4)
+	if len(summary.CommandHotspots) < 2 {
+		t.Fatalf("expected multiple command hotspots, got %#v", summary.CommandHotspots)
+	}
+	if got := summary.CommandHotspots[0].Command; got != "szr git diff" {
+		t.Fatalf("expected material diff hotspot to rank first, got %#v", summary.CommandHotspots)
+	}
+	if len(summary.FingerprintHotspots) != 1 || summary.FingerprintHotspots[0].Command != "szr git diff --stat" {
+		t.Fatalf("expected fingerprint hotspot to favor material opportunity, got %#v", summary.FingerprintHotspots)
 	}
 }
 

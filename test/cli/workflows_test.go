@@ -63,6 +63,155 @@ func TestRecommendAndHotspotsCommands(t *testing.T) {
 	}
 }
 
+func TestRecommendWrapperGuidanceForFindAndGrep(t *testing.T) {
+	paths := testutil.Paths(t.TempDir())
+	testutil.EnsurePaths(t, paths)
+	store := history.New(paths.HistoryFile)
+	records := []history.Record{
+		{
+			Timestamp:          time.Date(2026, 5, 21, 10, 0, 0, 0, time.UTC),
+			Command:            "/usr/bin/find /repo -name \"users.py\"",
+			CommandFingerprint: history.Fingerprint("/usr/bin/find /repo -name \"users.py\""),
+			Profile:            "passthrough",
+			ProfileConfidence:  "low",
+			DurationMS:         18,
+			RawTokens:          80,
+			FilteredTokens:     70,
+			SavedTokens:        10,
+			SavingsPct:         12.5,
+		},
+		{
+			Timestamp:          time.Date(2026, 5, 21, 11, 0, 0, 0, time.UTC),
+			Command:            "/usr/bin/find /repo -name \"users.py\"",
+			CommandFingerprint: history.Fingerprint("/usr/bin/find /repo -name \"users.py\""),
+			Profile:            "passthrough",
+			ProfileConfidence:  "low",
+			DurationMS:         19,
+			RawTokens:          82,
+			FilteredTokens:     72,
+			SavedTokens:        10,
+			SavingsPct:         12.2,
+		},
+		{
+			Timestamp:          time.Date(2026, 5, 21, 12, 0, 0, 0, time.UTC),
+			Command:            "/usr/bin/grep -rn links_service /repo",
+			CommandFingerprint: history.Fingerprint("/usr/bin/grep -rn links_service /repo"),
+			Profile:            "passthrough",
+			ProfileConfidence:  "low",
+			DurationMS:         16,
+			RawTokens:          90,
+			FilteredTokens:     78,
+			SavedTokens:        12,
+			SavingsPct:         13.3,
+		},
+		{
+			Timestamp:          time.Date(2026, 5, 21, 13, 0, 0, 0, time.UTC),
+			Command:            "/usr/bin/grep -rn links_service /repo",
+			CommandFingerprint: history.Fingerprint("/usr/bin/grep -rn links_service /repo"),
+			Profile:            "passthrough",
+			ProfileConfidence:  "low",
+			DurationMS:         17,
+			RawTokens:          92,
+			FilteredTokens:     80,
+			SavedTokens:        12,
+			SavingsPct:         13.0,
+		},
+	}
+	for _, rec := range records {
+		if err := store.Append(rec); err != nil {
+			t.Fatalf("append wrapper guidance history: %v", err)
+		}
+	}
+
+	app := cli.NewWithDependencies("test", config.Default(), paths, store, testutil.AppEngine(t, paths))
+	code, stdout, stderr := testutil.RunApp(t, app, "recommend")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected wrapper recommend stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	for _, want := range []string{"[wrapper-guidance] /usr/bin/find /repo -name \"users.py\"", "szr find <path> --name ...", "[wrapper-guidance] /usr/bin/grep -rn links_service /repo", "szr grep <pattern> <path>"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("expected wrapper recommend output %q in %q", want, stdout)
+		}
+	}
+}
+
+func TestRecommendRoutingExpansionForSafeGitFamilies(t *testing.T) {
+	paths := testutil.Paths(t.TempDir())
+	testutil.EnsurePaths(t, paths)
+	store := history.New(paths.HistoryFile)
+	records := []history.Record{
+		{
+			Timestamp:          time.Date(2026, 5, 21, 10, 0, 0, 0, time.UTC),
+			Command:            "git diff HEAD~1..HEAD --stat",
+			CommandFingerprint: history.Fingerprint("git diff HEAD~1..HEAD --stat"),
+			Profile:            "passthrough",
+			ProfileConfidence:  "low",
+			DurationMS:         21,
+			RawTokens:          90,
+			FilteredTokens:     90,
+			SavedTokens:        0,
+			SavingsPct:         0,
+		},
+		{
+			Timestamp:          time.Date(2026, 5, 21, 11, 0, 0, 0, time.UTC),
+			Command:            "git diff HEAD~1..HEAD --stat",
+			CommandFingerprint: history.Fingerprint("git diff HEAD~1..HEAD --stat"),
+			Profile:            "passthrough",
+			ProfileConfidence:  "low",
+			DurationMS:         22,
+			RawTokens:          92,
+			FilteredTokens:     92,
+			SavedTokens:        0,
+			SavingsPct:         0,
+		},
+		{
+			Timestamp:          time.Date(2026, 5, 21, 12, 0, 0, 0, time.UTC),
+			Command:            "git diff HEAD~1..HEAD --name-only",
+			CommandFingerprint: history.Fingerprint("git diff HEAD~1..HEAD --name-only"),
+			Profile:            "passthrough",
+			ProfileConfidence:  "low",
+			DurationMS:         23,
+			RawTokens:          80,
+			FilteredTokens:     80,
+			SavedTokens:        0,
+			SavingsPct:         0,
+		},
+		{
+			Timestamp:          time.Date(2026, 5, 21, 13, 0, 0, 0, time.UTC),
+			Command:            "git diff HEAD~1..HEAD --stat | tail -30",
+			CommandFingerprint: history.Fingerprint("git diff HEAD~1..HEAD --stat | tail -30"),
+			Profile:            "passthrough",
+			ProfileConfidence:  "low",
+			DurationMS:         24,
+			RawTokens:          95,
+			FilteredTokens:     95,
+			SavedTokens:        0,
+			SavingsPct:         0,
+		},
+	}
+	for _, rec := range records {
+		if err := store.Append(rec); err != nil {
+			t.Fatalf("append routing history: %v", err)
+		}
+	}
+
+	app := cli.NewWithDependencies("test", config.Default(), paths, store, testutil.AppEngine(t, paths))
+	code, stdout, stderr := testutil.RunApp(t, app, "recommend")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected routing recommend stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	for _, want := range []string{
+		"[routing-expansion] git diff",
+		"representative rewrite: `szr proxy git diff HEAD~1..HEAD --stat | tail -30`",
+		"[routing-coverage] git diff HEAD~1..HEAD --stat",
+		"`szr git diff HEAD~1..HEAD --stat`",
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("expected routing recommend output %q in %q", want, stdout)
+		}
+	}
+}
+
 func TestReplayCommandWithFile(t *testing.T) {
 	root, paths, app := newWorkflowApp(t)
 	diffPath := filepath.Join(root, "diff.log")

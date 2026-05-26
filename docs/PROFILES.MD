@@ -2,7 +2,7 @@
 
 This document tracks the builtin profiles currently registered by `internal/profiles.Builtins()`.
 
-Current coverage: `33` builtin profiles across `13` categories.
+Current coverage: `34` builtin profiles across `13` categories.
 
 Anything not listed here does not currently have a dedicated builtin profile in `szr`.
 
@@ -12,7 +12,7 @@ Anything not listed here does not currently have a dedicated builtin profile in 
 | --- | ---: | --- |
 | Go | 2 | `go test`, `go build`, `go vet` |
 | Generic fallback | 2 | wrapped `test` commands, shallow `summary` commands |
-| Search | 1 | `rg` plain-text search |
+| Search | 2 | `rg` plain-text search, `find` path discovery |
 | Git | 3 | `git status`, `git log`, `git diff` |
 | GitHub CLI | 5 | `gh pr view`, `gh pr checks`, `gh run list`, `gh run view`, GitHub Actions logs |
 | JavaScript | 5 | `npm`, `pnpm`, `yarn`, `bun`, `turbo`, `nx`, `vite`, `vitest`, `jest`, `eslint`, `tsc` |
@@ -48,7 +48,10 @@ Anything not listed here does not currently have a dedicated builtin profile in 
 
 - `ripgrep`
   - Matches: plain-text `rg` search commands outside JSON, files-only, and count-oriented modes
-  - Focus: groups matches by file with stable filename and line-number output, and falls back to real ripgrep errors when needed
+  - Focus: groups matches by file with stable filename and line-number output, applies conservative repo-noise excludes, and streams to early cutoff when enough visible context is collected
+- `path-find`
+  - Matches: plain `find` commands that emit path lists without `-exec`, `-delete`, or custom print formats
+  - Focus: bounded path previews for file-discovery output with repo-noise suppression and streaming cutoff
 
 ### Git
 
