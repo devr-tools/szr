@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/devr-tools/szr/internal/config"
 	"github.com/devr-tools/szr/internal/engine"
 	"github.com/devr-tools/szr/internal/teeindex"
 )
@@ -92,7 +93,7 @@ func buildReplayOutput(command string, effectiveCommand []string, profile engine
 		SavingsPct:        savingsPct(rendered.RawTokens, rendered.FilteredTokens),
 		BytesParsed:       rendered.BytesParsed,
 		BytesEmitted:      rendered.BytesEmitted,
-		Budget:            engine.ResolveBudget(profile, engine.Invocation{Command: effectiveCommand, Display: effectiveCommand}, maxLines),
+		Budget:            engine.ResolveBudget(profile, engine.Invocation{Command: effectiveCommand, Display: effectiveCommand, Advanced: config.Default().Advanced}, maxLines),
 		Display:           rendered.Text,
 	}
 }

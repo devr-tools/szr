@@ -21,6 +21,25 @@ func isKubectlCommand(args []string, verb string) bool {
 	return ok && got == verb
 }
 
+func hasKubectlWideOutput(args []string) bool {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "-o" || arg == "--output" {
+			if i+1 < len(args) && args[i+1] == "wide" {
+				return true
+			}
+			continue
+		}
+		if arg == "-owide" || strings.HasPrefix(arg, "-o=") && strings.TrimPrefix(arg, "-o=") == "wide" {
+			return true
+		}
+		if strings.HasPrefix(arg, "--output=") && strings.TrimPrefix(arg, "--output=") == "wide" {
+			return true
+		}
+	}
+	return false
+}
+
 func insertKubectlVerbArgs(command []string, extra ...string) []string {
 	if len(command) == 0 || len(extra) == 0 {
 		return command

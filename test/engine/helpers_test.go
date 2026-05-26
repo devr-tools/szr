@@ -82,6 +82,15 @@ func TestResolveBudgetAgentMode(t *testing.T) {
 	if agentBudget.MaxLines >= standardMediumBudget.MaxLines || agentBudget.MinFailures != 1 || agentBudget.MinAnchors != 1 || agentBudget.MinHints != 1 {
 		t.Fatalf("expected reasoning-budget agent mode to tighten and add contracts, got %#v", agentBudget)
 	}
+
+	aggressiveBudget := engine.ResolveBudget(
+		engine.Profile{Budget: engine.OutputBudget{MaxLines: 12}, Confidence: engine.ConfidenceMedium},
+		engine.Invocation{ReasoningBudgetMode: "aggressive"},
+		12,
+	)
+	if aggressiveBudget.MaxLines >= agentBudget.MaxLines || aggressiveBudget.MinFailures != 1 || aggressiveBudget.MinAnchors != 1 || aggressiveBudget.MinHints != 1 {
+		t.Fatalf("expected aggressive reasoning budget to tighten beyond agent mode, got %#v", aggressiveBudget)
+	}
 }
 
 func TestDecideFastPath(t *testing.T) {

@@ -1,6 +1,10 @@
 package engine
 
-import "time"
+import (
+	"time"
+
+	"github.com/devr-tools/szr/internal/config"
+)
 
 type Invocation struct {
 	Command             []string
@@ -9,6 +13,7 @@ type Invocation struct {
 	Verbose             int
 	UltraCompact        bool
 	ReasoningBudgetMode string
+	Advanced            config.Advanced
 }
 
 type Execution struct {

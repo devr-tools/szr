@@ -80,6 +80,31 @@ func (a *App) handleSettingsChoice(choice string, reader *bufio.Reader, stdout, 
 		})
 	case "7":
 		return a.updateReasoningBudgetSetting(reader, stdout, stderr)
+	case "8":
+		return a.updateBooleanSetting(reader, stdout, stderr, "aggressive prepare rewrites", a.config.Advanced.AggressivePrepareRewrites, "settings: aggressive prepare rewrites unchanged", func(cfg *config.Config, value bool) string {
+			cfg.Advanced.AggressivePrepareRewrites = value
+			return enabledLabel(cfg.Advanced.AggressivePrepareRewrites)
+		})
+	case "9":
+		return a.updateBooleanSetting(reader, stdout, stderr, "noise prefiltering", a.config.Advanced.NoisePrefiltering, "settings: noise prefiltering unchanged", func(cfg *config.Config, value bool) string {
+			cfg.Advanced.NoisePrefiltering = value
+			return enabledLabel(cfg.Advanced.NoisePrefiltering)
+		})
+	case "10":
+		return a.updateBooleanSetting(reader, stdout, stderr, "adaptive budgets", a.config.Advanced.AdaptiveBudgets, "settings: adaptive budgets unchanged", func(cfg *config.Config, value bool) string {
+			cfg.Advanced.AdaptiveBudgets = value
+			return enabledLabel(cfg.Advanced.AdaptiveBudgets)
+		})
+	case "11":
+		return a.updateBooleanSetting(reader, stdout, stderr, "early capture stop", a.config.Advanced.EarlyCaptureStop, "settings: early capture stop unchanged", func(cfg *config.Config, value bool) string {
+			cfg.Advanced.EarlyCaptureStop = value
+			return enabledLabel(cfg.Advanced.EarlyCaptureStop)
+		})
+	case "12":
+		return a.updateBooleanSetting(reader, stdout, stderr, "semantic compaction", a.config.Advanced.SemanticCompaction, "settings: semantic compaction unchanged", func(cfg *config.Config, value bool) string {
+			cfg.Advanced.SemanticCompaction = value
+			return enabledLabel(cfg.Advanced.SemanticCompaction)
+		})
 	case "q", "quit", "exit":
 		fmt.Fprintln(stdout, "settings: saved and exiting")
 		return 0, true
@@ -162,6 +187,11 @@ func (a *App) printSettingsMenu(w io.Writer, cfg config.Config, configFile strin
 	printSettingsRow(w, "5", "max preview lines", fmt.Sprintf("%d", cfg.MaxPreviewLines))
 	printSettingsRow(w, "6", "max match groups", fmt.Sprintf("%d", cfg.MaxMatchGroups))
 	printSettingsRow(w, "7", "reasoning budget mode", cfg.ReasoningBudgetMode+" "+dimSettingsTag("default"))
+	printSettingsRow(w, "8", "aggressive prepare rewrites", enabledLabel(cfg.Advanced.AggressivePrepareRewrites))
+	printSettingsRow(w, "9", "noise prefiltering", enabledLabel(cfg.Advanced.NoisePrefiltering))
+	printSettingsRow(w, "10", "adaptive budgets", enabledLabel(cfg.Advanced.AdaptiveBudgets))
+	printSettingsRow(w, "11", "early capture stop", enabledLabel(cfg.Advanced.EarlyCaptureStop))
+	printSettingsRow(w, "12", "semantic compaction", enabledLabel(cfg.Advanced.SemanticCompaction))
 	fmt.Fprintln(w, strings.Repeat("-", 54))
 	printSettingsRow(w, "q", "save and exit", "")
 	fmt.Fprint(w, "> ")
@@ -234,6 +264,7 @@ func promptForReasoningBudget(reader *bufio.Reader, stdout io.Writer, current st
 		fmt.Fprintf(stdout, "  current: %s\n", current)
 		fmt.Fprintf(stdout, "  1. standard %s %s - balanced for human readability\n", dimSettingsTag("default"), dimSettingsTag("recommended"))
 		fmt.Fprintln(stdout, "  2. agent     - steadier for agent loops")
+		fmt.Fprintln(stdout, "  3. aggressive - tighter for spread-heavy workflows")
 		fmt.Fprintln(stdout, "  blank input cancels")
 		fmt.Fprint(stdout, "> ")
 		line, ok, err := readSettingsLine(reader)
@@ -247,6 +278,8 @@ func promptForReasoningBudget(reader *bufio.Reader, stdout io.Writer, current st
 			line = config.ReasoningBudgetStandard
 		case "2":
 			line = config.ReasoningBudgetAgent
+		case "3":
+			line = config.ReasoningBudgetAggressive
 		}
 		mode, err := config.NormalizeReasoningBudgetMode(line)
 		if err != nil {

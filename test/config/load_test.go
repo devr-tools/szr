@@ -35,11 +35,27 @@ func TestLoadVariants(t *testing.T) {
 		func() (string, error) { return root, nil },
 		func(string) (os.FileInfo, error) { return nil, os.ErrNotExist },
 		func(string) ([]byte, error) {
-			return []byte(`{"tee_on_failure":false,"max_preview_lines":7,"max_match_groups":4,"reasoning_budget":"agent","update_check":{"enabled":true,"interval_hours":12,"auto_update":true}}`), nil
+			return []byte(`{"tee_on_failure":false,"max_preview_lines":7,"max_match_groups":4,"reasoning_budget":"agent","advanced":{"adaptive_budgets":true,"early_capture_stop":false},"update_check":{"enabled":true,"interval_hours":12,"auto_update":true}}`), nil
 		},
 	)
 	if err != nil || cfg.TeeOnFailure || cfg.MaxPreviewLines != 7 || cfg.MaxMatchGroups != 4 || cfg.ReasoningBudgetMode != config.ReasoningBudgetAgent || !cfg.UpdateCheck.Enabled || cfg.UpdateCheck.IntervalHours != 12 || !cfg.UpdateCheck.AutoUpdate {
 		t.Fatalf("unexpected loaded config: %#v err=%v", cfg, err)
+	}
+	if !cfg.Advanced.AggressivePrepareRewrites || !cfg.Advanced.NoisePrefiltering || !cfg.Advanced.AdaptiveBudgets || cfg.Advanced.EarlyCaptureStop || !cfg.Advanced.SemanticCompaction {
+		t.Fatalf("unexpected advanced config: %#v", cfg.Advanced)
+	}
+
+	cfg, _, err = config.LoadWith(
+		func() (config.Paths, error) { return paths, nil },
+		func(config.Paths) error { return nil },
+		func() (string, error) { return root, nil },
+		func(string) (os.FileInfo, error) { return nil, os.ErrNotExist },
+		func(string) ([]byte, error) {
+			return []byte(`{"reasoning_budget":"aggressive"}`), nil
+		},
+	)
+	if err != nil || cfg.ReasoningBudgetMode != config.ReasoningBudgetAggressive {
+		t.Fatalf("unexpected aggressive loaded config: %#v err=%v", cfg, err)
 	}
 
 	_, _, err = config.LoadWith(

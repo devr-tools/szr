@@ -43,6 +43,11 @@ var familyFastPathRules = map[string]fastPathRule{
 		MaxTokens: 96,
 		Reason:    "short tree output",
 	},
+	"grep": {
+		MaxBytes:  320,
+		MaxTokens: 80,
+		Reason:    "tiny grep output",
+	},
 	"git-diff": {
 		MaxBytes:  256,
 		MaxTokens: 64,
@@ -86,6 +91,11 @@ var familyFastPathRules = map[string]fastPathRule{
 }
 
 func ResolveBudget(profile Profile, inv Invocation, fallbackLines int) OutputBudget {
+	budget, _ := ResolveBudgetWithAdapter(profile, inv, fallbackLines, nil)
+	return budget
+}
+
+func ResolveBudgetWithAdapter(profile Profile, inv Invocation, fallbackLines int, adapter BudgetAdapter) (OutputBudget, *BudgetAdaptation) {
 	budget := profile.Budget
 	if budget.MaxLines <= 0 {
 		budget.MaxLines = fallbackLines
@@ -99,6 +109,11 @@ func ResolveBudget(profile Profile, inv Invocation, fallbackLines int) OutputBud
 	if budget.MaxTokens <= 0 && budget.MaxLines > 0 {
 		budget.MaxTokens = budget.MaxLines * 32
 	}
+	budget.NoisePrefiltering = inv.Advanced.NoisePrefiltering
+	budget.SemanticCompaction = inv.Advanced.SemanticCompaction
+	budget.AdaptiveBudgets = inv.Advanced.AdaptiveBudgets
+	budget.EarlyCaptureStop = inv.Advanced.EarlyCaptureStop
+	budget.AggressiveRewrites = inv.Advanced.AggressivePrepareRewrites
 
 	budget = tuneBudgetByProfile(profile, budget)
 	budget = tuneBudgetByReasoningMode(inv.ReasoningBudgetMode, budget)
@@ -118,6 +133,14 @@ func ResolveBudget(profile Profile, inv Invocation, fallbackLines int) OutputBud
 		budget = scaleBudget(budget, 9, 8)
 	}
 
+	var adaptation *BudgetAdaptation
+	if adapter != nil && budget.AdaptiveBudgets {
+		budget, adaptation = adapter.AdaptBudget(profile, inv, budget)
+	}
+	return finalizeResolvedBudget(budget), adaptation
+}
+
+func finalizeResolvedBudget(budget OutputBudget) OutputBudget {
 	budget.MaxLines = clampInt(budget.MaxLines, 3, 40)
 	if budget.MaxBytes <= 0 {
 		budget.MaxBytes = budget.MaxLines * 160
@@ -290,6 +313,17 @@ func tuneBudgetByReasoningMode(mode string, budget OutputBudget) OutputBudget {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
 	case "agent":
 		budget = scaleBudget(budget, 3, 4)
+		if budget.MinFailures < 1 {
+			budget.MinFailures = 1
+		}
+		if budget.MinAnchors < 1 {
+			budget.MinAnchors = 1
+		}
+		if budget.MinHints < 1 {
+			budget.MinHints = 1
+		}
+	case "aggressive":
+		budget = scaleBudget(budget, 1, 2)
 		if budget.MinFailures < 1 {
 			budget.MinFailures = 1
 		}

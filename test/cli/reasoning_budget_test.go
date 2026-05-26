@@ -34,6 +34,18 @@ func TestExplainReasoningBudgetMode(t *testing.T) {
 	if !strings.Contains(stdout, "contract: failures=1 anchors=1 hints=1") {
 		t.Fatalf("expected agent explain contract in %q", stdout)
 	}
+
+	code, stdout, stderr = testutil.RunApp(t, app, "--reasoning-budget", "aggressive", "explain", "go", "build")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected aggressive explain stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	aggressiveLines := extractBudgetLines(t, stdout)
+	if !strings.Contains(stdout, "reasoning budget mode: aggressive") {
+		t.Fatalf("expected aggressive explain mode in %q", stdout)
+	}
+	if aggressiveLines >= agentLines {
+		t.Fatalf("expected aggressive reasoning budget to tighten beyond agent, agent=%d aggressive=%d stdout=%q", agentLines, aggressiveLines, stdout)
+	}
 }
 
 func TestReasoningBudgetFlagErrors(t *testing.T) {

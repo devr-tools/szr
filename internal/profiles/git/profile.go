@@ -1,6 +1,7 @@
 package git
 
 import (
+	"github.com/devr-tools/szr/internal/config"
 	"github.com/devr-tools/szr/internal/engine"
 	shared "github.com/devr-tools/szr/internal/filters"
 	gitfilter "github.com/devr-tools/szr/internal/filters/git"
@@ -101,22 +102,60 @@ func Profiles(maxLines int) []engine.Profile {
 				return profilekit.HasCommand(inv.Display, "git", "diff")
 			},
 			Prepare: func(inv engine.Invocation) []string {
-				if profilekit.ContainsAny(inv.Command[1:], "--stat", "--numstat", "--shortstat", "--name-only", "--name-status") {
+				if profilekit.ContainsAny(inv.Command[1:], "--quiet", "--exit-code", "--no-patch", "-s") {
 					return inv.Command
 				}
-				return append(inv.Command, "--stat=120,40")
+				if !inv.Advanced.AggressivePrepareRewrites {
+					if profilekit.ContainsAny(inv.Command[1:], "--stat", "--numstat", "--shortstat", "--name-only", "--name-status") {
+						return inv.Command
+					}
+					return append(inv.Command, "--stat=120,40")
+				}
+				if profilekit.ContainsAny(inv.Command[1:], "--stat", "--numstat", "--shortstat", "--name-only", "--name-status") {
+					return ensureGitDiffNoiseFlags(inv.Command)
+				}
+				if isAggressiveGitDiff(inv) {
+					return ensureGitDiffNoiseFlags(append(inv.Command, "--stat=72,12", "--compact-summary"))
+				}
+				return ensureGitDiffNoiseFlags(append(inv.Command, "--stat=96,24", "--compact-summary"))
 			},
-			Render: func(_ engine.Invocation, exec engine.Execution) string {
-				return gitfilter.SummarizeGitDiff(shared.StripANSI(exec.Stdout))
+			Render: func(inv engine.Invocation, exec engine.Execution) string {
+				return newGitDiffReducer(inv, maxLines, 0).Reduce(shared.StripANSI(exec.Stdout))
 			},
-			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return gitfilter.NewGitDiffReducer(budget.MaxLines, budget.MaxBytes)
+			StreamRender: func(inv engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
+				return newGitDiffReducer(inv, budget.MaxLines, budget.MaxBytes)
 			},
 			ParseBytes: profilekit.ParseStdout,
 			Explain: []string{
-				"Biases `git diff` toward stat output instead of full hunks.",
-				"Totals additions and deletions, then keeps the per-file summary lines.",
+				"Biases `git diff` toward stat output instead of full hunks, with narrower stat widths in aggressive mode.",
+				"Totals additions and deletions, then keeps the highest-churn files when the diff touches many paths.",
 			},
 		},
 	}
+}
+
+func newGitDiffReducer(inv engine.Invocation, maxLines int, maxBytes int) *gitfilter.GitDiffReducer {
+	return gitfilter.NewGitDiffReducerWithOptions(gitfilter.GitDiffReducerOptions{
+		MaxLines:              maxLines,
+		MaxBytes:              maxBytes,
+		Aggressive:            isAggressiveGitDiff(inv),
+		LargeFileThreshold:    8,
+		LargeSummaryTopN:      5,
+		AggressiveSummaryTopN: 3,
+	})
+}
+
+func isAggressiveGitDiff(inv engine.Invocation) bool {
+	return inv.UltraCompact || inv.ReasoningBudgetMode == config.ReasoningBudgetAggressive
+}
+
+func ensureGitDiffNoiseFlags(command []string) []string {
+	out := append([]string{}, command...)
+	if !profilekit.ContainsAny(command[1:], "--no-color", "--color=never") && !profilekit.ContainsPrefix(command[1:], "--color=") {
+		out = append(out, "--no-color")
+	}
+	if !profilekit.ContainsAny(command[1:], "--no-ext-diff", "--ext-diff") {
+		out = append(out, "--no-ext-diff")
+	}
+	return out
 }

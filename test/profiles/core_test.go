@@ -3,6 +3,7 @@ package profiles_test
 import (
 	"testing"
 
+	"github.com/devr-tools/szr/internal/config"
 	"github.com/devr-tools/szr/internal/engine"
 	"github.com/devr-tools/szr/internal/profiles"
 	"github.com/devr-tools/szr/test/testutil"
@@ -10,8 +11,8 @@ import (
 
 func TestBuiltInProfileCount(t *testing.T) {
 	list := profiles.Builtins(3)
-	if len(list) != 39 {
-		t.Fatalf("expected 39 profiles, got %d", len(list))
+	if len(list) != 50 {
+		t.Fatalf("expected 50 profiles, got %d", len(list))
 	}
 }
 
@@ -32,6 +33,9 @@ func TestCoreFilesystemProfiles(t *testing.T) {
 	if !catRead.Match(engine.Invocation{Command: []string{"cat", "README.md"}}) || catRead.Match(engine.Invocation{Command: []string{"cat", "-n", "README.md"}}) {
 		t.Fatal("unexpected cat-read match behavior")
 	}
+	if catRead.Match(engine.Invocation{Command: []string{"cat", "data.json"}}) {
+		t.Fatal("cat-read should not match JSON files")
+	}
 	if got := catRead.Render(engine.Invocation{Command: []string{"cat", "README.md"}}, engine.Execution{Stdout: "# Title\n\nBody\n"}); got == "" {
 		t.Fatal("expected cat-read render output")
 	}
@@ -45,6 +49,55 @@ func TestCoreFilesystemProfiles(t *testing.T) {
 	}
 	if gitLsFiles.StreamPreference != engine.StreamStdoutOnly || gitLsFiles.StreamRender == nil {
 		t.Fatalf("unexpected git-ls-files stream metadata: %#v", gitLsFiles)
+	}
+}
+
+func TestSelectionPrefersSpecificConflictProfiles(t *testing.T) {
+	paths := testutil.Paths(t.TempDir())
+	testutil.EnsurePaths(t, paths)
+	cfg := config.Default()
+	e := engine.New(cfg, paths, nil, profiles.Builtins(cfg.MaxPreviewLines))
+
+	if got := e.Explain(engine.Invocation{
+		Command: []string{"cat", "data.json"},
+		Display: []string{"cat", "data.json"},
+	}).Name; got != "json-query" {
+		t.Fatalf("expected cat data.json to select json-query, got %q", got)
+	}
+
+	if got := e.Explain(engine.Invocation{
+		Command: []string{"kubectl", "get", "pods", "-o", "wide"},
+		Display: []string{"kubectl", "get", "pods", "-o", "wide"},
+	}).Name; got != "csv-tabular" {
+		t.Fatalf("expected kubectl get -o wide to select csv-tabular, got %q", got)
+	}
+
+	if got := e.Explain(engine.Invocation{
+		Command: []string{"curl", "https://api.example.test/v1/users"},
+		Display: []string{"curl", "https://api.example.test/v1/users"},
+	}).Name; got != "http-api" {
+		t.Fatalf("expected API curl request to select http-api, got %q", got)
+	}
+
+	if got := e.Explain(engine.Invocation{
+		Command: []string{"vercel", "ls"},
+		Display: []string{"vercel", "ls"},
+	}).Name; got != "vercel-deployments" {
+		t.Fatalf("expected vercel ls to select vercel-deployments, got %q", got)
+	}
+
+	if got := e.Explain(engine.Invocation{
+		Command: []string{"supabase", "functions", "logs", "stripe-webhook"},
+		Display: []string{"supabase", "functions", "logs", "stripe-webhook"},
+	}).Name; got != "supabase-function-logs" {
+		t.Fatalf("expected supabase functions logs to select supabase-function-logs, got %q", got)
+	}
+
+	if got := e.Explain(engine.Invocation{
+		Command: []string{"heroku", "logs", "--app", "api-prod"},
+		Display: []string{"heroku", "logs", "--app", "api-prod"},
+	}).Name; got != "heroku-router-logs" {
+		t.Fatalf("expected heroku logs to select heroku-router-logs, got %q", got)
 	}
 }
 

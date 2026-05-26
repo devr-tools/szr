@@ -34,6 +34,7 @@ go.work.sum
 # local build cache
 .gocache/
 .gocache-docker/
+.cache/
 
 # local build artifacts
 bin/

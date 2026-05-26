@@ -216,7 +216,7 @@ var builtinSpecs = []Spec{
 		ExpectedContains: []string{
 			"files=12",
 			"internal/parser/lexer.go",
-			"internal/parser/token.go",
+			"internal/parser/token_test.go",
 		},
 		MinTokenSavings: 50,
 		MinQualityScore: 75,

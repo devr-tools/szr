@@ -6,8 +6,9 @@ import (
 )
 
 const (
-	ReasoningBudgetStandard = "standard"
-	ReasoningBudgetAgent    = "agent"
+	ReasoningBudgetStandard   = "standard"
+	ReasoningBudgetAgent      = "agent"
+	ReasoningBudgetAggressive = "aggressive"
 )
 
 func NormalizeReasoningBudgetMode(value string) (string, error) {
@@ -16,8 +17,10 @@ func NormalizeReasoningBudgetMode(value string) (string, error) {
 		return ReasoningBudgetStandard, nil
 	case ReasoningBudgetAgent, "loop", "agent-loop":
 		return ReasoningBudgetAgent, nil
+	case ReasoningBudgetAggressive, "tight", "spread":
+		return ReasoningBudgetAggressive, nil
 	default:
-		return "", fmt.Errorf("invalid reasoning budget mode %q (want %q or %q)", value, ReasoningBudgetStandard, ReasoningBudgetAgent)
+		return "", fmt.Errorf("invalid reasoning budget mode %q (want %q, %q, or %q)", value, ReasoningBudgetStandard, ReasoningBudgetAgent, ReasoningBudgetAggressive)
 	}
 }
 

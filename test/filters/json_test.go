@@ -61,3 +61,56 @@ func TestJSONStructure(t *testing.T) {
 		t.Fatalf("unexpected empty array shape: %q", got)
 	}
 }
+
+func TestJSONPreview(t *testing.T) {
+	t.Parallel()
+
+	if got := filters.SummarizeJSONPreview([]byte("{bad"), 6); got != "invalid json" {
+		t.Fatalf("unexpected invalid preview result: %q", got)
+	}
+
+	preview := filters.SummarizeJSONPreview([]byte(`{"user":{"id":7,"name":"alex"},"items":[{"name":"alpha","count":1},{"name":"beta","count":2}],"ok":true}`), 8)
+	for _, want := range []string{
+		"root: object keys=3",
+		"user: object keys=2",
+		"user.id=7",
+		`user.name="alex"`,
+		`items: array len=2 sample=object{name,count}, object{name,count}`,
+		"ok=true",
+	} {
+		if !strings.Contains(preview, want) {
+			t.Fatalf("expected %q in json preview:\n%s", want, preview)
+		}
+	}
+
+	rootArray := filters.SummarizeJSONPreview([]byte(`[{"id":"a1","ok":true},{"id":"a2","ok":false}]`), 5)
+	for _, want := range []string{
+		"root: array len=2",
+		"sample=object{id,ok}, object{id,ok}",
+		"root[0]: object keys=2",
+		`root[0].id="a1"`,
+	} {
+		if !strings.Contains(rootArray, want) {
+			t.Fatalf("expected %q in root array preview:\n%s", want, rootArray)
+		}
+	}
+
+	prioritized := filters.SummarizeJSONPreview([]byte(`{"zeta":"later","message":"boom","updated_at":"2026-05-25T10:00:00Z","status":"FAILED","name":"api","id":"vm_123"}`), 5)
+	order := []string{
+		`id="vm_123"`,
+		`name="api"`,
+		`status="FAILED"`,
+		`updated_at="2026-05-25T10:00:00Z"`,
+	}
+	last := -1
+	for _, want := range order {
+		idx := strings.Index(prioritized, want)
+		if idx < 0 {
+			t.Fatalf("expected %q in prioritized preview:\n%s", want, prioritized)
+		}
+		if idx <= last {
+			t.Fatalf("expected %q after prior priority fields in preview:\n%s", want, prioritized)
+		}
+		last = idx
+	}
+}

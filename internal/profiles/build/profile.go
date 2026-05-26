@@ -20,7 +20,10 @@ func Profiles(maxLines int) []engine.Profile {
 				return isBuildSystemCommand(inv.Display)
 			},
 			Prepare: func(inv engine.Invocation) []string {
-				return inv.Command
+				if !inv.Advanced.AggressivePrepareRewrites {
+					return inv.Command
+				}
+				return prepareBuildSystemCommand(inv.Command)
 			},
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
 				return buildfilter.SummarizeBuildSystem(exec.Stdout+"\n"+exec.Stderr, maxLines)
@@ -51,4 +54,70 @@ func isBuildSystemCommand(args []string) bool {
 	default:
 		return false
 	}
+}
+
+func prepareBuildSystemCommand(command []string) []string {
+	if len(command) == 0 {
+		return command
+	}
+
+	out := append([]string{}, command...)
+	switch command[0] {
+	case "make":
+		out = prepareMakeCommand(out, command[1:])
+	case "bazel":
+		out = prepareBazelCommand(out, command[1:])
+	case "terraform", "tofu", "helm":
+		out = appendBuildArgIfMissing(out, command[1:], "-no-color")
+	case "gradle":
+		out = prepareGradleCommand(out, command[1:])
+	case "mvn":
+		out = prepareMavenCommand(out, command[1:])
+	}
+	return out
+}
+
+func prepareMakeCommand(out, args []string) []string {
+	if !profilekit.ContainsAny(args, "--no-print-directory", "-s", "--silent") {
+		out = append(out, "--no-print-directory")
+	}
+	return out
+}
+
+func prepareBazelCommand(out, args []string) []string {
+	out = appendBuildArgIfMissing(out, args, "--noshow_progress")
+	if !profilekit.ContainsAny(args, "--color=no") && !profilekit.ContainsPrefix(args, "--color=") {
+		out = append(out, "--color=no")
+	}
+	if !profilekit.ContainsAny(args, "--curses=no") && !profilekit.ContainsPrefix(args, "--curses=") {
+		out = append(out, "--curses=no")
+	}
+	return out
+}
+
+func prepareGradleCommand(out, args []string) []string {
+	if !profilekit.ContainsAny(args, "-q", "--quiet", "-i", "--info", "-d", "--debug") {
+		out = append(out, "--quiet")
+	}
+	if !profilekit.ContainsPrefix(args, "--console=") {
+		out = append(out, "--console=plain")
+	}
+	return out
+}
+
+func prepareMavenCommand(out, args []string) []string {
+	if !profilekit.ContainsAny(args, "-q", "--quiet", "-X", "--debug", "-e", "--errors") {
+		out = append(out, "--quiet")
+	}
+	if !profilekit.ContainsAny(args, "--batch-mode", "-B") {
+		out = append(out, "--batch-mode")
+	}
+	return out
+}
+
+func appendBuildArgIfMissing(out, args []string, arg string) []string {
+	if !profilekit.ContainsAny(args, arg) {
+		out = append(out, arg)
+	}
+	return out
 }

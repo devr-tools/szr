@@ -89,9 +89,7 @@ func TestGitSummaries(t *testing.T) {
 			" eight | 1 +",
 			" nine | 1 +",
 		}, "\n"))
-		if strings.Count(diffLong, "\n") != 8 {
-			t.Fatalf("expected truncated diff summary, got %q", diffLong)
-		}
+		assertContainsAll(t, diffLong, "files=1 +0 -0", "eight | 1 +", "five | 1 +", "... +4 more files")
 	})
 
 	t.Run("reducers", func(t *testing.T) {
@@ -102,6 +100,15 @@ func TestGitSummaries(t *testing.T) {
 		if statusStream != "main\nM  a\n?? b" {
 			t.Fatalf("unexpected compact git status stream: %q", statusStream)
 		}
+		if statusReducer.BytesParsed() == 0 {
+			t.Fatal("expected git status reducer to track parsed bytes")
+		}
+		if statusReducer.FallbackUsed() {
+			t.Fatal("did not expect git status reducer fallback")
+		}
+		if preview := statusReducer.Preview(); preview != statusStream {
+			t.Fatalf("expected git status preview to match result, got %q", preview)
+		}
 
 		logReducer := gitfilter.NewGitLogReducer(4, 0)
 		logReducer.ConsumeStdout([]byte("one\n"))
@@ -109,18 +116,51 @@ func TestGitSummaries(t *testing.T) {
 		if got := logReducer.Result(); got != "4 commits\none\ntwo\n... +2 more commits" {
 			t.Fatalf("unexpected git log stream: %q", got)
 		}
+		if logReducer.BytesParsed() == 0 {
+			t.Fatal("expected git log reducer to track parsed bytes")
+		}
+		if logReducer.FallbackUsed() {
+			t.Fatal("did not expect git log reducer fallback")
+		}
+		if preview := logReducer.Preview(); !strings.Contains(preview, "4 commits") {
+			t.Fatalf("expected git log preview to be populated, got %q", preview)
+		}
 
 		diffReducer := gitfilter.NewGitDiffReducer(4, 0)
 		diffReducer.ConsumeStdout([]byte("diff --git a/a.go b/a.go\n"))
 		diffReducer.ConsumeStdout([]byte(" a.go | 2 +-\n+foo\n-bar\n"))
 		diffStream := diffReducer.Result()
 		assertContainsAll(t, diffStream, "files=1 +1 -1", "a.go | 2 +-")
+		if diffReducer.BytesParsed() == 0 {
+			t.Fatal("expected git diff reducer to track parsed bytes")
+		}
+		if diffReducer.FallbackUsed() {
+			t.Fatal("did not expect git diff reducer fallback for stat summary")
+		}
+		if preview := diffReducer.Preview(); !strings.Contains(preview, "files=1 +1 -1") {
+			t.Fatalf("expected git diff preview to be populated, got %q", preview)
+		}
 
 		patchReducer := gitfilter.NewGitDiffReducer(4, 0)
 		patchReducer.ConsumeStdout([]byte("diff --git a/a.go b/a.go\n"))
 		patchReducer.ConsumeStdout([]byte("@@ -1,2 +1,3 @@ func demo() {\n+foo\n-bar\n"))
 		if got := patchReducer.Result(); !strings.Contains(got, "a.go  hunks=1  +1 -1  func demo() {") {
 			t.Fatalf("unexpected git diff patch summary: %q", got)
+		}
+
+		stderrReducer := gitfilter.NewGitDiffReducer(4, 0)
+		stderrReducer.ConsumeStderr([]byte("diff --git a/b.go b/b.go\n b.go | 1 +\n"))
+		if got := stderrReducer.Result(); !strings.Contains(got, "b.go | 1 +") {
+			t.Fatalf("expected stderr diff reducer to summarize stderr chunks, got %q", got)
+		}
+
+		fallbackReducer := gitfilter.NewGitDiffReducer(4, 0)
+		fallbackReducer.ConsumeStdout([]byte("plain line\nanother line\n"))
+		if !fallbackReducer.FallbackUsed() {
+			t.Fatal("expected git diff reducer fallback when no diff markers are present")
+		}
+		if preview := fallbackReducer.Preview(); preview != "" {
+			t.Fatalf("expected empty git diff preview without diff metadata, got %q", preview)
 		}
 	})
 }

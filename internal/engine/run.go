@@ -15,6 +15,12 @@ type runOptions struct {
 	teeDir             string
 	captureStdout      bool
 	captureStderr      bool
+	stopStdoutEarly    bool
+	stopStderrEarly    bool
+	stdoutBypassBytes  int
+	stdoutBypassTokens int
+	stderrBypassBytes  int
+	stderrBypassTokens int
 	stdoutPreviewBytes int
 	stderrPreviewBytes int
 	reduceStdoutLive   bool
@@ -71,7 +77,7 @@ func (c *outputCollector) Consume(chunk []byte) {
 }
 
 func (c *outputCollector) String() string {
-	if !c.capture && c.limit <= 0 {
+	if !c.capture && c.limit <= 0 && c.builder.Len() == 0 {
 		return ""
 	}
 	return c.builder.String()
@@ -80,6 +86,12 @@ func (c *outputCollector) String() string {
 func (c *outputCollector) DisableTokenAccounting() {
 	c.accountTokens = false
 	c.tokensDisabled = true
+}
+
+func (c *outputCollector) DisableBuffering() {
+	c.capture = false
+	c.limit = 0
+	c.truncated = true
 }
 
 func (c *outputCollector) TokenCount() int {
@@ -142,6 +154,18 @@ func (r *synchronizedReducer) Done() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.done
+}
+
+func (r *synchronizedReducer) SafeToStopBuffering() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if !r.done {
+		return false
+	}
+	if r.inner.FallbackUsed() {
+		return false
+	}
+	return strings.TrimSpace(r.inner.Result()) != ""
 }
 
 func (r *synchronizedReducer) publishPreview(cb func(text string, bytesParsed int, done bool)) {
@@ -255,11 +279,25 @@ func collectCommandStreams(
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		errCh <- copyStream(stdoutPipe, stdout, tee, reducer, options.reduceStdoutLive, options.onPreview, true)
+		errCh <- copyStream(stdoutPipe, stdout, tee, reducer, streamCopyOptions{
+			reduceLive:      options.reduceStdoutLive,
+			onPreview:       options.onPreview,
+			isStdout:        true,
+			stopBufferEarly: options.stopStdoutEarly,
+			bypassBytes:     options.stdoutBypassBytes,
+			bypassTokens:    options.stdoutBypassTokens,
+		})
 	}()
 	go func() {
 		defer wg.Done()
-		errCh <- copyStream(stderrPipe, stderr, tee, reducer, options.reduceStderrLive, options.onPreview, false)
+		errCh <- copyStream(stderrPipe, stderr, tee, reducer, streamCopyOptions{
+			reduceLive:      options.reduceStderrLive,
+			onPreview:       options.onPreview,
+			isStdout:        false,
+			stopBufferEarly: options.stopStderrEarly,
+			bypassBytes:     options.stderrBypassBytes,
+			bypassTokens:    options.stderrBypassTokens,
+		})
 	}()
 	wg.Wait()
 	close(errCh)
@@ -302,32 +340,31 @@ func copyStream(
 	collector *outputCollector,
 	tee *teeCapture,
 	reducer *synchronizedReducer,
-	reduceLive bool,
-	onPreview func(text string, bytesParsed int, done bool),
-	isStdout bool,
+	options streamCopyOptions,
 ) error {
 	buf := make([]byte, 4096)
 	for {
 		n, err := reader.Read(buf)
 		if n > 0 {
 			chunk := buf[:n]
-			reducerDone := reducer != nil && reduceLive && reducer.Done()
-			if reducerDone && collector.accountTokens {
-				// The reducer already has enough information; keep draining and capturing,
-				// but skip further token accounting on the remainder of the stream.
-				collector.DisableTokenAccounting()
-			}
 			collector.Consume(chunk)
 			if tee != nil {
 				tee.Write(chunk)
 			}
-			if reducer != nil && reduceLive && !reducerDone {
-				if isStdout {
+			if reducer != nil && options.reduceLive && !reducer.Done() {
+				if options.isStdout {
 					reducer.ConsumeStdout(chunk)
 				} else {
 					reducer.ConsumeStderr(chunk)
 				}
-				reducer.publishPreview(onPreview)
+				reducer.publishPreview(options.onPreview)
+			}
+			if shouldDisableCollectorTokens(collector, reducer, options) {
+				collector.DisableTokenAccounting()
+			}
+			if shouldStopCollectorAfterChunk(collector, reducer, options) {
+				collector.DisableTokenAccounting()
+				collector.DisableBuffering()
 			}
 		}
 		if err == nil {
@@ -338,6 +375,41 @@ func copyStream(
 		}
 		return err
 	}
+}
+
+type streamCopyOptions struct {
+	reduceLive      bool
+	onPreview       func(text string, bytesParsed int, done bool)
+	isStdout        bool
+	stopBufferEarly bool
+	bypassBytes     int
+	bypassTokens    int
+}
+
+func shouldStopCollectorAfterChunk(collector *outputCollector, reducer *synchronizedReducer, options streamCopyOptions) bool {
+	if reducer == nil || !options.reduceLive || !options.stopBufferEarly {
+		return false
+	}
+	if !reducer.SafeToStopBuffering() {
+		return false
+	}
+	if options.bypassBytes > 0 && collector.bytes > options.bypassBytes {
+		return true
+	}
+	if options.bypassTokens > 0 && collector.TokenCount() > options.bypassTokens {
+		return true
+	}
+	return false
+}
+
+func shouldDisableCollectorTokens(collector *outputCollector, reducer *synchronizedReducer, options streamCopyOptions) bool {
+	if reducer == nil || !options.reduceLive || !collector.accountTokens || !reducer.Done() {
+		return false
+	}
+	if !options.stopBufferEarly {
+		return true
+	}
+	return shouldStopCollectorAfterChunk(collector, reducer, options)
 }
 
 type tokenCounter struct {

@@ -63,7 +63,7 @@ func TestJSPackageTestProfileCoverage(t *testing.T) {
 	root := t.TempDir()
 	testutil.MustWriteFile(t, filepath.Join(root, "package.json"), `{"scripts":{"test":"jest"}}`)
 	if got := pm.Prepare(engine.Invocation{Cwd: root}); got != nil {
-		t.Fatalf("expected nil prepare for empty package manager command, got %#v", got)
+		t.Fatalf("expected empty package-manager prepare to stay nil, got %#v", got)
 	}
 }
 

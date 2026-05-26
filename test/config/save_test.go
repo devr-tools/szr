@@ -18,6 +18,8 @@ func TestSaveWritesNormalizedConfig(t *testing.T) {
 	cfg.UpdateCheck.IntervalHours = 0
 	cfg.UpdateCheck.AutoUpdate = true
 	cfg.MaxPreviewLines = 9
+	cfg.Advanced.AdaptiveBudgets = true
+	cfg.Advanced.EarlyCaptureStop = false
 
 	if err := config.Save(paths, cfg); err != nil {
 		t.Fatalf("save config: %v", err)
@@ -40,6 +42,9 @@ func TestSaveWritesNormalizedConfig(t *testing.T) {
 	}
 	if saved.MaxPreviewLines != 9 {
 		t.Fatalf("expected saved max preview lines, got %#v", saved)
+	}
+	if !saved.Advanced.AdaptiveBudgets || saved.Advanced.EarlyCaptureStop {
+		t.Fatalf("expected saved advanced config, got %#v", saved.Advanced)
 	}
 }
 

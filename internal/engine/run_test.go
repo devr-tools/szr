@@ -16,7 +16,10 @@ func TestCopyStreamDisablesTokenAccountingAfterReducerDone(t *testing.T) {
 		accountTokens: true,
 	}
 
-	err := copyStream(&chunkedReader{chunks: [][]byte{[]byte("alpha"), []byte("beta")}}, collector, nil, reducer, true, nil, true)
+	err := copyStream(&chunkedReader{chunks: [][]byte{[]byte("alpha"), []byte("beta")}}, collector, nil, reducer, streamCopyOptions{
+		reduceLive: true,
+		isStdout:   true,
+	})
 	if err != nil {
 		t.Fatalf("copyStream error: %v", err)
 	}
@@ -107,7 +110,10 @@ func TestCopyStreamPreservesTeeAfterReducerDone(t *testing.T) {
 		accountTokens: true,
 	}
 
-	err = copyStream(strings.NewReader("alphabeta"), collector, tee, reducer, true, nil, true)
+	err = copyStream(strings.NewReader("alphabeta"), collector, tee, reducer, streamCopyOptions{
+		reduceLive: true,
+		isStdout:   true,
+	})
 	if err != nil {
 		t.Fatalf("copyStream error: %v", err)
 	}
@@ -126,6 +132,63 @@ func TestCopyStreamPreservesTeeAfterReducerDone(t *testing.T) {
 	}
 	if got := string(data); got != "alphabeta" {
 		t.Fatalf("tee content = %q, want %q", got, "alphabeta")
+	}
+}
+
+func TestCopyStreamStopsBufferingAfterReducerDoneWhenBypassIsExceeded(t *testing.T) {
+	reducer := newSynchronizedReducer(&stubDoneReducer{doneAfterStdoutChunks: 1})
+	collector := &outputCollector{
+		limit:         64,
+		accountTokens: true,
+	}
+
+	err := copyStream(&chunkedReader{chunks: [][]byte{[]byte("alpha"), []byte("beta"), []byte("gamma")}}, collector, nil, reducer, streamCopyOptions{
+		reduceLive:      true,
+		isStdout:        true,
+		stopBufferEarly: true,
+		bypassBytes:     len("alpha"),
+		bypassTokens:    99,
+	})
+	if err != nil {
+		t.Fatalf("copyStream error: %v", err)
+	}
+
+	if got := collector.String(); got != "alphabeta" {
+		t.Fatalf("captured output = %q, want %q", got, "alphabeta")
+	}
+	if got := collector.TokenCount(); got != estimateTokensForTest("alphabeta") {
+		t.Fatalf("token count = %d, want %d", got, estimateTokensForTest("alphabeta"))
+	}
+	if !collector.tokensDisabled {
+		t.Fatal("expected token accounting to be disabled after early buffer stop")
+	}
+}
+
+func TestCopyStreamKeepsBufferingWhenReducerFallbackNeedsRawOutput(t *testing.T) {
+	reducer := newSynchronizedReducer(&stubFallbackDoneReducer{
+		stubDoneReducer: stubDoneReducer{doneAfterStdoutChunks: 1},
+	})
+	collector := &outputCollector{
+		limit:         64,
+		accountTokens: true,
+	}
+
+	err := copyStream(&chunkedReader{chunks: [][]byte{[]byte("alpha"), []byte("beta"), []byte("gamma")}}, collector, nil, reducer, streamCopyOptions{
+		reduceLive:      true,
+		isStdout:        true,
+		stopBufferEarly: true,
+		bypassBytes:     len("alpha"),
+		bypassTokens:    99,
+	})
+	if err != nil {
+		t.Fatalf("copyStream error: %v", err)
+	}
+
+	if got := collector.String(); got != "alphabetagamma" {
+		t.Fatalf("captured output = %q, want %q", got, "alphabetagamma")
+	}
+	if collector.tokensDisabled {
+		t.Fatal("did not expect token accounting to be disabled when fallback keeps raw capture necessary")
 	}
 }
 
@@ -156,6 +219,14 @@ func (r *stubDoneReducer) FallbackUsed() bool {
 
 func (r *stubDoneReducer) Done() bool {
 	return r.doneAfterStdoutChunks > 0 && r.stdoutChunks >= r.doneAfterStdoutChunks
+}
+
+type stubFallbackDoneReducer struct {
+	stubDoneReducer
+}
+
+func (r *stubFallbackDoneReducer) FallbackUsed() bool {
+	return true
 }
 
 func estimateTokensForTest(text string) int {

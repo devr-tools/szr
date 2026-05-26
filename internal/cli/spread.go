@@ -170,17 +170,18 @@ func renderSpreadHotspots(ui spreadUI, stats []history.CommandHotspot) {
 			fmt.Sprintf("%.1f%% %s", stat.AveragePct, progressBar(stat.AveragePct, 10, false, true)),
 			fmt.Sprintf("%.1f%%", stat.FallbackRate),
 			fmt.Sprintf("%dms", stat.DurationP95MS),
-			hotspotAction(stat),
 		})
 	}
 	ui.table(
-		[]string{"command", "profile", "count", "avg", "fallback", "p95", "action"},
+		[]string{"command", "profile", "count", "avg", "fallback", "p95"},
 		rows,
 		tableSpec{
 			alignRight: map[int]bool{2: true, 4: true, 5: true},
-			maxWidth:   map[int]int{0: 30, 1: 18, 3: 22, 6: 38},
+			maxWidth:   map[int]int{0: 24, 1: 16, 3: 22},
 		},
 	)
+	top := stats[0]
+	fmt.Printf("  top action: %s for %s (%s)\n", hotspotAction(top), top.Command, top.Profile)
 }
 
 func renderSpreadFingerprints(ui spreadUI, stats []history.FingerprintStat) {

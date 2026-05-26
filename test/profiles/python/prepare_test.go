@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/devr-tools/szr/internal/config"
 	"github.com/devr-tools/szr/internal/engine"
 	"github.com/devr-tools/szr/internal/profiles"
 	"github.com/devr-tools/szr/test/testutil"
@@ -12,6 +13,7 @@ import (
 func TestPytestProfilePrepare(t *testing.T) {
 	list := profiles.Builtins(6)
 	profile := testutil.FindProfile(t, list, "pytest")
+	advanced := config.Default().Advanced
 
 	if !profile.Match(engine.Invocation{Display: []string{"pytest", "-k", "math"}}) {
 		t.Fatal("expected direct pytest to match")
@@ -26,23 +28,23 @@ func TestPytestProfilePrepare(t *testing.T) {
 		t.Fatal("did not expect unittest to match pytest profile")
 	}
 
-	if got := profile.Prepare(engine.Invocation{Command: []string{"pytest", "tests"}}); !reflect.DeepEqual(got, []string{"pytest", "tests", "-q", "--tb=short", "--color=no", "-ra"}) {
+	if got := profile.Prepare(engine.Invocation{Command: []string{"pytest", "tests"}, Advanced: advanced}); !reflect.DeepEqual(got, []string{"pytest", "tests", "-q", "--no-header", "--tb=short", "--color=no", "--disable-warnings", "-ra"}) {
 		t.Fatalf("unexpected pytest prepare: %#v", got)
 	}
-	if got := profile.Prepare(engine.Invocation{Command: []string{"python", "-m", "pytest", "tests"}}); !reflect.DeepEqual(got, []string{"python", "-m", "pytest", "tests", "-q", "--tb=short", "--color=no", "-ra"}) {
+	if got := profile.Prepare(engine.Invocation{Command: []string{"python", "-m", "pytest", "tests"}, Advanced: advanced}); !reflect.DeepEqual(got, []string{"python", "-m", "pytest", "tests", "-q", "--no-header", "--tb=short", "--color=no", "--disable-warnings", "-ra"}) {
 		t.Fatalf("unexpected python -m pytest prepare: %#v", got)
 	}
-	if got := profile.Prepare(engine.Invocation{Command: []string{"uv", "run", "pytest", "tests"}}); !reflect.DeepEqual(got, []string{"uv", "run", "pytest", "tests", "-q", "--tb=short", "--color=no", "-ra"}) {
+	if got := profile.Prepare(engine.Invocation{Command: []string{"uv", "run", "pytest", "tests"}, Advanced: advanced}); !reflect.DeepEqual(got, []string{"uv", "run", "pytest", "tests", "-q", "--no-header", "--tb=short", "--color=no", "--disable-warnings", "-ra"}) {
 		t.Fatalf("unexpected uv run pytest prepare: %#v", got)
 	}
 
-	preserved := profile.Prepare(engine.Invocation{Command: []string{"pytest", "-vv", "--tb=long", "--color=yes", "-rfE"}})
-	if want := []string{"pytest", "-vv", "--tb=long", "--color=yes", "-rfE"}; !reflect.DeepEqual(preserved, want) {
+	preserved := profile.Prepare(engine.Invocation{Command: []string{"pytest", "-vv", "--tb=long", "--color=yes", "-rfE"}, Advanced: advanced})
+	if want := []string{"pytest", "-vv", "--tb=long", "--color=yes", "-rfE", "--no-header", "--disable-warnings"}; !reflect.DeepEqual(preserved, want) {
 		t.Fatalf("expected explicit pytest flags to be preserved: %#v", preserved)
 	}
 
-	partial := profile.Prepare(engine.Invocation{Command: []string{"pytest", "--tb=short"}})
-	if want := []string{"pytest", "--tb=short", "-q", "--color=no", "-ra"}; !reflect.DeepEqual(partial, want) {
+	partial := profile.Prepare(engine.Invocation{Command: []string{"pytest", "--tb=short"}, Advanced: advanced})
+	if want := []string{"pytest", "--tb=short", "-q", "--no-header", "--color=no", "--disable-warnings", "-ra"}; !reflect.DeepEqual(partial, want) {
 		t.Fatalf("unexpected partial pytest prepare: %#v", partial)
 	}
 }
