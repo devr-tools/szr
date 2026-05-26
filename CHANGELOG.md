@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.4.0](https://github.com/devr-tools/szr/compare/v0.3.0...v0.4.0) (2026-05-26)
+
+
+### Features
+
+* add commands ([e23c282](https://github.com/devr-tools/szr/commit/e23c282c25b492cb6de819166a7d9392c2ec1d49))
+* fix for pull request finding 'Useless assignment to local variable' ([66fb27a](https://github.com/devr-tools/szr/commit/66fb27a509e4262b931f99e437435e4fb02e64ad))
+* fix test ([2ba144a](https://github.com/devr-tools/szr/commit/2ba144a76d78cfbcccaffdc8e89b2a5286016d91))
+
 ## [0.3.0](https://github.com/devr-tools/szr/compare/v0.2.0...v0.3.0) (2026-05-26)
 
 
