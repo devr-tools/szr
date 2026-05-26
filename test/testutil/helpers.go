@@ -130,27 +130,10 @@ func MustWriteExecutable(t *testing.T, path, content string) {
 }
 
 func writeExecutableFile(path string, content []byte, mode os.FileMode) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp.*")
-	if err != nil {
+	if err := os.WriteFile(path, content, mode); err != nil {
 		return err
 	}
-	tmpPath := tmp.Name()
-	defer func() {
-		_ = os.Remove(tmpPath)
-	}()
-
-	if _, err := tmp.Write(content); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Chmod(mode); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(tmpPath, path); err != nil {
+	if err := os.Chmod(path, mode); err != nil {
 		return err
 	}
 	return nil
