@@ -13,6 +13,7 @@ func TestRipgrepProfilePrepare(t *testing.T) {
 	list := profiles.Builtins(6)
 	profile := testutil.FindProfile(t, list, "ripgrep")
 	filesProfile := testutil.FindProfile(t, list, "ripgrep-files")
+	filesWithMatchesProfile := testutil.FindProfile(t, list, "ripgrep-files-with-matches")
 
 	if !profile.Match(engine.Invocation{Display: []string{"rg", "todo", "."}}) {
 		t.Fatal("expected rg to match ripgrep profile")
@@ -28,6 +29,15 @@ func TestRipgrepProfilePrepare(t *testing.T) {
 	}
 	if filesProfile.Match(engine.Invocation{Display: []string{"rg", "todo", "."}}) {
 		t.Fatal("did not expect plain rg search to match ripgrep-files profile")
+	}
+	if !filesWithMatchesProfile.Match(engine.Invocation{Display: []string{"rg", "--files-with-matches", "todo"}}) {
+		t.Fatal("expected rg --files-with-matches to match ripgrep-files-with-matches profile")
+	}
+	if !filesWithMatchesProfile.Match(engine.Invocation{Display: []string{"rg", "-l", "todo"}}) {
+		t.Fatal("expected rg -l to match ripgrep-files-with-matches profile")
+	}
+	if filesWithMatchesProfile.Match(engine.Invocation{Display: []string{"rg", "--files"}}) {
+		t.Fatal("did not expect rg --files to match ripgrep-files-with-matches profile")
 	}
 
 	got := profile.Prepare(engine.Invocation{Command: []string{"rg", "todo", "."}})
@@ -131,6 +141,12 @@ func TestRipgrepProfilePrepare(t *testing.T) {
 	}
 	if !reflect.DeepEqual(filesPrepared, filesWant) {
 		t.Fatalf("unexpected ripgrep-files prepare: %#v", filesPrepared)
+	}
+
+	filesWithMatchesPrepared := filesWithMatchesProfile.Prepare(engine.Invocation{Command: []string{"rg", "--files-with-matches", "todo"}})
+	filesWithMatchesWant := append(filesWant[:len(filesWant)-1], "--files-with-matches", "todo")
+	if !reflect.DeepEqual(filesWithMatchesPrepared, filesWithMatchesWant) {
+		t.Fatalf("unexpected ripgrep-files-with-matches prepare: %#v", filesWithMatchesPrepared)
 	}
 }
 

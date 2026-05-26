@@ -10,6 +10,31 @@ import (
 func Profiles(maxLines int) []engine.Profile {
 	return []engine.Profile{
 		{
+			Name:             "git-ls-files",
+			Description:      "Summarizes tracked file lists into a bounded path preview.",
+			Confidence:       engine.ConfidenceHigh,
+			StreamPreference: engine.StreamStdoutOnly,
+			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 8)),
+			LatencyBudget:    profilekit.LatencyBudget(15),
+			Match: func(inv engine.Invocation) bool {
+				return profilekit.HasCommand(inv.Display, "git", "ls-files")
+			},
+			Prepare: func(inv engine.Invocation) []string {
+				return inv.Command
+			},
+			Render: func(_ engine.Invocation, exec engine.Execution) string {
+				return shared.SummarizeFindOutput(exec.Stdout, exec.Stderr, maxLines)
+			},
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
+				return shared.NewFindReducer(budget.MaxLines)
+			},
+			ParseBytes: profilekit.ParseCombined,
+			Explain: []string{
+				"Matches `git ls-files` directly instead of routing file lists through a generic fallback.",
+				"Summarizes tracked paths as a bounded, deduplicated list with the same path-list behavior used for other discovery commands.",
+			},
+		},
+		{
 			Name:             "git-status",
 			Description:      "Condenses git working tree state into branch and file counts.",
 			Confidence:       engine.ConfidenceHigh,

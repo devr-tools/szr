@@ -23,6 +23,13 @@ func isRipgrepFilesCommand(args []string) bool {
 	return profilekit.ContainsAny(args[1:], "--files")
 }
 
+func isRipgrepFilesWithMatchesCommand(args []string) bool {
+	if len(args) == 0 || args[0] != "rg" {
+		return false
+	}
+	return profilekit.ContainsAny(args[1:], "--files-with-matches", "-l")
+}
+
 func prepareRipgrep(command []string) []string {
 	if len(command) == 0 {
 		return command

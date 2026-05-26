@@ -10,8 +10,8 @@ import (
 
 func TestBuiltInProfileCount(t *testing.T) {
 	list := profiles.Builtins(3)
-	if len(list) != 37 {
-		t.Fatalf("expected 37 profiles, got %d", len(list))
+	if len(list) != 39 {
+		t.Fatalf("expected 39 profiles, got %d", len(list))
 	}
 }
 
@@ -34,6 +34,17 @@ func TestCoreFilesystemProfiles(t *testing.T) {
 	}
 	if got := catRead.Render(engine.Invocation{Command: []string{"cat", "README.md"}}, engine.Execution{Stdout: "# Title\n\nBody\n"}); got == "" {
 		t.Fatal("expected cat-read render output")
+	}
+
+	gitLsFiles := testutil.FindProfile(t, list, "git-ls-files")
+	if !gitLsFiles.Match(engine.Invocation{Display: []string{"git", "ls-files"}}) {
+		t.Fatal("git-ls-files should match git ls-files")
+	}
+	if got := gitLsFiles.Render(engine.Invocation{}, engine.Execution{Stdout: "cmd/main.go\ninternal/app.go\n"}); got == "" {
+		t.Fatal("expected git-ls-files render output")
+	}
+	if gitLsFiles.StreamPreference != engine.StreamStdoutOnly || gitLsFiles.StreamRender == nil {
+		t.Fatalf("unexpected git-ls-files stream metadata: %#v", gitLsFiles)
 	}
 }
 

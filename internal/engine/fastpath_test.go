@@ -50,8 +50,8 @@ func TestDecideFastPathFamilyAwareBypasses(t *testing.T) {
 		{name: "git diff over byte limit", profile: "git-diff", command: []string{"git", "diff", "HEAD~1..HEAD"}, rawBytes: 257, rawTokens: 64, wantBypass: false},
 		{name: "short git diff name list gets larger bypass", profile: "git-diff", command: []string{"git", "diff", "--name-only"}, rawBytes: 384, rawTokens: 96, wantBypass: true, wantReason: "short git diff name list"},
 		{name: "git diff name list over shape threshold", profile: "git-diff", command: []string{"git", "diff", "--name-only"}, rawBytes: 385, rawTokens: 96, wantBypass: false},
-		{name: "short tracked file list in generic summary", profile: "generic-summary", command: []string{"git", "ls-files", "*.go"}, rawBytes: 384, rawTokens: 96, wantBypass: true, wantReason: "short tracked file list"},
-		{name: "git ls-files over token limit", profile: "generic-summary", command: []string{"git", "ls-files"}, rawBytes: 384, rawTokens: 97, wantBypass: false},
+		{name: "short tracked file list", profile: "git-ls-files", command: []string{"git", "ls-files", "*.go"}, rawBytes: 384, rawTokens: 96, wantBypass: true, wantReason: "short tracked file list"},
+		{name: "git ls-files over token limit", profile: "git-ls-files", command: []string{"git", "ls-files"}, rawBytes: 384, rawTokens: 97, wantBypass: false},
 		{name: "plain git status uses base threshold", profile: "git-status", command: []string{"git", "status"}, rawBytes: 192, rawTokens: 48, wantBypass: true, wantReason: "short git status output"},
 		{name: "short git status shape gets larger bypass", profile: "git-status", command: []string{"git", "status", "--short"}, rawBytes: 288, rawTokens: 72, wantBypass: true, wantReason: "short git status listing"},
 		{name: "git status short over shape token limit", profile: "git-status", command: []string{"git", "status", "--short"}, rawBytes: 288, rawTokens: 73, wantBypass: false},
@@ -59,6 +59,8 @@ func TestDecideFastPathFamilyAwareBypasses(t *testing.T) {
 		{name: "tiny git log", profile: "git-log", command: []string{"git", "log", "--oneline"}, rawBytes: 224, rawTokens: 56, wantBypass: true, wantReason: "tiny git log output"},
 		{name: "short ripgrep files list", profile: "ripgrep-files", command: []string{"rg", "--files"}, rawBytes: 384, rawTokens: 96, wantBypass: true, wantReason: "short ripgrep file list"},
 		{name: "ripgrep files list over shape threshold", profile: "ripgrep-files", command: []string{"rg", "--files"}, rawBytes: 385, rawTokens: 96, wantBypass: false},
+		{name: "short ripgrep files-with-matches list", profile: "ripgrep-files-with-matches", command: []string{"rg", "--files-with-matches", "todo"}, rawBytes: 384, rawTokens: 96, wantBypass: true, wantReason: "short ripgrep matched-file list"},
+		{name: "ripgrep files-with-matches list over threshold", profile: "ripgrep-files-with-matches", command: []string{"rg", "-l", "todo"}, rawBytes: 385, rawTokens: 96, wantBypass: false},
 	}
 
 	for _, tt := range tests {

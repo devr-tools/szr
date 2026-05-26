@@ -34,6 +34,31 @@ func Profiles(maxLines int, maxGroups int) []engine.Profile {
 			},
 		},
 		{
+			Name:             "ripgrep-files-with-matches",
+			Description:      "Summarizes `rg --files-with-matches` output into a bounded path list.",
+			Confidence:       engine.ConfidenceHigh,
+			StreamPreference: engine.StreamStdoutFirst,
+			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 8)),
+			LatencyBudget:    profilekit.LatencyBudget(20),
+			Match: func(inv engine.Invocation) bool {
+				return isRipgrepFilesWithMatchesCommand(inv.Display)
+			},
+			Prepare: func(inv engine.Invocation) []string {
+				return prepareRipgrepFiles(inv.Command)
+			},
+			Render: func(_ engine.Invocation, exec engine.Execution) string {
+				return filters.SummarizeFindOutput(exec.Stdout, exec.Stderr, maxLines)
+			},
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
+				return filters.NewFindReducer(budget.MaxLines)
+			},
+			ParseBytes: profilekit.ParseCombined,
+			Explain: []string{
+				"Targets `rg --files-with-matches` path-list output while preserving ripgrep ignore behavior unless the user explicitly overrides it.",
+				"Summarizes matching file paths as a bounded, deduplicated list instead of routing through a generic fallback.",
+			},
+		},
+		{
 			Name:             "ripgrep",
 			Description:      "Normalizes ripgrep into stable line-oriented output and groups matches by file.",
 			Confidence:       engine.ConfidenceHigh,

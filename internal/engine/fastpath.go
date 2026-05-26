@@ -78,6 +78,11 @@ var familyFastPathRules = map[string]fastPathRule{
 		MaxTokens: 96,
 		Reason:    "short ripgrep file list",
 	},
+	"ripgrep-files-with-matches": {
+		MaxBytes:  384,
+		MaxTokens: 96,
+		Reason:    "short ripgrep matched-file list",
+	},
 }
 
 func ResolveBudget(profile Profile, inv Invocation, fallbackLines int) OutputBudget {
@@ -187,8 +192,15 @@ func fastPathRuleKey(profile Profile, inv Invocation) string {
 		if isRipgrepFilesShape(inv) {
 			return "ripgrep-files"
 		}
+		if isRipgrepFilesWithMatchesShape(inv) {
+			return "ripgrep-files-with-matches"
+		}
 	case "ripgrep-files":
 		return "ripgrep-files"
+	case "ripgrep-files-with-matches":
+		return "ripgrep-files-with-matches"
+	case "git-ls-files":
+		return "git-ls-files"
 	}
 	return profile.Name
 }
@@ -225,6 +237,14 @@ func isRipgrepFilesShape(inv Invocation) bool {
 		return false
 	}
 	return containsAnyArg(args[1:], "--files")
+}
+
+func isRipgrepFilesWithMatchesShape(inv Invocation) bool {
+	args := effectiveFastPathArgs(inv)
+	if len(args) == 0 || args[0] != "rg" {
+		return false
+	}
+	return containsAnyArg(args[1:], "--files-with-matches", "-l")
 }
 
 func effectiveFastPathArgs(inv Invocation) []string {

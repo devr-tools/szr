@@ -101,6 +101,6 @@ func requireReplayValue(rt Runtime, args []string, index *int, flag string) (str
 		fmt.Fprintf(rt.Stderr, "szr: replay requires a value after %s\n", flag)
 		return "", false
 	}
-	*index++
+	*index = *index + 1
 	return args[*index], true
 }
