@@ -16,6 +16,23 @@ type parsedTable struct {
 }
 
 func SummarizeWideTable(input string, maxLines int) string {
+	return summarizeWideTableResult(input, maxLines).Text
+}
+
+func WideTableRecoveryInfo(input string, maxLines int) (string, string, bool) {
+	result := summarizeWideTableResult(input, maxLines)
+	if result.OmittedCount <= 0 {
+		return shared.NoRecovery()
+	}
+	return shared.FullOutputRecovery(fmt.Sprintf("omitted %d additional rows", result.OmittedCount))
+}
+
+type tabularSummaryResult struct {
+	Text         string
+	OmittedCount int
+}
+
+func summarizeWideTableResult(input string, maxLines int) tabularSummaryResult {
 	if maxLines <= 0 {
 		maxLines = 10
 	}
@@ -23,7 +40,7 @@ func SummarizeWideTable(input string, maxLines int) string {
 	clean := shared.StripANSI(input)
 	lines := shared.NonEmptyLines(clean)
 	if len(lines) == 0 {
-		return "ok"
+		return tabularSummaryResult{Text: "ok"}
 	}
 
 	if table, ok := parseDU(lines); ok {
@@ -32,7 +49,7 @@ func SummarizeWideTable(input string, maxLines int) string {
 	if table, ok := parseWideTable(lines); ok {
 		return renderTableSummary(table, maxLines)
 	}
-	return shared.CompactLines(clean, maxLines)
+	return tabularSummaryResult{Text: shared.CompactLines(clean, maxLines)}
 }
 
 func parseDU(lines []string) (parsedTable, bool) {
@@ -131,12 +148,16 @@ func normalizeHeaders(headers []string) []string {
 	return out
 }
 
-func renderTableSummary(table parsedTable, maxLines int) string {
+func renderTableSummary(table parsedTable, maxLines int) tabularSummaryResult {
 	lines := []string{fmt.Sprintf("rows: %d columns: %s", len(table.rows), strings.Join(table.headers, ", "))}
 	for _, row := range table.rows {
 		lines = append(lines, shared.Clip(summarizeRow(table.headers, row), 160))
 	}
-	return shared.JoinLimitedLines(lines, maxLines)
+	result := tabularSummaryResult{Text: shared.JoinLimitedLines(lines, maxLines)}
+	if len(lines) > maxLines {
+		result.OmittedCount = len(lines) - maxLines
+	}
+	return result
 }
 
 func summarizeRow(headers []string, row []string) string {

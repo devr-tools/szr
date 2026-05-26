@@ -1,12 +1,30 @@
 package python
 
 import (
+	"strconv"
 	"strings"
 
 	shared "github.com/devr-tools/szr/internal/filters"
 )
 
 func SummarizePytest(input string, maxLines int) string {
+	return summarizePytestResult(input, maxLines).Text
+}
+
+func PytestRecoveryInfo(input string, maxLines int) (string, string, bool) {
+	result := summarizePytestResult(input, maxLines)
+	if result.OmittedCount <= 0 {
+		return shared.NoRecovery()
+	}
+	return shared.FullOutputRecovery("omitted " + strconv.Itoa(result.OmittedCount) + " additional lines")
+}
+
+type pythonSummaryResult struct {
+	Text         string
+	OmittedCount int
+}
+
+func summarizePytestResult(input string, maxLines int) pythonSummaryResult {
 	if maxLines <= 0 {
 		maxLines = 12
 	}
@@ -14,7 +32,7 @@ func SummarizePytest(input string, maxLines int) string {
 	clean := StripANSI(input)
 	lines := nonEmptyLines(clean)
 	if len(lines) == 0 {
-		return "ok"
+		return pythonSummaryResult{Text: "ok"}
 	}
 
 	summaries := uniqueStrings(shared.FoldConsecutiveLines(collectPytestSummaries(lines)))
@@ -23,9 +41,9 @@ func SummarizePytest(input string, maxLines int) string {
 
 	if len(failures) == 0 && len(details) == 0 {
 		if len(summaries) > 0 {
-			return joinLimitedLines(summaries, maxLines)
+			return summarizePythonLines(summaries, maxLines)
 		}
-		return shared.CompactLines(clean, maxLines)
+		return pythonSummaryResult{Text: shared.CompactLines(clean, maxLines)}
 	}
 
 	rootDetails := []string{}
@@ -50,10 +68,22 @@ func SummarizePytest(input string, maxLines int) string {
 	out = append(out, rootDetails...)
 	out = append(out, shared.SelectUniqueAnchoredLines(stackDetails, maxLines/3+1)...)
 	out = append(out, hintDetails...)
-	return joinLimitedLines(out, maxLines)
+	return summarizePythonLines(out, maxLines)
 }
 
 func SummarizePythonTooling(input string, maxLines int) string {
+	return summarizePythonToolingResult(input, maxLines).Text
+}
+
+func PythonToolingRecoveryInfo(input string, maxLines int) (string, string, bool) {
+	result := summarizePythonToolingResult(input, maxLines)
+	if result.OmittedCount <= 0 {
+		return shared.NoRecovery()
+	}
+	return shared.FullOutputRecovery("omitted " + strconv.Itoa(result.OmittedCount) + " additional lines")
+}
+
+func summarizePythonToolingResult(input string, maxLines int) pythonSummaryResult {
 	if maxLines <= 0 {
 		maxLines = 12
 	}
@@ -96,12 +126,12 @@ func SummarizePythonTooling(input string, maxLines int) string {
 	lines = uniqueStrings(shared.FoldConsecutiveLines(lines))
 	summaries = uniqueStrings(shared.FoldConsecutiveLines(summaries))
 	if len(lines) == 0 && len(summaries) == 0 {
-		return shared.SummarizeGenericFailure(clean, maxLines)
+		return pythonSummaryResult{Text: shared.SummarizeGenericFailure(clean, maxLines)}
 	}
 
 	out := append([]string{}, lines...)
 	out = append(out, summaries...)
-	return joinLimitedLines(out, maxLines)
+	return summarizePythonLines(out, maxLines)
 }
 
 func collectPytestSummaries(lines []string) []string {
@@ -261,4 +291,12 @@ func nonEmptyLines(input string) []string {
 
 func joinLimitedLines(lines []string, maxLines int) string {
 	return shared.JoinLimitedLines(lines, maxLines)
+}
+
+func summarizePythonLines(lines []string, maxLines int) pythonSummaryResult {
+	result := pythonSummaryResult{Text: shared.JoinLimitedLines(lines, maxLines)}
+	if len(lines) > maxLines {
+		result.OmittedCount = len(lines) - maxLines
+	}
+	return result
 }

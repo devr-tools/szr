@@ -48,3 +48,23 @@ func TestCSVTabularProfileRender(t *testing.T) {
 		t.Fatalf("unexpected csv-tabular stream metadata: %#v", profile)
 	}
 }
+
+func TestCSVTabularProfileStreamRecovery(t *testing.T) {
+	t.Parallel()
+
+	profile := testutil.FindProfile(t, tabularprofiles.Profiles(6), "csv-tabular")
+	stream := profile.StreamRender(engine.Invocation{}, engine.OutputBudget{MaxLines: 3})
+	stream.ConsumeStdout([]byte(strings.Join([]string{
+		"NAME        READY   STATUS    RESTARTS   AGE   IP           NODE",
+		"api-0       1/1     Running   0          3d    10.0.0.12    node-a",
+		"worker-0    0/1     Pending   0          5m    <none>       node-b",
+		"cron-0      1/1     Running   0          1d    10.0.0.13    node-c",
+	}, "\n")))
+	recoveryStream, ok := stream.(interface{ RecoveryInfo() (string, string, bool) })
+	if !ok {
+		t.Fatalf("expected recovery-capable tabular reducer, got %T", stream)
+	}
+	if kind, summary, requireRawCapture := recoveryStream.RecoveryInfo(); kind != "full-output" || summary != "omitted 1 additional rows" || !requireRawCapture {
+		t.Fatalf("unexpected tabular recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+}

@@ -29,8 +29,10 @@ func Profiles(maxLines int) []engine.Profile {
 				return kubefilter.SummarizeGet(exec.Stdout, maxLines)
 			},
 			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return shared.NewBufferedTextReducer(true, false, func(input string) string {
+				return shared.NewBufferedTextReducerWithRecovery(true, false, func(input string) string {
 					return kubefilter.SummarizeGet(input, budget.MaxLines)
+				}, func(input string) (string, string, bool) {
+					return kubefilter.KubectlGetRecoveryInfo(input, budget.MaxLines)
 				})
 			},
 			ParseBytes: profilekit.ParseStdout,
@@ -53,8 +55,10 @@ func Profiles(maxLines int) []engine.Profile {
 				return kubefilter.SummarizeDescribe(exec.Stdout, maxLines)
 			},
 			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return shared.NewBufferedTextReducer(true, false, func(input string) string {
+				return shared.NewBufferedTextReducerWithRecovery(true, false, func(input string) string {
 					return kubefilter.SummarizeDescribe(input, budget.MaxLines)
+				}, func(input string) (string, string, bool) {
+					return kubefilter.KubectlDescribeRecoveryInfo(input, budget.MaxLines)
 				})
 			},
 			ParseBytes: profilekit.ParseStdout,
@@ -87,8 +91,10 @@ func Profiles(maxLines int) []engine.Profile {
 				return kubefilter.SummarizeLogs(exec.Stdout+"\n"+exec.Stderr, maxLines)
 			},
 			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return shared.NewBufferedTextReducer(true, true, func(input string) string {
+				return shared.NewBufferedTextReducerWithRecovery(true, true, func(input string) string {
 					return kubefilter.SummarizeLogs(input, budget.MaxLines)
+				}, func(input string) (string, string, bool) {
+					return kubefilter.KubectlLogsRecoveryInfo(input, budget.MaxLines)
 				})
 			},
 			ParseBytes: profilekit.ParseCombined,
@@ -114,9 +120,7 @@ func Profiles(maxLines int) []engine.Profile {
 				return shared.CompactLines(exec.Stdout, maxLines)
 			},
 			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return shared.NewBufferedTextReducer(true, false, func(input string) string {
-					return shared.CompactLines(input, budget.MaxLines)
-				})
+				return shared.NewCompactLineReducer(budget.MaxLines, budget.MaxBytes)
 			},
 			ParseBytes: profilekit.ParseStdout,
 			Explain: []string{
@@ -141,8 +145,10 @@ func Profiles(maxLines int) []engine.Profile {
 				return kubefilter.SummarizeDescribe(exec.Stdout, maxLines)
 			},
 			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return shared.NewBufferedTextReducer(true, false, func(input string) string {
+				return shared.NewBufferedTextReducerWithRecovery(true, false, func(input string) string {
 					return kubefilter.SummarizeDescribe(input, budget.MaxLines)
+				}, func(input string) (string, string, bool) {
+					return kubefilter.KubectlDescribeRecoveryInfo(input, budget.MaxLines)
 				})
 			},
 			ParseBytes: profilekit.ParseStdout,

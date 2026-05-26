@@ -50,13 +50,30 @@ type RunStep struct {
 }
 
 func SummarizePRView(input string, maxLines int) string {
+	return summarizePRViewResult(input, maxLines).Text
+}
+
+func GHPRViewRecoveryInfo(input string, maxLines int) (string, string, bool) {
+	result := summarizePRViewResult(input, maxLines)
+	if result.OmittedCount <= 0 {
+		return shared.NoRecovery()
+	}
+	return shared.FullOutputRecovery(fmt.Sprintf("omitted %d additional lines", result.OmittedCount))
+}
+
+type githubSummaryResult struct {
+	Text         string
+	OmittedCount int
+}
+
+func summarizePRViewResult(input string, maxLines int) githubSummaryResult {
 	if maxLines <= 0 {
 		maxLines = 10
 	}
 	clean := shared.StripANSI(input)
 	var pr PRView
 	if err := json.Unmarshal([]byte(strings.TrimSpace(clean)), &pr); err != nil || pr.Number == 0 {
-		return shared.SummarizeGenericFailure(clean, maxLines)
+		return githubSummaryResult{Text: shared.SummarizeGenericFailure(clean, maxLines)}
 	}
 
 	out := []string{
@@ -67,7 +84,7 @@ func SummarizePRView(input string, maxLines int) string {
 	for _, file := range pr.Files {
 		out = append(out, shared.Clip(fmt.Sprintf("%s +%d -%d", file.Path, file.Additions, file.Deletions), 160))
 	}
-	return shared.JoinLimitedLines(out, maxLines)
+	return summarizeGithubLines(out, maxLines)
 }
 
 func SummarizeGHPRView(input string, maxLines int) string {
@@ -75,6 +92,18 @@ func SummarizeGHPRView(input string, maxLines int) string {
 }
 
 func SummarizeRunView(input string, maxLines int) string {
+	return summarizeRunViewResult(input, maxLines).Text
+}
+
+func GHRunViewRecoveryInfo(input string, maxLines int) (string, string, bool) {
+	result := summarizeRunViewResult(input, maxLines)
+	if result.OmittedCount <= 0 {
+		return shared.NoRecovery()
+	}
+	return shared.FullOutputRecovery(fmt.Sprintf("omitted %d additional lines", result.OmittedCount))
+}
+
+func summarizeRunViewResult(input string, maxLines int) githubSummaryResult {
 	if maxLines <= 0 {
 		maxLines = 12
 	}
@@ -83,7 +112,7 @@ func SummarizeRunView(input string, maxLines int) string {
 	if err := json.Unmarshal([]byte(strings.TrimSpace(clean)), &run); err == nil && (run.Name != "" || run.WorkflowName != "" || len(run.Jobs) > 0) {
 		return summarizeStructuredRun(run, maxLines)
 	}
-	return shared.SummarizeGenericFailure(clean, maxLines)
+	return githubSummaryResult{Text: shared.SummarizeGenericFailure(clean, maxLines)}
 }
 
 func SummarizeGHRunView(input string, maxLines int) string {
@@ -91,12 +120,24 @@ func SummarizeGHRunView(input string, maxLines int) string {
 }
 
 func SummarizeRunLog(input string, maxLines int) string {
+	return summarizeRunLogResult(input, maxLines).Text
+}
+
+func GHRunLogRecoveryInfo(input string, maxLines int) (string, string, bool) {
+	result := summarizeRunLogResult(input, maxLines)
+	if result.OmittedCount <= 0 {
+		return shared.NoRecovery()
+	}
+	return shared.FullOutputRecovery(fmt.Sprintf("omitted %d additional log lines", result.OmittedCount))
+}
+
+func summarizeRunLogResult(input string, maxLines int) githubSummaryResult {
 	if maxLines <= 0 {
 		maxLines = 12
 	}
 	lines := shared.NonEmptyLines(shared.StripANSI(input))
 	if len(lines) == 0 {
-		return "ok"
+		return githubSummaryResult{Text: "ok"}
 	}
 
 	jobMessages := map[string]map[string]int{}
@@ -134,16 +175,16 @@ func SummarizeRunLog(input string, maxLines int) string {
 		}
 	}
 	if len(out) == 0 {
-		return shared.SummarizeGenericFailure(strings.Join(lines, "\n"), maxLines)
+		return githubSummaryResult{Text: shared.SummarizeGenericFailure(strings.Join(lines, "\n"), maxLines)}
 	}
-	return shared.JoinLimitedLines(out, maxLines)
+	return summarizeGithubLines(out, maxLines)
 }
 
 func SummarizeGHRunLog(input string, maxLines int) string {
 	return SummarizeRunLog(input, maxLines)
 }
 
-func summarizeStructuredRun(run RunView, maxLines int) string {
+func summarizeStructuredRun(run RunView, maxLines int) githubSummaryResult {
 	title := run.WorkflowName
 	if title == "" {
 		title = run.Name
@@ -175,7 +216,15 @@ func summarizeStructuredRun(run RunView, maxLines int) string {
 	if run.URL != "" {
 		out = append(out, shared.Clip(run.URL, 160))
 	}
-	return shared.JoinLimitedLines(out, maxLines)
+	return summarizeGithubLines(out, maxLines)
+}
+
+func summarizeGithubLines(lines []string, maxLines int) githubSummaryResult {
+	result := githubSummaryResult{Text: shared.JoinLimitedLines(lines, maxLines)}
+	if len(lines) > maxLines {
+		result.OmittedCount = len(lines) - maxLines
+	}
+	return result
 }
 
 func parseRunLogLine(line string) (string, string, string) {

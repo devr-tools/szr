@@ -265,23 +265,39 @@ Define one shared policy for hidden-output recovery.
 - Current Task 6 migrations cover:
   - `cloud-list`
   - `cloud-logs`
+  - `csv-tabular`
   - `ctest`
   - `docker ps`
   - `docker logs`
   - `find`
+  - `gh-pr-view`
+  - `gh-pr-checks`
+  - `gh-run-list`
+  - `gh-run-log`
+  - `gh-run-view`
   - `http-api`
   - `json-query`
   - `clang-tooling`
   - `patch-diff`
+  - `php-tooling`
+  - `pytest`
+  - `python-tooling`
   - `ripgrep`
+  - `cargo-test`
+  - `cargo-build`
   - generic failure compaction
   - `build-system`
+  - `kubectl-get`
+  - `kubectl-describe`
+  - `kubectl-logs`
+  - `kubectl-top`
+  - `kubectl-events`
   - `git log`
   - `git diff`
   - core directory-listing/tree previews
   - core file-read previews
   - `sql-query`
-- Remaining Task 6 targets should prioritize families that still truncate or collapse output in custom `Render` functions without shared recovery metadata.
+- Remaining Task 6 targets should prioritize any residual core/build-test helpers that still truncate or collapse output without shared recovery metadata, especially `go-test-json` if we want the older buffered set fully closed out.
 
 ## Task 7: Contributor Docs By Ecosystem
 

@@ -32,8 +32,10 @@ func Profiles(maxLines int) []engine.Profile {
 				return phpfilter.SummarizePHP(exec.Stdout+"\n"+exec.Stderr, maxLines)
 			},
 			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return shared.NewBufferedTextReducer(true, true, func(input string) string {
+				return shared.NewBufferedTextReducerWithRecovery(true, true, func(input string) string {
 					return phpfilter.SummarizePHP(input, budget.MaxLines)
+				}, func(input string) (string, string, bool) {
+					return phpfilter.PHPRecoveryInfo(input, budget.MaxLines)
 				})
 			},
 			ParseBytes: profilekit.ParseCombined,

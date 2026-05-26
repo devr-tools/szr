@@ -61,3 +61,27 @@ func TestSummarizeGHRunLog(t *testing.T) {
 		}
 	}
 }
+
+func TestGHRecoveryInfo(t *testing.T) {
+	t.Parallel()
+
+	prInput := `{"number":42,"title":"Tighten reducers","state":"OPEN","isDraft":false,"headRefName":"feature/reducers","baseRefName":"main","reviewDecision":"CHANGES_REQUESTED","files":[{"path":"internal/filters/github.go","additions":80,"deletions":0},{"path":"internal/profiles/github.go","additions":60,"deletions":0},{"path":"test/github_test.go","additions":20,"deletions":1}]}`
+	if kind, summary, requireRawCapture := ghfilter.GHPRViewRecoveryInfo(prInput, 4); kind != "full-output" || summary != "omitted 2 additional lines" || !requireRawCapture {
+		t.Fatalf("unexpected gh pr recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+
+	runViewInput := `{"workflowName":"CI","status":"completed","conclusion":"failure","event":"push","headBranch":"main","url":"https://example.test/run/1","jobs":[{"name":"test","status":"completed","conclusion":"failure","steps":[{"name":"setup","conclusion":"success"},{"name":"unit","conclusion":"failure"},{"name":"integration","conclusion":"failure"}]},{"name":"lint","status":"completed","conclusion":"failure","steps":[{"name":"eslint","conclusion":"failure"}]}]}`
+	if kind, summary, requireRawCapture := ghfilter.GHRunViewRecoveryInfo(runViewInput, 4); kind != "full-output" || summary != "omitted 4 additional lines" || !requireRawCapture {
+		t.Fatalf("unexpected gh run view recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+
+	runLogInput := strings.Join([]string{
+		"test\tSet up job\tRunner provisioning failed",
+		"test\tUnit\tError: assertion failed",
+		"test\tIntegration\tError: timeout",
+		"lint\tESLint\tfatal: unexpected token",
+	}, "\n")
+	if kind, summary, requireRawCapture := ghfilter.GHRunLogRecoveryInfo(runLogInput, 3); kind != "full-output" || summary != "omitted 2 additional log lines" || !requireRawCapture {
+		t.Fatalf("unexpected gh run log recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+}

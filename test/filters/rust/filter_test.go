@@ -80,3 +80,27 @@ func TestSummarizeCargoBuildFoldsRepeatedHints(t *testing.T) {
 		t.Fatalf("expected unique cargo stack anchor, got %q", got)
 	}
 }
+
+func TestRustRecoveryInfo(t *testing.T) {
+	testInput := strings.Join([]string{
+		"test tests::math::subtracts ... FAILED",
+		"thread 'tests::math::subtracts' panicked at src/lib.rs:42:5:",
+		"assertion `left == right` failed",
+		"test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out",
+		"error: test failed, to rerun pass `--lib`",
+	}, "\n")
+	if kind, summary, requireRawCapture := rustfilter.CargoTestRecoveryInfo(testInput, 3); kind != "full-output" || summary != "omitted 2 additional lines" || !requireRawCapture {
+		t.Fatalf("unexpected cargo test recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+
+	buildInput := strings.Join([]string{
+		"error[E0432]: unresolved import `missing::Thing`",
+		"--> src/lib.rs:4:5",
+		"help: consider importing this module instead",
+		"warning: unused import: `std::fmt`",
+		"error: could not compile `app` due to 1 previous error; 1 warning emitted",
+	}, "\n")
+	if kind, summary, requireRawCapture := rustfilter.CargoBuildRecoveryInfo(buildInput, 3); kind != "full-output" || summary != "omitted 2 additional lines" || !requireRawCapture {
+		t.Fatalf("unexpected cargo build recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+}

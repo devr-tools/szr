@@ -42,3 +42,17 @@ func TestSummarizeWideTableDUFallback(t *testing.T) {
 		}
 	}
 }
+
+func TestWideTableRecoveryInfo(t *testing.T) {
+	t.Parallel()
+
+	input := strings.Join([]string{
+		"NAME        READY   STATUS    RESTARTS   AGE   IP           NODE",
+		"api-0       1/1     Running   0          3d    10.0.0.12    node-a",
+		"worker-0    0/1     Pending   0          5m    <none>       node-b",
+		"cron-0      1/1     Running   0          1d    10.0.0.13    node-c",
+	}, "\n")
+	if kind, summary, requireRawCapture := tabularfilter.WideTableRecoveryInfo(input, 3); kind != "full-output" || summary != "omitted 1 additional rows" || !requireRawCapture {
+		t.Fatalf("unexpected wide table recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+}

@@ -46,12 +46,12 @@ func containsAny(args []string, needles ...string) bool {
 	return false
 }
 
-func newBufferedStdoutReducer(render func(string) string) engine.StreamReducer {
-	return shared.NewBufferedTextReducer(true, false, render)
+func newBufferedStdoutReducer(render func(string) string, recovery func(string) (string, string, bool)) engine.StreamReducer {
+	return shared.NewBufferedTextReducerWithRecovery(true, false, render, recovery)
 }
 
-func newBufferedCombinedReducer(render func(string) string) engine.StreamReducer {
-	return shared.NewBufferedTextReducer(true, true, render)
+func newBufferedCombinedReducer(render func(string) string, recovery func(string) (string, string, bool)) engine.StreamReducer {
+	return shared.NewBufferedTextReducerWithRecovery(true, true, render, recovery)
 }
 
 var ghOptionValueFlags = map[string]struct{}{

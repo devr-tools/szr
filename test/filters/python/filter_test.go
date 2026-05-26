@@ -117,3 +117,27 @@ func TestSummarizePytestFoldsRepeatedFrames(t *testing.T) {
 		t.Fatalf("expected fixture hint retention, got %q", got)
 	}
 }
+
+func TestPythonRecoveryInfo(t *testing.T) {
+	pytestInput := strings.Join([]string{
+		"collected 3 items",
+		"FAILED tests/test_math.py::test_add - AssertionError: assert 3 == 2",
+		"assert add(1, 2) == 2",
+		"assert 3 == 2",
+		"tests/test_math.py:12: AssertionError",
+		"available fixtures: cache, capfd, caplog",
+	}, "\n")
+	if kind, summary, requireRawCapture := pyfilter.PytestRecoveryInfo(pytestInput, 4); kind != "full-output" || summary != "omitted 2 additional lines" || !requireRawCapture {
+		t.Fatalf("unexpected pytest recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+
+	toolingInput := strings.Join([]string{
+		"src/app.py:12: error: Name \"missing\" is not defined  [name-defined]",
+		"src/app.py:18:5: F401 `os` imported but unused",
+		"ERROR: Could not find a version that satisfies the requirement missing-pkg",
+		"Found 2 errors in 1 file (checked 4 source files)",
+	}, "\n")
+	if kind, summary, requireRawCapture := pyfilter.PythonToolingRecoveryInfo(toolingInput, 3); kind != "full-output" || summary != "omitted 1 additional lines" || !requireRawCapture {
+		t.Fatalf("unexpected python tooling recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+}
