@@ -47,10 +47,20 @@ func parseStructuredEvents(input string) []event {
 	case []any:
 		records = objectSlice(typed)
 	case map[string]any:
-		for _, key := range []string{"events", "entries", "value"} {
+		for _, key := range []string{"events", "entries", "value", "results"} {
 			if items := objectSlice(typed[key]); len(items) > 0 {
 				records = items
 				break
+			}
+		}
+		if len(records) == 0 {
+			if data, ok := typed["data"].(map[string]any); ok {
+				for _, key := range []string{"events", "results"} {
+					if items := objectSlice(data[key]); len(items) > 0 {
+						records = items
+						break
+					}
+				}
 			}
 		}
 		if len(records) == 0 {
@@ -65,6 +75,8 @@ func parseStructuredEvents(input string) []event {
 		evt := event{
 			Timestamp: firstString(record, "timestamp", "receiveTimestamp", "eventTimestamp", "timeGenerated"),
 			Source: firstNonEmpty(
+				firstString(record, "function_slug", "function_name", "entrypoint"),
+				firstString(record, "source", "service", "name"),
 				firstString(record, "logName", "resourceGroupName"),
 				firstString(nestedMap(record, "resource"), "type"),
 				firstString(nestedMap(record, "resource"), "labels.container_name"),
@@ -80,7 +92,13 @@ func parseStructuredEvents(input string) []event {
 				nestedString(record, "status", "localizedValue"),
 			),
 			Message: firstNonEmpty(
+				buildStructuredRequestMessage(record),
 				firstString(record, "message", "textPayload"),
+				firstString(record, "event_message", "error"),
+				firstString(record, "msg", "details"),
+				nestedString(record, "data", "message"),
+				nestedString(record, "metadata", "message"),
+				nestedString(record, "response", "message"),
 				nestedString(record, "jsonPayload", "message"),
 				nestedString(record, "properties", "message"),
 				nestedString(record, "properties", "statusMessage"),
@@ -104,6 +122,14 @@ func parseTextEvents(input string) []event {
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" {
+			continue
+		}
+		if evt, ok := parseHerokuLine(trimmed); ok {
+			out = append(out, evt)
+			continue
+		}
+		if evt, ok := parseVercelLine(trimmed); ok {
+			out = append(out, evt)
 			continue
 		}
 		if evt, ok := parseTimestampedLine(trimmed); ok {
@@ -154,68 +180,165 @@ func parseTimestampedLine(line string) (event, bool) {
 	}
 	return event{
 		Timestamp: ts,
-		Source:    source,
+		Source:    normalizeLogSource(source),
 		Severity:  severity,
 		Message:   message,
 	}, true
 }
 
-func renderEvents(events []event, maxLines int) string {
-	firstTS := ""
-	lastTS := ""
-	sources := map[string]struct{}{}
-	signatures := map[string]int{}
-	order := []string{}
-
-	for _, evt := range events {
-		if evt.Timestamp != "" {
-			if firstTS == "" || evt.Timestamp < firstTS {
-				firstTS = evt.Timestamp
-			}
-			if lastTS == "" || evt.Timestamp > lastTS {
-				lastTS = evt.Timestamp
-			}
+func parseHerokuLine(line string) (event, bool) {
+	parts := strings.SplitN(line, " ", 2)
+	if len(parts) != 2 || !looksLikeTimestamp(parts[0]) {
+		return event{}, false
+	}
+	rest := strings.TrimSpace(parts[1])
+	if !strings.Contains(rest, "[") || !strings.Contains(rest, "]:") {
+		return event{}, false
+	}
+	source := "cloud"
+	severity := ""
+	message := rest
+	if idx := strings.Index(rest, "]:"); idx >= 0 {
+		prefix := rest[:idx+1]
+		message = strings.TrimSpace(rest[idx+2:])
+		source = normalizeHerokuSource(prefix)
+	}
+	if strings.HasPrefix(message, "Error ") {
+		severity = "ERROR"
+	}
+	for _, token := range []string{" ERROR ", " FATAL ", " WARN "} {
+		if strings.Contains(" "+message+" ", token) {
+			severity = strings.TrimSpace(token)
+			message = strings.Replace(message, token, " ", 1)
+			message = strings.Join(strings.Fields(message), " ")
+			break
 		}
+	}
+	message = canonicalizeHerokuMessage(message)
+	return event{Timestamp: parts[0], Source: source, Severity: severity, Message: message}, true
+}
+
+func parseVercelLine(line string) (event, bool) {
+	fields := strings.Fields(line)
+	if len(fields) < 3 || !looksLikeTimestamp(fields[0]) {
+		return event{}, false
+	}
+	idx := 1
+	source := ""
+	if idx < len(fields) && !isSeverityToken(fields[idx]) {
+		if idx+1 < len(fields) && !isSeverityToken(fields[idx+1]) {
+			idx++
+			source = fields[idx]
+			idx++
+		} else {
+			source = fields[idx]
+			idx++
+		}
+	}
+	severity := ""
+	if idx < len(fields) && isSeverityToken(fields[idx]) {
+		severity = strings.ToUpper(strings.Trim(fields[idx], "[]:"))
+		idx++
+	}
+	message := strings.Join(fields[idx:], " ")
+	if message == "" {
+		return event{}, false
+	}
+	return event{Timestamp: fields[0], Source: normalizeLogSource(source), Severity: severity, Message: canonicalizeVercelMessage(message)}, true
+}
+
+func renderEvents(events []event, maxLines int) string {
+	stats := collectEventStats(events)
+	out := []string{fmt.Sprintf("events: %d sources: %d", len(events), len(stats.sources))}
+	if stats.firstTS != "" || stats.lastTS != "" {
+		out = append(out, fmt.Sprintf("time: %s .. %s", orDefault(stats.firstTS, "unknown"), orDefault(stats.lastTS, "unknown")))
+	}
+	if len(stats.sources) > 0 {
+		out = append(out, "services: "+strings.Join(sortedKeys(stats.sources), ", "))
+	}
+
+	if len(stats.order) == 0 {
+		stats.order = fallbackEventLines(events, maxLines-3)
+	}
+
+	out = appendRenderedEvents(out, stats.order, stats.signatures)
+	return shared.JoinLimitedLines(out, maxLines)
+}
+
+type eventStats struct {
+	firstTS    string
+	lastTS     string
+	sources    map[string]struct{}
+	signatures map[string]int
+	order      []string
+}
+
+func collectEventStats(events []event) eventStats {
+	stats := eventStats{
+		sources:    map[string]struct{}{},
+		signatures: map[string]int{},
+	}
+	for _, evt := range events {
+		updateEventBounds(&stats, evt.Timestamp)
 		if evt.Source != "" {
-			sources[evt.Source] = struct{}{}
+			stats.sources[evt.Source] = struct{}{}
 		}
 		if !sharedLineInteresting(strings.TrimSpace(evt.Severity + " " + evt.Message)) {
 			continue
 		}
-		line := strings.TrimSpace(strings.Join([]string{evt.Source + ":", evt.Severity, evt.Message}, " "))
-		line = strings.ReplaceAll(line, "  ", " ")
-		if _, ok := signatures[line]; !ok {
-			order = append(order, line)
+		line := formatEventLine(evt)
+		if _, ok := stats.signatures[line]; !ok {
+			stats.order = append(stats.order, line)
 		}
-		signatures[line]++
+		stats.signatures[line]++
 	}
+	return stats
+}
 
-	out := []string{fmt.Sprintf("events: %d sources: %d", len(events), len(sources))}
-	if firstTS != "" || lastTS != "" {
-		out = append(out, fmt.Sprintf("time: %s .. %s", orDefault(firstTS, "unknown"), orDefault(lastTS, "unknown")))
+func updateEventBounds(stats *eventStats, timestamp string) {
+	if timestamp == "" {
+		return
 	}
-	if len(sources) > 0 {
-		sourceList := make([]string, 0, len(sources))
-		for source := range sources {
-			sourceList = append(sourceList, source)
+	if stats.firstTS == "" || timestamp < stats.firstTS {
+		stats.firstTS = timestamp
+	}
+	if stats.lastTS == "" || timestamp > stats.lastTS {
+		stats.lastTS = timestamp
+	}
+}
+
+func sortedKeys(values map[string]struct{}) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func fallbackEventLines(events []event, limit int) []string {
+	if limit < 1 {
+		limit = 1
+	}
+	capHint := limit
+	if len(events) < capHint {
+		capHint = len(events)
+	}
+	out := make([]string, 0, capHint)
+	for _, evt := range events {
+		line := formatEventLine(evt)
+		if strings.TrimSpace(line) == ":" || strings.TrimSpace(line) == "" {
+			continue
 		}
-		sort.Strings(sourceList)
-		out = append(out, "services: "+strings.Join(sourceList, ", "))
-	}
-
-	if len(order) == 0 {
-		for _, evt := range events {
-			line := strings.TrimSpace(strings.Join([]string{evt.Source + ":", evt.Severity, evt.Message}, " "))
-			line = strings.ReplaceAll(line, "  ", " ")
-			if strings.TrimSpace(line) != ":" && strings.TrimSpace(line) != "" {
-				order = append(order, line)
-			}
-			if len(order) >= maxLines-3 {
-				break
-			}
+		out = append(out, line)
+		if len(out) >= limit {
+			break
 		}
 	}
+	return out
+}
 
+func appendRenderedEvents(out, order []string, signatures map[string]int) []string {
 	for _, line := range order {
 		count := signatures[line]
 		if count > 1 {
@@ -224,7 +347,12 @@ func renderEvents(events []event, maxLines int) string {
 		}
 		out = append(out, shared.Clip(line, 160))
 	}
-	return shared.JoinLimitedLines(out, maxLines)
+	return out
+}
+
+func formatEventLine(evt event) string {
+	line := strings.TrimSpace(strings.Join([]string{evt.Source + ":", evt.Severity, evt.Message}, " "))
+	return strings.ReplaceAll(line, "  ", " ")
 }
 
 func objectSlice(value any) []map[string]any {
@@ -297,14 +425,41 @@ func firstInterestingValue(record map[string]any) string {
 
 func sharedLineInteresting(line string) bool {
 	lower := strings.ToLower(strings.TrimSpace(line))
-	return strings.Contains(lower, "error") ||
-		strings.Contains(lower, "failed") ||
-		strings.Contains(lower, "fatal") ||
-		strings.Contains(lower, "panic") ||
-		strings.Contains(lower, "exception") ||
-		strings.Contains(lower, "denied") ||
-		strings.Contains(lower, "timeout") ||
-		strings.Contains(lower, "throttl")
+	return containsInterestingFragment(lower)
+}
+
+var interestingLogFragments = []string{
+	"error",
+	"failed",
+	"fatal",
+	"panic",
+	"exception",
+	"denied",
+	"timeout",
+	"throttl",
+	"h12",
+	"h18",
+	"r14",
+	"r15",
+	"l10",
+	"l14",
+	"unhandled",
+	"uncaught",
+	" 500",
+	" 502",
+	" 503",
+	" 504",
+	"oom",
+	"out of memory",
+}
+
+func containsInterestingFragment(line string) bool {
+	for _, fragment := range interestingLogFragments {
+		if strings.Contains(line, fragment) {
+			return true
+		}
+	}
+	return false
 }
 
 func looksLikeTimestamp(value string) bool {
@@ -327,6 +482,121 @@ func isSeverityToken(value string) bool {
 func orDefault(value, fallback string) string {
 	if strings.TrimSpace(value) == "" {
 		return fallback
+	}
+	return value
+}
+
+func buildStructuredRequestMessage(record map[string]any) string {
+	status := firstNonEmpty(firstString(record, "status_code", "statusCode"), nestedString(record, "response", "status_code"))
+	method := firstString(record, "method")
+	path := firstNonEmpty(firstString(record, "path"), nestedString(record, "metadata", "path"))
+	msg := firstNonEmpty(firstString(record, "msg", "message", "event_message", "error"), nestedString(record, "metadata", "message"))
+	parts := []string{}
+	if status != "" {
+		parts = append(parts, status)
+	}
+	if method != "" {
+		parts = append(parts, method)
+	}
+	if path != "" {
+		parts = append(parts, path)
+	}
+	if msg != "" {
+		parts = append(parts, msg)
+	}
+	if len(parts) < 2 {
+		return ""
+	}
+	return strings.Join(parts, " ")
+}
+
+func normalizeHerokuSource(prefix string) string {
+	prefix = strings.TrimSuffix(prefix, ":")
+	switch {
+	case strings.HasPrefix(prefix, "heroku[") && strings.HasSuffix(prefix, "]"):
+		return "heroku/" + strings.TrimSuffix(strings.TrimPrefix(prefix, "heroku["), "]")
+	case strings.HasPrefix(prefix, "app[") && strings.HasSuffix(prefix, "]"):
+		return "app/" + strings.TrimSuffix(strings.TrimPrefix(prefix, "app["), "]")
+	default:
+		return normalizeLogSource(prefix)
+	}
+}
+
+func normalizeLogSource(source string) string {
+	source = strings.TrimSpace(strings.TrimSuffix(source, ":"))
+	if source == "" {
+		return "cloud"
+	}
+	return source
+}
+
+func canonicalizeHerokuMessage(message string) string {
+	if strings.Contains(message, "code=H12") {
+		return normalizeKeyValueMessage(message, []string{"code", "status", "dyno", "path", "method"})
+	}
+	if strings.Contains(message, "Error R14") {
+		return "R14 Memory quota exceeded"
+	}
+	if strings.Contains(message, "Process exited with status") {
+		return message
+	}
+	if strings.Contains(message, "State changed from") {
+		return message
+	}
+	return message
+}
+
+func canonicalizeVercelMessage(message string) string {
+	if strings.Contains(message, "GET /") || strings.Contains(message, "POST /") {
+		return normalizeRequestLine(message)
+	}
+	return message
+}
+
+func normalizeRequestLine(message string) string {
+	fields := strings.Fields(message)
+	out := []string{}
+	for _, field := range fields {
+		if strings.HasPrefix(field, "req_") || strings.HasPrefix(strings.ToLower(field), "requestid=") {
+			continue
+		}
+		out = append(out, field)
+		if len(out) >= 4 {
+			break
+		}
+	}
+	return strings.Join(out, " ")
+}
+
+func normalizeKeyValueMessage(message string, keys []string) string {
+	parts := []string{}
+	for _, key := range keys {
+		if value := extractKeyValue(message, key); value != "" {
+			parts = append(parts, key+"="+value)
+		}
+	}
+	if len(parts) == 0 {
+		return message
+	}
+	return strings.Join(parts, " ")
+}
+
+func extractKeyValue(message, key string) string {
+	marker := key + "="
+	idx := strings.Index(message, marker)
+	if idx < 0 {
+		return ""
+	}
+	value := message[idx+len(marker):]
+	if strings.HasPrefix(value, "\"") {
+		value = value[1:]
+		if end := strings.Index(value, "\""); end >= 0 {
+			return value[:end]
+		}
+		return value
+	}
+	if end := strings.IndexAny(value, " \t"); end >= 0 {
+		return value[:end]
 	}
 	return value
 }

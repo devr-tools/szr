@@ -2,7 +2,7 @@
 
 This document tracks the builtin profiles currently registered by `internal/profiles.Builtins()`.
 
-Current coverage: `41` builtin profiles across `14` categories.
+Current coverage: `50` builtin profiles across `21` categories.
 
 Anything not listed here does not currently have a dedicated builtin profile in `szr`.
 
@@ -10,10 +10,11 @@ Anything not listed here does not currently have a dedicated builtin profile in 
 
 | Category | Count | Covered commands and workflows |
 | --- | ---: | --- |
+| Filesystem | 2 | `ls`, `tree`, single-file `cat` previews |
 | Go | 2 | `go test`, `go build`, `go vet` |
 | Generic fallback | 2 | wrapped `test` commands, shallow `summary` commands |
-| Search | 2 | `rg` plain-text search, `find` path discovery |
-| Git | 3 | `git status`, `git log`, `git diff` |
+| Search | 5 | `grep`, `rg` plain-text search, `rg --files`, `rg --files-with-matches`, `find` path discovery |
+| Git | 4 | `git ls-files`, `git status`, `git log`, `git diff` |
 | GitHub CLI | 5 | `gh pr view`, `gh pr checks`, `gh run list`, `gh run view`, GitHub Actions logs |
 | JavaScript | 5 | `npm`, `pnpm`, `yarn`, `bun`, `turbo`, `nx`, `vite`, `vitest`, `jest`, `eslint`, `tsc` |
 | PHP | 1 | `composer`, `phpunit`, `pest`, `phpstan`, `psalm`, `phpcs`, `phpcbf`, `php-cs-fixer`, `php artisan` |
@@ -23,9 +24,24 @@ Anything not listed here does not currently have a dedicated builtin profile in 
 | Patch and diff | 1 | `diff`, `patch`, `git apply` |
 | Rust | 2 | `cargo test`, `cargo build`, `cargo clippy` |
 | Containers | 2 | `docker ps`, `docker logs`, `docker compose ps`, `docker compose logs` |
+| Cloud inventory | 2 | `aws`, `gcloud`, `az`, `doctl`, `oci`, `openstack`, `vercel`, `supabase`, `heroku` inventory and deployment listings |
+| Cloud logs | 3 | cloud log streams plus scoped Supabase function logs and Heroku router logs |
 | Kubernetes | 5 | `kubectl get`, `kubectl describe`, `kubectl logs`, `kubectl top`, `kubectl events` |
+| HTTP API | 1 | `curl`, `http`, `httpie`, stdout-oriented `wget` API fetches |
+| JSON query | 1 | `jq`, `yq`, JSON file reads, `python -m json.tool` |
+| SQL | 1 | `psql`, `sqlite3`, `mysql`, `duckdb` query commands |
+| Tabular | 1 | `ps`, `df`, `du`, `systemctl`, `helm list`, `kubectl get -o wide` |
 
 ## Profile Inventory
+
+### Filesystem
+
+- `directory-listing`
+  - Matches: `ls`, `tree`
+  - Focus: concise directory and file group previews with normalized output
+- `cat-read`
+  - Matches: single-file non-JSON `cat`
+  - Focus: structural file previews that prefer headings, declarations, and anchored lines
 
 ### Go
 
@@ -47,6 +63,15 @@ Anything not listed here does not currently have a dedicated builtin profile in 
 
 ### Search
 
+- `grep`
+  - Matches: recursive `grep` search with stable line-oriented output
+  - Focus: grouped matches by file with conservative repo-noise suppression
+- `ripgrep-files`
+  - Matches: `rg --files`
+  - Focus: bounded path previews for repo file listings
+- `ripgrep-files-with-matches`
+  - Matches: `rg --files-with-matches`, `rg -l`
+  - Focus: bounded path previews for matching files only
 - `ripgrep`
   - Matches: plain-text `rg` search commands outside JSON, files-only, and count-oriented modes
   - Focus: groups matches by file with stable filename and line-number output, applies conservative repo-noise excludes, and streams to early cutoff when enough visible context is collected
@@ -56,6 +81,9 @@ Anything not listed here does not currently have a dedicated builtin profile in 
 
 ### Git
 
+- `git-ls-files`
+  - Matches: `git ls-files`
+  - Focus: bounded tracked-file previews for large file lists
 - `git-status`
   - Matches: `git status`
   - Focus: branch state plus staged, unstaged, and untracked file counts
@@ -156,6 +184,27 @@ Anything not listed here does not currently have a dedicated builtin profile in 
   - Matches: `docker logs`, `docker compose logs`
   - Focus: bounded log tails with repeated failures collapsed by service or container
 
+### Cloud inventory
+
+- `vercel-deployments`
+  - Matches: `vercel list`, `vercel ls`
+  - Focus: deployment target, ready state, URL, branch, creator, and metadata-aware Vercel deployment previews
+- `cloud-list`
+  - Matches: inventory-style `aws`, `gcloud`, `az`, `doctl`, `oci`, `openstack`, `vercel`, `supabase`, and `heroku` commands
+  - Focus: resource identity, status, region or zone, framework or project context, and provider-specific nested metadata
+
+### Cloud logs
+
+- `supabase-function-logs`
+  - Matches: `supabase functions logs`
+  - Focus: scoped Edge Function failures with function slug, path, method, status code, and repeated invocation grouping
+- `heroku-router-logs`
+  - Matches: `heroku logs` when the user did not already scope by dyno or app-source noise
+  - Focus: router-only request failures such as `H12`, status code, dyno, and request path signal
+- `cloud-logs`
+  - Matches: `aws logs`, `gcloud logging read`, `az monitor`, `oci logging-search`, `doctl apps logs`, `openstack console log show`, `vercel logs`, `supabase logs`, `heroku logs`
+  - Focus: time range, source identity, and repeated failure signatures across provider log streams
+
 ### Kubernetes
 
 - `kubectl-get`
@@ -173,6 +222,30 @@ Anything not listed here does not currently have a dedicated builtin profile in 
 - `kubectl-top`
   - Matches: `kubectl top`
   - Focus: compact previews of the newest resource metrics rows
+
+### HTTP API
+
+- `http-api`
+  - Matches: API-oriented `curl`, `http`, `httpie`, and stdout-targeted `wget` fetches
+  - Focus: response status, content type, and JSON body previews with selected scalar values
+
+### JSON query
+
+- `json-query`
+  - Matches: `jq`, `yq`, JSON file reads, and `python -m json.tool`
+  - Focus: JSON structure plus selected scalar previews instead of raw pretty-printed output
+
+### SQL
+
+- `sql-query`
+  - Matches: non-interactive `psql`, `sqlite3`, `mysql`, and `duckdb` query commands
+  - Focus: row summaries, row-count signal, JSON results, and common SQL errors
+
+### Tabular
+
+- `csv-tabular`
+  - Matches: wide tabular CLI output such as `ps`, `df`, `du`, `systemctl`, `helm list`, and `kubectl get -o wide`
+  - Focus: row-oriented key-field summaries for tables that are too wide to replay verbatim
 
 ## Expansion Read
 

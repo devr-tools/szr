@@ -11,8 +11,8 @@ import (
 
 func TestBuiltInProfileCount(t *testing.T) {
 	list := profiles.Builtins(3)
-	if len(list) != 47 {
-		t.Fatalf("expected 47 profiles, got %d", len(list))
+	if len(list) != 50 {
+		t.Fatalf("expected 50 profiles, got %d", len(list))
 	}
 }
 
@@ -77,6 +77,27 @@ func TestSelectionPrefersSpecificConflictProfiles(t *testing.T) {
 		Display: []string{"curl", "https://api.example.test/v1/users"},
 	}).Name; got != "http-api" {
 		t.Fatalf("expected API curl request to select http-api, got %q", got)
+	}
+
+	if got := e.Explain(engine.Invocation{
+		Command: []string{"vercel", "ls"},
+		Display: []string{"vercel", "ls"},
+	}).Name; got != "vercel-deployments" {
+		t.Fatalf("expected vercel ls to select vercel-deployments, got %q", got)
+	}
+
+	if got := e.Explain(engine.Invocation{
+		Command: []string{"supabase", "functions", "logs", "stripe-webhook"},
+		Display: []string{"supabase", "functions", "logs", "stripe-webhook"},
+	}).Name; got != "supabase-function-logs" {
+		t.Fatalf("expected supabase functions logs to select supabase-function-logs, got %q", got)
+	}
+
+	if got := e.Explain(engine.Invocation{
+		Command: []string{"heroku", "logs", "--app", "api-prod"},
+		Display: []string{"heroku", "logs", "--app", "api-prod"},
+	}).Name; got != "heroku-router-logs" {
+		t.Fatalf("expected heroku logs to select heroku-router-logs, got %q", got)
 	}
 }
 

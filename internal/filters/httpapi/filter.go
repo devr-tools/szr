@@ -22,7 +22,7 @@ func SummarizeHTTPAPI(input string, maxLines int) string {
 	body = strings.TrimSpace(body)
 	if body != "" {
 		if looksLikeJSON(body) {
-			out = append(out, shared.NonEmptyLines(shared.RenderJSONStructure([]byte(body)))...)
+			out = append(out, shared.NonEmptyLines(shared.SummarizeJSONPreview([]byte(body), maxLines-1))...)
 		} else {
 			out = append(out, shared.NonEmptyLines(shared.CompactLines(body, maxLines))...)
 		}

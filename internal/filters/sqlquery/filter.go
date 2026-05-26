@@ -26,27 +26,7 @@ func SummarizeSQLQuery(input string, maxLines int) string {
 		return jsonSummary
 	}
 
-	errors := []string{}
-	summaries := []string{}
-	rows := []string{}
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || isSQLNoise(trimmed) || isSQLBorder(trimmed) {
-			continue
-		}
-		switch {
-		case isSQLError(trimmed):
-			errors = append(errors, shared.Clip(trimmed, 180))
-		case isSQLSummary(trimmed):
-			summaries = append(summaries, shared.Clip(trimmed, 180))
-		default:
-			rows = append(rows, shared.Clip(trimmed, 180))
-		}
-	}
-
-	errors = shared.UniqueStrings(shared.FoldConsecutiveLines(errors))
-	summaries = shared.UniqueStrings(shared.FoldConsecutiveLines(summaries))
-	rows = shared.UniqueStrings(shared.FoldConsecutiveLines(rows))
+	errors, summaries, rows := classifySQLLines(lines)
 
 	if len(errors) > 0 {
 		out := append([]string{}, errors...)
@@ -58,22 +38,67 @@ func SummarizeSQLQuery(input string, maxLines int) string {
 		return shared.SummarizeGenericFailure(clean, maxLines)
 	}
 
-	if len(rows) > 0 {
-		limit := maxLines
-		if len(summaries) > 0 {
-			limit--
-		}
-		if limit < 1 {
-			limit = 1
-		}
-		if len(rows) > limit {
-			rows = append(rows[:limit], fmt.Sprintf("... +%d more rows", len(rows)-limit))
-		}
-	}
-
+	rows = limitSQLRows(rows, len(summaries) > 0, maxLines)
 	out := append([]string{}, rows...)
 	out = append(out, summaries...)
 	return shared.JoinLimitedLines(out, maxLines)
+}
+
+func classifySQLLines(lines []string) ([]string, []string, []string) {
+	errors := []string{}
+	summaries := []string{}
+	rows := []string{}
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if skipSQLLine(trimmed) {
+			continue
+		}
+		switch classifySQLLine(trimmed) {
+		case "error":
+			errors = append(errors, shared.Clip(trimmed, 180))
+		case "summary":
+			summaries = append(summaries, shared.Clip(trimmed, 180))
+		default:
+			rows = append(rows, shared.Clip(trimmed, 180))
+		}
+	}
+	return normalizeSQLSummarySlice(errors), normalizeSQLSummarySlice(summaries), normalizeSQLSummarySlice(rows)
+}
+
+func skipSQLLine(line string) bool {
+	return line == "" || isSQLNoise(line) || isSQLBorder(line)
+}
+
+func classifySQLLine(line string) string {
+	switch {
+	case isSQLError(line):
+		return "error"
+	case isSQLSummary(line):
+		return "summary"
+	default:
+		return "row"
+	}
+}
+
+func normalizeSQLSummarySlice(lines []string) []string {
+	return shared.UniqueStrings(shared.FoldConsecutiveLines(lines))
+}
+
+func limitSQLRows(rows []string, hasSummaries bool, maxLines int) []string {
+	if len(rows) == 0 {
+		return rows
+	}
+	limit := maxLines
+	if hasSummaries {
+		limit--
+	}
+	if limit < 1 {
+		limit = 1
+	}
+	if len(rows) <= limit {
+		return rows
+	}
+	return append(rows[:limit], fmt.Sprintf("... +%d more rows", len(rows)-limit))
 }
 
 func summarizeJSONResult(lines []string, maxLines int) string {

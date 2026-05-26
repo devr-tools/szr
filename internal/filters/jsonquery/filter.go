@@ -1,7 +1,6 @@
 package jsonquery
 
 import (
-	"bytes"
 	"encoding/json"
 	"strings"
 
@@ -40,11 +39,16 @@ func summarizeJSON(input string, maxLines int) (string, bool) {
 	}
 
 	out := make([]string, 0, len(lines))
+	perEntryLines := maxLines / len(lines)
+	if perEntryLines < 3 {
+		perEntryLines = 3
+	}
 	for _, line := range lines {
-		rendered, ok := summarizeSingleJSON(strings.TrimSpace(line), 1)
+		rendered, ok := summarizeSingleJSON(strings.TrimSpace(line), perEntryLines)
 		if !ok {
 			return "", false
 		}
+		rendered = trimRootSummary(rendered)
 		out = append(out, rendered)
 	}
 	return shared.JoinLimitedLines(out, maxLines), true
@@ -54,25 +58,7 @@ func summarizeSingleJSON(input string, maxLines int) (string, bool) {
 	if !json.Valid([]byte(input)) {
 		return "", false
 	}
-
-	var compact bytes.Buffer
-	if err := json.Compact(&compact, []byte(input)); err != nil {
-		return "", false
-	}
-	if maxLines <= 1 {
-		return compact.String(), true
-	}
-
-	var pretty bytes.Buffer
-	if err := json.Indent(&pretty, compact.Bytes(), "", "  "); err != nil {
-		return compact.String(), true
-	}
-
-	lines := shared.NonEmptyLines(pretty.String())
-	if len(lines) == 0 {
-		return compact.String(), true
-	}
-	return shared.JoinLimitedLines(lines, maxLines), true
+	return shared.SummarizeJSONPreview([]byte(input), maxLines), true
 }
 
 func joinStreams(stdout, stderr string) string {
@@ -84,4 +70,15 @@ func joinStreams(stdout, stderr string) string {
 	default:
 		return stdout + "\n" + stderr
 	}
+}
+
+func trimRootSummary(rendered string) string {
+	lines := shared.NonEmptyLines(rendered)
+	if len(lines) <= 1 {
+		return rendered
+	}
+	if strings.HasPrefix(lines[0], "root: ") {
+		return strings.Join(lines[1:], "\n")
+	}
+	return rendered
 }

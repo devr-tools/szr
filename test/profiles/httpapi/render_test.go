@@ -23,9 +23,9 @@ func TestHTTPAPIProfileRender(t *testing.T) {
 	})
 	for _, want := range []string{
 		"status=200 OK content-type=application/json",
-		"id: string",
-		"items: [",
-		"ok: bool",
+		`id="u_123"`,
+		"items: array len=1 sample=object{name,count}",
+		"ok=true",
 	} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected %q in rendered HTTP API output:\n%s", want, rendered)
@@ -41,8 +41,8 @@ func TestHTTPAPIProfileRender(t *testing.T) {
 	got := streamed.Result()
 	for _, want := range []string{
 		"status=201 Created content-type=application/json",
-		"id: string",
-		"status: string",
+		`id="evt_123"`,
+		`status="queued"`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected %q in streamed HTTP API output:\n%s", want, got)

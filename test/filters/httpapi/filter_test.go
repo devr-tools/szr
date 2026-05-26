@@ -20,10 +20,10 @@ func TestSummarizeHTTPAPI(t *testing.T) {
 	got := httpapifilter.SummarizeHTTPAPI(jsonResponse, 10)
 	for _, want := range []string{
 		"status=200 OK content-type=application/json",
-		"id: string",
-		"items: [",
-		"name: string",
-		"ok: bool",
+		"root: object keys=3",
+		`id="u_123"`,
+		"items: array len=1 sample=object{name,count}",
+		"ok=true",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected %q in summarized API response:\n%s", want, got)
