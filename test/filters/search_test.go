@@ -63,13 +63,13 @@ func TestFindSummaries(t *testing.T) {
 		t.Fatalf("unexpected empty find summary: %q", got)
 	}
 	got := filters.SummarizeFindPaths([]string{"b.py", "a.py"}, 4)
-	for _, want := range []string{"2 matches across 1 dirs", "a.py", "b.py"} {
+	for _, want := range []string{"2 matches | ext: .py (2)", "examples: a.py, b.py"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected %q in find summary:\n%s", want, got)
 		}
 	}
 	truncated := filters.SummarizeFindPaths([]string{"a.py", "b.py", "c.py", "d.py"}, 3)
-	if !strings.Contains(truncated, "4 matches across 1 dirs") {
+	if !strings.Contains(truncated, "4 matches | ext: .py (4)") {
 		t.Fatalf("expected truncated find summary, got %q", truncated)
 	}
 	suppressed := filters.SummarizeFindPaths([]string{"node_modules/a.js", "src/a.py"}, 4)
@@ -80,6 +80,12 @@ func TestFindSummaries(t *testing.T) {
 	for _, want := range []string{".venv", "tmp"} {
 		if !strings.Contains(reducerOnlySuppressed, want) {
 			t.Fatalf("expected reducer-only noise bucket %q in find summary:\n%s", want, reducerOnlySuppressed)
+		}
+	}
+	grouped := filters.SummarizeFindPathsGrouped([]string{"cmd/a.go", "cmd/b.go", "internal/c.go"}, 4)
+	for _, want := range []string{"3F 2D", "cmd/ a.go b.go", "internal/ c.go"} {
+		if !strings.Contains(grouped, want) {
+			t.Fatalf("expected %q in grouped find summary:\n%s", want, grouped)
 		}
 	}
 }
@@ -126,8 +132,8 @@ func TestStreamingSearchReducers(t *testing.T) {
 	if !find.Done() {
 		t.Fatal("expected find reducer to report done after filling sample budget")
 	}
-	if got := find.Result(); !strings.Contains(got, "... +4 more matches") {
-		t.Fatalf("expected find reducer overflow note, got %q", got)
+	if got := find.Result(); !strings.Contains(got, "examples: /tmp/a.py") {
+		t.Fatalf("expected find reducer compact examples, got %q", got)
 	}
 	if preview, result := find.Preview(), find.Result(); preview != result {
 		t.Fatalf("expected stable find preview/result, preview=%q result=%q", preview, result)
@@ -163,7 +169,7 @@ func TestStreamingSearchReducersSuppressReducerOnlyNoise(t *testing.T) {
 	find := filters.NewFindReducer(4)
 	find.ConsumeStdout([]byte(".venv/bin/python\ntmp/build.log\nsrc/app.go\n"))
 	got = find.Result()
-	for _, want := range []string{"1 matches across 1 dirs", "src/app.go", ".venv", "tmp"} {
+	for _, want := range []string{"1 matches | ext: .go (1)", "examples: src/app.go"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected %q in find reducer output:\n%s", want, got)
 		}

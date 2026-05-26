@@ -149,9 +149,8 @@ var builtinSpecs = []Spec{
 		Display:     []string{"find", ".", "-name", "*.go"},
 		StdoutFile:  "testdata/find_noisy_paths.txt",
 		ExpectedContains: []string{
-			"6 matches across 3 dirs",
+			"6 matches | ext: .go (6)",
 			"cmd/szr/main.go",
-			"internal/engine/fastpath.go",
 			"suppressed noisy paths:",
 		},
 		MinTokenSavings: 20,

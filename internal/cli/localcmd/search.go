@@ -86,7 +86,14 @@ func RunFind(rt Runtime, cfg config.Config, args []string) int {
 		if !decision.include {
 			return nil
 		}
-		matches = append(matches, normalized)
+		displayPath := relative
+		if displayPath == "" {
+			displayPath = filepath.Base(normalized)
+		}
+		if displayPath == "" {
+			displayPath = normalized
+		}
+		matches = append(matches, filepath.ToSlash(displayPath))
 		return nil
 	})
 	if err != nil {
@@ -94,6 +101,10 @@ func RunFind(rt Runtime, cfg config.Config, args []string) int {
 		return 1
 	}
 
+	if opts.grouped {
+		fmt.Fprintln(rt.Stdout, filters.SummarizeFindPathsGrouped(matches, limit))
+		return 0
+	}
 	fmt.Fprintln(rt.Stdout, filters.SummarizeFindPaths(matches, limit))
 	return 0
 }
@@ -114,6 +125,7 @@ type findOptions struct {
 	matchType   string
 	maxDepth    int
 	excludes    []string
+	grouped     bool
 }
 
 type findMatchDecision struct {
@@ -145,12 +157,13 @@ func parseFindOptions(rt Runtime, args []string) (findOptions, int) {
 }
 
 func applyFindFlag(rt Runtime, opts *findOptions, args []string, index *int) bool {
-	value, ok := findFlagValue(rt, args, index, args[*index])
+	flag := args[*index]
+	value, ok := findFlagValue(rt, args, index, flag)
 	if !ok {
 		return false
 	}
 
-	switch args[*index-1] {
+	switch flag {
 	case "--name":
 		opts.namePattern = value
 	case "--path":
@@ -170,8 +183,10 @@ func applyFindFlag(rt Runtime, opts *findOptions, args []string, index *int) boo
 			return false
 		}
 		opts.maxDepth = parsed
+	case "--grouped":
+		opts.grouped = true
 	default:
-		fmt.Fprintf(rt.Stderr, "szr: unexpected find argument %s\n", args[*index-1])
+		fmt.Fprintf(rt.Stderr, "szr: unexpected find argument %s\n", flag)
 		return false
 	}
 
@@ -179,6 +194,9 @@ func applyFindFlag(rt Runtime, opts *findOptions, args []string, index *int) boo
 }
 
 func findFlagValue(rt Runtime, args []string, index *int, flag string) (string, bool) {
+	if flag == "--grouped" {
+		return "true", true
+	}
 	*index = *index + 1
 	if *index >= len(args) {
 		fmt.Fprintf(rt.Stderr, "szr: find requires a value for %s\n", flag)

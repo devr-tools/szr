@@ -43,84 +43,109 @@ func (a *App) runSettingsInteractive(stdin io.Reader, stdout, stderr io.Writer) 
 	}
 }
 
+type settingsAction func(*App, *bufio.Reader, io.Writer, io.Writer) (int, bool)
+
 func (a *App) handleSettingsChoice(choice string, reader *bufio.Reader, stdout, stderr io.Writer) (int, bool) {
+	if action, ok := a.settingsActions()[choice]; ok {
+		return action(a, reader, stdout, stderr)
+	}
+
 	switch choice {
-	case "1":
-		return a.updateBooleanSetting(reader, stdout, stderr, "update checks", a.config.UpdateCheck.Enabled, "settings: update checks unchanged", func(cfg *config.Config, value bool) string {
-			cfg.UpdateCheck.Enabled = value
-			return enabledLabel(cfg.UpdateCheck.Enabled)
-		})
-	case "2":
-		return a.updateBooleanSetting(reader, stdout, stderr, "auto update", a.config.UpdateCheck.AutoUpdate, "settings: auto update unchanged", func(cfg *config.Config, value bool) string {
-			cfg.UpdateCheck.AutoUpdate = value
-			if cfg.UpdateCheck.AutoUpdate {
-				cfg.UpdateCheck.Enabled = true
-			}
-			return enabledLabel(cfg.UpdateCheck.AutoUpdate)
-		})
-	case "3":
-		return a.updatePositiveIntSetting(reader, stdout, stderr, "update interval hours", "update interval", "settings: interval unchanged", func(cfg *config.Config, value int) string {
-			cfg.UpdateCheck.IntervalHours = value
-			return fmt.Sprintf("%dh", cfg.UpdateCheck.IntervalHours)
-		})
-	case "4":
-		return a.updateBooleanSetting(reader, stdout, stderr, "tee on failure", a.config.TeeOnFailure, "settings: tee on failure unchanged", func(cfg *config.Config, value bool) string {
-			cfg.TeeOnFailure = value
-			return enabledLabel(cfg.TeeOnFailure)
-		})
-	case "5":
-		return a.updatePositiveIntSetting(reader, stdout, stderr, "max preview lines", "max preview lines", "settings: max preview lines unchanged", func(cfg *config.Config, value int) string {
-			cfg.MaxPreviewLines = value
-			return fmt.Sprintf("%d", cfg.MaxPreviewLines)
-		})
-	case "6":
-		return a.updatePositiveIntSetting(reader, stdout, stderr, "max match groups", "max match groups", "settings: max match groups unchanged", func(cfg *config.Config, value int) string {
-			cfg.MaxMatchGroups = value
-			return fmt.Sprintf("%d", cfg.MaxMatchGroups)
-		})
-	case "7":
-		return a.updateReasoningBudgetSetting(reader, stdout, stderr)
-	case "8":
-		return a.updateBooleanSetting(reader, stdout, stderr, "aggressive prepare rewrites", a.config.Advanced.AggressivePrepareRewrites, "settings: aggressive prepare rewrites unchanged", func(cfg *config.Config, value bool) string {
-			cfg.Advanced.AggressivePrepareRewrites = value
-			return enabledLabel(cfg.Advanced.AggressivePrepareRewrites)
-		})
-	case "9":
-		return a.updateBooleanSetting(reader, stdout, stderr, "noise prefiltering", a.config.Advanced.NoisePrefiltering, "settings: noise prefiltering unchanged", func(cfg *config.Config, value bool) string {
-			cfg.Advanced.NoisePrefiltering = value
-			return enabledLabel(cfg.Advanced.NoisePrefiltering)
-		})
-	case "10":
-		return a.updateBooleanSetting(reader, stdout, stderr, "adaptive budgets", a.config.Advanced.AdaptiveBudgets, "settings: adaptive budgets unchanged", func(cfg *config.Config, value bool) string {
-			cfg.Advanced.AdaptiveBudgets = value
-			return enabledLabel(cfg.Advanced.AdaptiveBudgets)
-		})
-	case "11":
-		return a.updateBooleanSetting(reader, stdout, stderr, "early capture stop", a.config.Advanced.EarlyCaptureStop, "settings: early capture stop unchanged", func(cfg *config.Config, value bool) string {
-			cfg.Advanced.EarlyCaptureStop = value
-			return enabledLabel(cfg.Advanced.EarlyCaptureStop)
-		})
-	case "12":
-		return a.updateBooleanSetting(reader, stdout, stderr, "semantic compaction", a.config.Advanced.SemanticCompaction, "settings: semantic compaction unchanged", func(cfg *config.Config, value bool) string {
-			cfg.Advanced.SemanticCompaction = value
-			return enabledLabel(cfg.Advanced.SemanticCompaction)
-		})
-	case "13":
-		return a.updateBooleanSetting(reader, stdout, stderr, "compression contract", a.config.Advanced.CompressionContract, "settings: compression contract unchanged", func(cfg *config.Config, value bool) string {
-			cfg.Advanced.CompressionContract = value
-			return enabledLabel(cfg.Advanced.CompressionContract)
-		})
-	case "14":
-		return a.updateBooleanSetting(reader, stdout, stderr, "compact artifact refs", a.config.Advanced.CompactArtifactRefs, "settings: compact artifact refs unchanged", func(cfg *config.Config, value bool) string {
-			cfg.Advanced.CompactArtifactRefs = value
-			return enabledLabel(cfg.Advanced.CompactArtifactRefs)
-		})
 	case "q", "quit", "exit":
 		fmt.Fprintln(stdout, "settings: saved and exiting")
 		return 0, true
 	default:
 		fmt.Fprintf(stdout, "settings: unknown choice %q\n\n", choice)
 		return 0, false
+	}
+}
+
+func (a *App) settingsActions() map[string]settingsAction {
+	return map[string]settingsAction{
+		"1": func(app *App, reader *bufio.Reader, stdout, stderr io.Writer) (int, bool) {
+			return app.updateBooleanSetting(reader, stdout, stderr, "update checks", app.config.UpdateCheck.Enabled, "settings: update checks unchanged", func(cfg *config.Config, value bool) string {
+				cfg.UpdateCheck.Enabled = value
+				return enabledLabel(cfg.UpdateCheck.Enabled)
+			})
+		},
+		"2": func(app *App, reader *bufio.Reader, stdout, stderr io.Writer) (int, bool) {
+			return app.updateBooleanSetting(reader, stdout, stderr, "auto update", app.config.UpdateCheck.AutoUpdate, "settings: auto update unchanged", func(cfg *config.Config, value bool) string {
+				cfg.UpdateCheck.AutoUpdate = value
+				if cfg.UpdateCheck.AutoUpdate {
+					cfg.UpdateCheck.Enabled = true
+				}
+				return enabledLabel(cfg.UpdateCheck.AutoUpdate)
+			})
+		},
+		"3": func(app *App, reader *bufio.Reader, stdout, stderr io.Writer) (int, bool) {
+			return app.updatePositiveIntSetting(reader, stdout, stderr, "update interval hours", "update interval", "settings: interval unchanged", func(cfg *config.Config, value int) string {
+				cfg.UpdateCheck.IntervalHours = value
+				return fmt.Sprintf("%dh", cfg.UpdateCheck.IntervalHours)
+			})
+		},
+		"4": func(app *App, reader *bufio.Reader, stdout, stderr io.Writer) (int, bool) {
+			return app.updateBooleanSetting(reader, stdout, stderr, "tee on failure", app.config.TeeOnFailure, "settings: tee on failure unchanged", func(cfg *config.Config, value bool) string {
+				cfg.TeeOnFailure = value
+				return enabledLabel(cfg.TeeOnFailure)
+			})
+		},
+		"5": func(app *App, reader *bufio.Reader, stdout, stderr io.Writer) (int, bool) {
+			return app.updatePositiveIntSetting(reader, stdout, stderr, "max preview lines", "max preview lines", "settings: max preview lines unchanged", func(cfg *config.Config, value int) string {
+				cfg.MaxPreviewLines = value
+				return fmt.Sprintf("%d", cfg.MaxPreviewLines)
+			})
+		},
+		"6": func(app *App, reader *bufio.Reader, stdout, stderr io.Writer) (int, bool) {
+			return app.updatePositiveIntSetting(reader, stdout, stderr, "max match groups", "max match groups", "settings: max match groups unchanged", func(cfg *config.Config, value int) string {
+				cfg.MaxMatchGroups = value
+				return fmt.Sprintf("%d", cfg.MaxMatchGroups)
+			})
+		},
+		"7": func(app *App, reader *bufio.Reader, stdout, stderr io.Writer) (int, bool) {
+			return app.updateReasoningBudgetSetting(reader, stdout, stderr)
+		},
+		"8": func(app *App, reader *bufio.Reader, stdout, stderr io.Writer) (int, bool) {
+			return app.updateBooleanSetting(reader, stdout, stderr, "aggressive prepare rewrites", app.config.Advanced.AggressivePrepareRewrites, "settings: aggressive prepare rewrites unchanged", func(cfg *config.Config, value bool) string {
+				cfg.Advanced.AggressivePrepareRewrites = value
+				return enabledLabel(cfg.Advanced.AggressivePrepareRewrites)
+			})
+		},
+		"9": func(app *App, reader *bufio.Reader, stdout, stderr io.Writer) (int, bool) {
+			return app.updateBooleanSetting(reader, stdout, stderr, "noise prefiltering", app.config.Advanced.NoisePrefiltering, "settings: noise prefiltering unchanged", func(cfg *config.Config, value bool) string {
+				cfg.Advanced.NoisePrefiltering = value
+				return enabledLabel(cfg.Advanced.NoisePrefiltering)
+			})
+		},
+		"10": func(app *App, reader *bufio.Reader, stdout, stderr io.Writer) (int, bool) {
+			return app.updateBooleanSetting(reader, stdout, stderr, "adaptive budgets", app.config.Advanced.AdaptiveBudgets, "settings: adaptive budgets unchanged", func(cfg *config.Config, value bool) string {
+				cfg.Advanced.AdaptiveBudgets = value
+				return enabledLabel(cfg.Advanced.AdaptiveBudgets)
+			})
+		},
+		"11": func(app *App, reader *bufio.Reader, stdout, stderr io.Writer) (int, bool) {
+			return app.updateBooleanSetting(reader, stdout, stderr, "early capture stop", app.config.Advanced.EarlyCaptureStop, "settings: early capture stop unchanged", func(cfg *config.Config, value bool) string {
+				cfg.Advanced.EarlyCaptureStop = value
+				return enabledLabel(cfg.Advanced.EarlyCaptureStop)
+			})
+		},
+		"12": func(app *App, reader *bufio.Reader, stdout, stderr io.Writer) (int, bool) {
+			return app.updateBooleanSetting(reader, stdout, stderr, "semantic compaction", app.config.Advanced.SemanticCompaction, "settings: semantic compaction unchanged", func(cfg *config.Config, value bool) string {
+				cfg.Advanced.SemanticCompaction = value
+				return enabledLabel(cfg.Advanced.SemanticCompaction)
+			})
+		},
+		"13": func(app *App, reader *bufio.Reader, stdout, stderr io.Writer) (int, bool) {
+			return app.updateBooleanSetting(reader, stdout, stderr, "compression contract", app.config.Advanced.CompressionContract, "settings: compression contract unchanged", func(cfg *config.Config, value bool) string {
+				cfg.Advanced.CompressionContract = value
+				return enabledLabel(cfg.Advanced.CompressionContract)
+			})
+		},
+		"14": func(app *App, reader *bufio.Reader, stdout, stderr io.Writer) (int, bool) {
+			return app.updateBooleanSetting(reader, stdout, stderr, "compact artifact refs", app.config.Advanced.CompactArtifactRefs, "settings: compact artifact refs unchanged", func(cfg *config.Config, value bool) string {
+				cfg.Advanced.CompactArtifactRefs = value
+				return enabledLabel(cfg.Advanced.CompactArtifactRefs)
+			})
+		},
 	}
 }
 
