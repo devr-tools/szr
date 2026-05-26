@@ -39,28 +39,34 @@ jobs:
       - name: Resolve release context
         id: release
         shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_TAG: ${{ github.event.inputs.tag }}
+          DISPATCH_PRERELEASE: ${{ github.event.inputs.prerelease }}
+          CALL_TAG: ${{ inputs.tag }}
+          CALL_PRERELEASE: ${{ inputs.prerelease }}
         run: |
           set -euo pipefail
 
-          if [ "${{ github.event_name }}" = "push" ]; then
+          if [ "$EVENT_NAME" = "push" ]; then
             tag="${GITHUB_REF_NAME}"
             if [[ "$tag" =~ ^([A-Za-z0-9._-]+-)?v[0-9]+\.[0-9]+\.[0-9]+-[0-9A-Za-z.-]+$ ]]; then
               prerelease="true"
             else
               prerelease="false"
             fi
-          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            raw_tag="${{ github.event.inputs.tag }}"
-            prerelease="${{ github.event.inputs.prerelease }}"
+          elif [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            raw_tag="$DISPATCH_TAG"
+            prerelease="$DISPATCH_PRERELEASE"
           else
-            raw_tag="${{ inputs.tag }}"
-            prerelease="${{ inputs.prerelease }}"
+            raw_tag="$CALL_TAG"
+            prerelease="$CALL_PRERELEASE"
 
             # Reusable callers already pass normalized tags, but keep the same
             # manual-input cleanup here so both entry points behave the same.
           fi
 
-          if [ "${{ github.event_name }}" != "push" ]; then
+          if [ "$EVENT_NAME" != "push" ]; then
             tag="$(printf '%s' "$raw_tag" | tr -d '[:space:]')"
             tag="${tag#refs/tags/}"
             tag="${tag#tag=}"
