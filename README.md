@@ -173,4 +173,4 @@ Use this surface when you want to:
 
 ## Authors
 
-@alxxjohn
+Alex John [@alxxjohn]
