@@ -65,4 +65,19 @@ func TestKubectlProfilesStreamRecovery(t *testing.T) {
 	if kind, summary, requireRawCapture := logsRecovery.RecoveryInfo(); kind != "full-output" || summary != "omitted 2 additional log lines" || !requireRawCapture {
 		t.Fatalf("unexpected kubectl logs recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
 	}
+
+	kubectlTop := testutil.FindProfile(t, list, "kubectl-top")
+	topStream := kubectlTop.StreamRender(engine.Invocation{}, engine.OutputBudget{MaxLines: 2})
+	topStream.ConsumeStdout([]byte(strings.Join([]string{
+		"NAME CPU MEM",
+		"api 10m 64Mi",
+		"worker 200m 512Mi",
+	}, "\n")))
+	topRecovery, ok := topStream.(interface{ RecoveryInfo() (string, string, bool) })
+	if !ok {
+		t.Fatalf("expected recovery-capable kubectl top reducer, got %T", topStream)
+	}
+	if kind, summary, requireRawCapture := topRecovery.RecoveryInfo(); kind != "full-output" || summary != "omitted 1 additional line" || !requireRawCapture {
+		t.Fatalf("unexpected kubectl top recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
 }

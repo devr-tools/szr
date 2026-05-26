@@ -74,4 +74,19 @@ func TestGHProfilesStreamRecovery(t *testing.T) {
 	if kind, summary, requireRawCapture := runRecovery.RecoveryInfo(); kind != "full-output" || summary != "omitted 3 additional lines" || !requireRawCapture {
 		t.Fatalf("unexpected gh run recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
 	}
+
+	ghRunList := testutil.FindProfile(t, list, "gh-run-list")
+	runListStream := ghRunList.StreamRender(engine.Invocation{}, engine.OutputBudget{MaxLines: 2})
+	runListStream.ConsumeStdout([]byte(strings.Join([]string{
+		"completed  success  CI         main",
+		"completed  failure  CI         feature/kube",
+		"in_progress pending Deploy     main",
+	}, "\n")))
+	runListRecovery, ok := runListStream.(interface{ RecoveryInfo() (string, string, bool) })
+	if !ok {
+		t.Fatalf("expected recovery-capable gh run list reducer, got %T", runListStream)
+	}
+	if kind, summary, requireRawCapture := runListRecovery.RecoveryInfo(); kind != "full-output" || summary != "omitted 1 additional line" || !requireRawCapture {
+		t.Fatalf("unexpected gh run list recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
 }

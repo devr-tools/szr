@@ -6,6 +6,7 @@ import (
 
 	"github.com/devr-tools/szr/internal/filters"
 	"github.com/devr-tools/szr/internal/filters/declarative"
+	fsfilter "github.com/devr-tools/szr/internal/filters/fs"
 )
 
 func TestLineHelpers(t *testing.T) {
@@ -147,6 +148,18 @@ func TestFailureHelpers(t *testing.T) {
 	if kind, summary, requireRawCapture := prefilterReducer.RecoveryInfo(); kind != filters.RecoveryKindFullOutput || summary != "omitted 2 progress lines, 1 install lines" || !requireRawCapture {
 		t.Fatalf("unexpected prefiltered recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
 	}
+
+	goTestJSON := strings.Join([]string{
+		`{"Action":"pass","Package":"github.com/acme/pass"}`,
+		`{"Action":"fail","Package":"github.com/acme/fail","Test":"TestOne"}`,
+		`{"Action":"fail","Package":"github.com/acme/fail","Test":"TestTwo"}`,
+		`{"Action":"fail","Package":"github.com/acme/fail","Test":"TestThree"}`,
+		`{"Action":"fail","Package":"github.com/acme/fail","Test":"TestFour"}`,
+		`{"Action":"fail","Package":"github.com/acme/fail","Test":"TestFive"}`,
+	}, "\n")
+	if kind, summary, requireRawCapture := filters.GoTestJSONRecoveryInfo(goTestJSON); kind != filters.RecoveryKindFullOutput || summary != "omitted 1 additional test lines" || !requireRawCapture {
+		t.Fatalf("unexpected go test json recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
 }
 
 func TestUtilityHelpers(t *testing.T) {
@@ -206,32 +219,32 @@ func TestFilesystemSummaries(t *testing.T) {
 		"`-- docs",
 		"2 directories, 2 files",
 	}, "\n")
-	got := filters.SummarizeTreeOutput(tree, 6)
+	got := fsfilter.SummarizeTreeOutput(tree, 6)
 	for _, want := range []string{"project", "cmd (2) app, lib", "docs", "2 directories, 2 files"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected tree summary %q in %q", want, got)
 		}
 	}
 
-	compact := filters.SummarizeTreeOutput(tree, 2)
+	compact := fsfilter.SummarizeTreeOutput(tree, 2)
 	lines := strings.Split(compact, "\n")
 	if len(lines) != 2 || lines[0] != "project" || lines[1] != "2 directories, 2 files" {
 		t.Fatalf("expected compact tree summary to preserve root and footer, got %q", compact)
 	}
 
-	if kind, summary, requireRawCapture := filters.TreeOutputRecoveryInfo(tree, 2); kind != filters.RecoveryKindFullOutput || summary != "omitted tree entries" || !requireRawCapture {
+	if kind, summary, requireRawCapture := fsfilter.TreeOutputRecoveryInfo(tree, 2); kind != filters.RecoveryKindFullOutput || summary != "omitted tree entries" || !requireRawCapture {
 		t.Fatalf("unexpected tree recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
 	}
 
 	listingInput := "README.md\nMakefile\nsrc/\ndocs/\ninternal/\ntest/\npkg/\n"
-	if kind, summary, requireRawCapture := filters.DirectoryListingRecoveryInfo(listingInput, 4); kind != filters.RecoveryKindFullOutput || summary != "omitted 7 directory entries" || !requireRawCapture {
+	if kind, summary, requireRawCapture := fsfilter.DirectoryListingRecoveryInfo(listingInput, 4); kind != filters.RecoveryKindFullOutput || summary != "omitted 7 directory entries" || !requireRawCapture {
 		t.Fatalf("unexpected directory listing recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
 	}
 
 	reducer := filters.NewBufferedTextReducerWithRecovery(true, false, func(input string) string {
-		return filters.SummarizeDirectoryListing(input, 4)
+		return fsfilter.SummarizeDirectoryListing(input, 4)
 	}, func(input string) (string, string, bool) {
-		return filters.DirectoryListingRecoveryInfo(input, 4)
+		return fsfilter.DirectoryListingRecoveryInfo(input, 4)
 	})
 	reducer.ConsumeStdout([]byte(listingInput))
 	if kind, summary, requireRawCapture := reducer.RecoveryInfo(); kind != filters.RecoveryKindFullOutput || summary != "omitted 7 directory entries" || !requireRawCapture {

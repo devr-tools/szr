@@ -117,10 +117,10 @@ func Profiles(maxLines int) []engine.Profile {
 				return inv.Command
 			},
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
-				return shared.CompactLines(exec.Stdout+"\n"+exec.Stderr, maxLines)
+				return shared.RenderDeclarativeBuiltin("compact_lines", exec.Stdout+"\n"+exec.Stderr, maxLines)
 			},
 			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return shared.NewCompactLineReducer(budget.MaxLines, budget.MaxBytes)
+				return shared.NewDeclarativeBuiltinReducer("compact_lines", "lines", budget.MaxLines, true, true)
 			},
 			ParseBytes: profilekit.ParseCombined,
 			Explain: []string{

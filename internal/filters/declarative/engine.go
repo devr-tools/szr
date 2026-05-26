@@ -19,7 +19,10 @@ func Apply(spec Spec, input string, opts Options) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	return applyCompiled(compiled, input), nil
+}
 
+func applyCompiled(compiled compiledSpec, input string) Result {
 	lines := splitLines(input)
 	filtered := make([]string, 0, len(lines))
 	for _, line := range lines {
@@ -42,7 +45,7 @@ func Apply(spec Spec, input string, opts Options) (Result, error) {
 	if len(filtered) == 0 {
 		result.Empty = true
 		result.Text = compiled.spec.EmptyMessage
-		return result, nil
+		return result
 	}
 
 	selected := filtered
@@ -65,21 +68,28 @@ func Apply(spec Spec, input string, opts Options) (Result, error) {
 		out = append(out, fmt.Sprintf("... +%d more lines", result.OmittedAfter))
 	}
 	result.Text = strings.Join(out, "\n")
-	return result, nil
+	return result
 }
 
 func ApplyBuiltin(name string, input string, opts Options) (Result, error) {
-	spec, err := Builtin(name)
+	compiled, err := compiledBuiltin(name)
 	if err != nil {
 		return Result{}, err
 	}
-	return Apply(spec, input, opts)
+	if opts.LineLimit > 0 && opts.LineLimit != compiled.limit {
+		compiled.limit = opts.LineLimit
+	}
+	return applyCompiled(compiled, input), nil
 }
 
 func compileSpec(spec Spec, opts Options) (compiledSpec, error) {
 	if err := Validate(spec); err != nil {
 		return compiledSpec{}, err
 	}
+	return compileValidatedSpec(spec, opts)
+}
+
+func compileValidatedSpec(spec Spec, opts Options) (compiledSpec, error) {
 	compiled := compiledSpec{
 		spec:    spec,
 		limit:   spec.Head,

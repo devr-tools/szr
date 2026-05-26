@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/devr-tools/szr/internal/filters"
 	"github.com/devr-tools/szr/internal/filters/declarative"
 )
 
@@ -66,6 +67,32 @@ func TestDeclarativeValidation(t *testing.T) {
 	}, "line", declarative.Options{})
 	if err == nil || !strings.Contains(err.Error(), "head and tail cannot both be set") {
 		t.Fatalf("expected head/tail validation error, got %v", err)
+	}
+}
+
+func TestDeclarativeBuiltinBridge(t *testing.T) {
+	t.Parallel()
+
+	input := strings.Join([]string{
+		"line-1",
+		"line-2",
+		"line-3",
+	}, "\n")
+	if got := filters.RenderDeclarativeBuiltin("compact_lines", input, 2); got != "line-1\nline-2\n... +1 more lines" {
+		t.Fatalf("unexpected declarative builtin render: %q", got)
+	}
+
+	if kind, summary, requireRawCapture := filters.DeclarativeBuiltinRecoveryInfo("compact_lines", "lines", input, 2); kind != filters.RecoveryKindFullOutput || summary != "omitted 1 additional line" || !requireRawCapture {
+		t.Fatalf("unexpected declarative builtin recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+
+	reducer := filters.NewDeclarativeBuiltinReducer("compact_lines", "lines", 2, true, false)
+	reducer.ConsumeStdout([]byte(input))
+	if got := reducer.Result(); got != "line-1\nline-2\n... +1 more lines" {
+		t.Fatalf("unexpected declarative reducer result: %q", got)
+	}
+	if kind, summary, requireRawCapture := reducer.RecoveryInfo(); kind != filters.RecoveryKindFullOutput || summary != "omitted 1 additional line" || !requireRawCapture {
+		t.Fatalf("unexpected declarative reducer recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
 	}
 }
 

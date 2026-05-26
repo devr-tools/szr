@@ -6,6 +6,7 @@ import (
 
 	"github.com/devr-tools/szr/internal/engine"
 	"github.com/devr-tools/szr/internal/filters"
+	fsfilter "github.com/devr-tools/szr/internal/filters/fs"
 	"github.com/devr-tools/szr/internal/profilekit"
 )
 
@@ -46,21 +47,21 @@ func directoryListingProfile(maxLines int) engine.Profile {
 		},
 		Render: func(inv engine.Invocation, exec engine.Execution) string {
 			if len(inv.Command) > 0 && inv.Command[0] == "tree" {
-				return filters.SummarizeTreeOutput(exec.Stdout, maxLines)
+				return fsfilter.SummarizeTreeOutput(exec.Stdout, maxLines)
 			}
-			return filters.SummarizeDirectoryListing(exec.Stdout, maxLines)
+			return fsfilter.SummarizeDirectoryListing(exec.Stdout, maxLines)
 		},
 		StreamRender: func(inv engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
 			return filters.NewBufferedTextReducerWithRecovery(true, false, func(input string) string {
 				if len(inv.Command) > 0 && inv.Command[0] == "tree" {
-					return filters.SummarizeTreeOutput(input, budget.MaxLines)
+					return fsfilter.SummarizeTreeOutput(input, budget.MaxLines)
 				}
-				return filters.SummarizeDirectoryListing(input, budget.MaxLines)
+				return fsfilter.SummarizeDirectoryListing(input, budget.MaxLines)
 			}, func(input string) (string, string, bool) {
 				if len(inv.Command) > 0 && inv.Command[0] == "tree" {
-					return filters.TreeOutputRecoveryInfo(input, budget.MaxLines)
+					return fsfilter.TreeOutputRecoveryInfo(input, budget.MaxLines)
 				}
-				return filters.DirectoryListingRecoveryInfo(input, budget.MaxLines)
+				return fsfilter.DirectoryListingRecoveryInfo(input, budget.MaxLines)
 			})
 		},
 		ParseBytes: profilekit.ParseStdout,
@@ -83,14 +84,14 @@ func catReadProfile(maxLines int) engine.Profile {
 			return isSingleFileCat(inv.Command)
 		},
 		Render: func(inv engine.Invocation, exec engine.Execution) string {
-			return filters.SummarizeReadFile(inv.Command[len(inv.Command)-1], []byte(exec.Stdout), maxLines)
+			return fsfilter.SummarizeReadFile(inv.Command[len(inv.Command)-1], []byte(exec.Stdout), maxLines)
 		},
 		StreamRender: func(inv engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
 			path := inv.Command[len(inv.Command)-1]
 			return filters.NewBufferedTextReducerWithRecovery(true, false, func(input string) string {
-				return filters.SummarizeReadFile(path, []byte(input), budget.MaxLines)
+				return fsfilter.SummarizeReadFile(path, []byte(input), budget.MaxLines)
 			}, func(input string) (string, string, bool) {
-				return filters.ReadFileRecoveryInfo(path, []byte(input), budget.MaxLines)
+				return fsfilter.ReadFileRecoveryInfo(path, []byte(input), budget.MaxLines)
 			})
 		},
 		ParseBytes: profilekit.ParseStdout,
@@ -122,8 +123,10 @@ func goTestJSONProfile(maxLines int) engine.Profile {
 			return filters.SummarizeGoTestJSON(exec.Stdout)
 		},
 		StreamRender: func(_ engine.Invocation, _ engine.OutputBudget) engine.StreamReducer {
-			return filters.NewBufferedTextReducer(true, false, func(input string) string {
+			return filters.NewBufferedTextReducerWithRecovery(true, false, func(input string) string {
 				return filters.SummarizeGoTestJSON(input)
+			}, func(input string) (string, string, bool) {
+				return filters.GoTestJSONRecoveryInfo(input)
 			})
 		},
 		ParseBytes: profilekit.ParseStdout,
@@ -215,10 +218,10 @@ func genericSummaryProfile(maxLines int) engine.Profile {
 			return len(inv.Display) > 0 && inv.Display[0] == "summary"
 		},
 		Render: func(_ engine.Invocation, exec engine.Execution) string {
-			return filters.CompactLines(exec.Stdout+"\n"+exec.Stderr, maxLines)
+			return filters.RenderDeclarativeBuiltin("compact_lines", exec.Stdout+"\n"+exec.Stderr, maxLines)
 		},
 		StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-			return filters.NewCompactLineReducer(budget.MaxLines, budget.MaxBytes)
+			return filters.NewDeclarativeBuiltinReducer("compact_lines", "lines", budget.MaxLines, true, true)
 		},
 		ParseBytes: profilekit.ParseCombined,
 		Explain: []string{

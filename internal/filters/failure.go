@@ -569,6 +569,23 @@ type goTestPackageState struct {
 }
 
 func SummarizeGoTestJSON(input string) string {
+	return summarizeGoTestJSONResult(input).Text
+}
+
+func GoTestJSONRecoveryInfo(input string) (string, string, bool) {
+	result := summarizeGoTestJSONResult(input)
+	if result.OmittedCount <= 0 {
+		return NoRecovery()
+	}
+	return FullOutputRecovery(fmt.Sprintf("omitted %d additional test lines", result.OmittedCount))
+}
+
+type goTestSummaryResult struct {
+	Text         string
+	OmittedCount int
+}
+
+func summarizeGoTestJSONResult(input string) goTestSummaryResult {
 	failures := map[string][]string{}
 	packages := map[string]*goTestPackageState{}
 	scanner := bufio.NewScanner(strings.NewReader(input))
@@ -581,7 +598,7 @@ func SummarizeGoTestJSON(input string) string {
 	}
 
 	if len(packages) == 0 {
-		return CompactLines(input, 12)
+		return goTestSummaryResult{Text: CompactLines(input, 12)}
 	}
 
 	passed, failed := countGoTestPackages(packages)
@@ -631,12 +648,12 @@ func countGoTestPackages(packages map[string]*goTestPackageState) (int, int) {
 	return passed, failed
 }
 
-func renderGoTestSummary(passed, failed int, failures map[string][]string) string {
+func renderGoTestSummary(passed, failed int, failures map[string][]string) goTestSummaryResult {
 	var out []string
 	out = append(out, fmt.Sprintf("packages: pass=%d fail=%d", passed, failed))
 	if len(failures) == 0 {
 		out = append(out, "all tests passed")
-		return strings.Join(out, "\n")
+		return goTestSummaryResult{Text: strings.Join(out, "\n")}
 	}
 
 	keys := make([]string, 0, len(failures))
@@ -655,5 +672,12 @@ func renderGoTestSummary(passed, failed int, failures map[string][]string) strin
 			out = append(out, "  "+testName)
 		}
 	}
-	return strings.Join(out, "\n")
+	result := goTestSummaryResult{Text: strings.Join(out, "\n")}
+	for _, values := range failures {
+		unique := uniqueStrings(values)
+		if len(unique) > 4 {
+			result.OmittedCount += len(unique) - 4
+		}
+	}
+	return result
 }

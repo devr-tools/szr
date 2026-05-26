@@ -65,7 +65,9 @@ func (r *BufferedTextReducer) RecoveryInfo() (string, string, bool) {
 }
 
 func (r *BufferedTextReducer) input() string {
-	return strings.TrimSpace(r.stdout.String() + joinReducerStreams(r.stdout.String(), r.stderr.String()))
+	stdout := r.stdout.String()
+	stderr := r.stderr.String()
+	return strings.TrimSpace(stdout + joinReducerStreams(stdout, stderr))
 }
 
 func joinReducerStreams(stdout, stderr string) string {

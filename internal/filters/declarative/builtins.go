@@ -16,6 +16,7 @@ var builtinFiles embed.FS
 var (
 	loadBuiltinsOnce sync.Once
 	builtinSpecs     map[string]Spec
+	builtinCompiled  map[string]compiledSpec
 	builtinLoadErr   error
 )
 
@@ -40,6 +41,7 @@ func Builtins() (map[string]Spec, error) {
 		}
 
 		loaded := make(map[string]Spec, len(entries))
+		compiledLoaded := make(map[string]compiledSpec, len(entries))
 		for _, entry := range entries {
 			if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
 				continue
@@ -62,9 +64,16 @@ func Builtins() (map[string]Spec, error) {
 				builtinLoadErr = fmt.Errorf("validate builtin reducer %s: %w", path, err)
 				return
 			}
+			compiled, err := compileValidatedSpec(spec, Options{})
+			if err != nil {
+				builtinLoadErr = fmt.Errorf("compile builtin reducer %s: %w", path, err)
+				return
+			}
 			loaded[spec.Name] = spec
+			compiledLoaded[spec.Name] = compiled
 		}
 		builtinSpecs = loaded
+		builtinCompiled = compiledLoaded
 	})
 	if builtinLoadErr != nil {
 		return nil, builtinLoadErr
@@ -75,6 +84,17 @@ func Builtins() (map[string]Spec, error) {
 		out[name] = spec
 	}
 	return out, nil
+}
+
+func compiledBuiltin(name string) (compiledSpec, error) {
+	if _, err := Builtins(); err != nil {
+		return compiledSpec{}, err
+	}
+	spec, ok := builtinCompiled[name]
+	if !ok {
+		return compiledSpec{}, fmt.Errorf("unknown declarative reducer %q", name)
+	}
+	return spec, nil
 }
 
 func BuiltinNames() ([]string, error) {

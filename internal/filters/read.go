@@ -9,42 +9,81 @@ import (
 
 func ReadLevel(data []byte, level string, lineNumbers bool, maxLines int) string {
 	if level == "minimal" && !lineNumbers {
-		result, err := declarative.ApplyBuiltin("read_minimal", string(data), declarative.Options{LineLimit: maxLines})
-		if err == nil {
-			return result.Text
-		}
+		return fastReadLevelMinimal(data, maxLines)
 	}
 
 	lines := strings.Split(string(data), "\n")
 	filtered := make([]string, 0, len(lines))
 	for i, raw := range lines {
-		line := raw
-		switch level {
-		case "minimal":
-			if strings.HasPrefix(strings.TrimSpace(line), "//") || strings.HasPrefix(strings.TrimSpace(line), "#") {
-				continue
-			}
-		case "aggressive":
-			trimmed := strings.TrimSpace(line)
-			if trimmed == "" {
-				continue
-			}
-			if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "#") {
-				continue
-			}
-			if strings.Contains(trimmed, "{") && strings.Contains(trimmed, "}") {
-				line = collapseBlock(trimmed)
-			}
+		line, keep := filterReadLine(raw, level)
+		if !keep {
+			continue
 		}
-		if lineNumbers {
-			line = fmt.Sprintf("%4d  %s", i+1, line)
-		}
-		filtered = append(filtered, line)
+		filtered = append(filtered, formatReadLine(line, i, lineNumbers))
 	}
-	if maxLines > 0 && len(filtered) > maxLines {
-		filtered = append(filtered[:maxLines], fmt.Sprintf("... +%d more lines", len(filtered)-maxLines))
-	}
+	filtered = limitReadLines(filtered, maxLines)
 	return strings.Join(filtered, "\n")
+}
+
+func fastReadLevelMinimal(data []byte, maxLines int) string {
+	lines := strings.Split(string(data), "\n")
+	filtered := make([]string, 0, len(lines))
+	for _, raw := range lines {
+		trimmed := strings.TrimSpace(raw)
+		if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		filtered = append(filtered, raw)
+	}
+	filtered = limitReadLines(filtered, maxLines)
+	return strings.Join(filtered, "\n")
+}
+
+func filterReadLine(raw string, level string) (string, bool) {
+	switch level {
+	case "minimal":
+		return filterMinimalReadLine(raw)
+	case "aggressive":
+		return filterAggressiveReadLine(raw)
+	default:
+		return raw, true
+	}
+}
+
+func filterMinimalReadLine(raw string) (string, bool) {
+	trimmed := strings.TrimSpace(raw)
+	if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "#") {
+		return "", false
+	}
+	return raw, true
+}
+
+func filterAggressiveReadLine(raw string) (string, bool) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "", false
+	}
+	if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "#") {
+		return "", false
+	}
+	if strings.Contains(trimmed, "{") && strings.Contains(trimmed, "}") {
+		return collapseBlock(trimmed), true
+	}
+	return raw, true
+}
+
+func formatReadLine(line string, index int, lineNumbers bool) string {
+	if !lineNumbers {
+		return line
+	}
+	return fmt.Sprintf("%4d  %s", index+1, line)
+}
+
+func limitReadLines(lines []string, maxLines int) []string {
+	if maxLines <= 0 || len(lines) <= maxLines {
+		return lines
+	}
+	return append(lines[:maxLines], fmt.Sprintf("... +%d more lines", len(lines)-maxLines))
 }
 
 func collapseBlock(line string) string {

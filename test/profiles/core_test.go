@@ -1,10 +1,12 @@
 package profiles_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/devr-tools/szr/internal/config"
 	"github.com/devr-tools/szr/internal/engine"
+	"github.com/devr-tools/szr/internal/filters"
 	"github.com/devr-tools/szr/internal/profiles"
 	"github.com/devr-tools/szr/test/testutil"
 )
@@ -115,6 +117,33 @@ func TestGoProfiles(t *testing.T) {
 	}
 	if goTest.StreamPreference != engine.StreamStdoutOnly || goTest.StreamRender == nil {
 		t.Fatalf("unexpected go-test-json stream metadata: %#v", goTest)
+	}
+	goTestStream := goTest.StreamRender(engine.Invocation{}, goTest.Budget)
+	goTestStream.ConsumeStdout([]byte(strings.Join([]string{
+		`{"Action":"pass","Package":"github.com/acme/pass"}`,
+		`{"Action":"fail","Package":"github.com/acme/fail","Test":"TestOne"}`,
+		`{"Action":"fail","Package":"github.com/acme/fail","Test":"TestTwo"}`,
+		`{"Action":"fail","Package":"github.com/acme/fail","Test":"TestThree"}`,
+		`{"Action":"fail","Package":"github.com/acme/fail","Test":"TestFour"}`,
+		`{"Action":"fail","Package":"github.com/acme/fail","Test":"TestFive"}`,
+	}, "\n")))
+	goTestRecovery, ok := goTestStream.(interface{ RecoveryInfo() (string, string, bool) })
+	if !ok {
+		t.Fatalf("expected recovery-capable go-test-json reducer, got %T", goTestStream)
+	}
+	if kind, summary, requireRawCapture := goTestRecovery.RecoveryInfo(); kind != filters.RecoveryKindFullOutput || summary != "omitted 1 additional test lines" || !requireRawCapture {
+		t.Fatalf("unexpected go-test-json recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+
+	genericSummary := testutil.FindProfile(t, list, "generic-summary")
+	summaryStream := genericSummary.StreamRender(engine.Invocation{}, engine.OutputBudget{MaxLines: 2})
+	summaryStream.ConsumeStdout([]byte("line-1\nline-2\nline-3\n"))
+	summaryRecovery, ok := summaryStream.(interface{ RecoveryInfo() (string, string, bool) })
+	if !ok {
+		t.Fatalf("expected recovery-capable generic-summary reducer, got %T", summaryStream)
+	}
+	if kind, summary, requireRawCapture := summaryRecovery.RecoveryInfo(); kind != filters.RecoveryKindFullOutput || summary != "omitted 1 additional line" || !requireRawCapture {
+		t.Fatalf("unexpected generic-summary recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
 	}
 
 	goBuild := testutil.FindProfile(t, list, "go-build")
@@ -340,10 +369,10 @@ func TestWorkspaceAndToolingProfiles(t *testing.T) {
 	}
 
 	ripgrep := testutil.FindProfile(t, list, "ripgrep")
-	if !ripgrep.Match(engine.Invocation{Display: []string{"rg", "needle", "."}}) {
+	if !ripgrep.Match(engine.Classify(engine.Invocation{Display: []string{"rg", "needle", "."}})) {
 		t.Fatal("ripgrep should match plain rg commands")
 	}
-	if ripgrep.Match(engine.Invocation{Display: []string{"rg", "--json", "needle"}}) {
+	if ripgrep.Match(engine.Classify(engine.Invocation{Display: []string{"rg", "--json", "needle"}})) {
 		t.Fatal("ripgrep should not match json rg mode")
 	}
 	if got := ripgrep.Render(engine.Invocation{}, engine.Execution{Stdout: "a.go:1:hit\nb.go:2:hit\n"}); got == "" {

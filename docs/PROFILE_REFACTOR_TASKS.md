@@ -41,16 +41,14 @@ Completed and integrated:
 - Task 7 contributor docs for `git`, `javascript`, and generic fallback reducers
 - Task 8 first migration slice for search/path-list families
 
-In progress:
+Closed out:
 
-- Task 5 declarative fallback reducers
+- No active refactor task remains blocked on core infrastructure.
+- Task 5 is complete for the current reducer set.
   - Runtime, builtin specs, validation, and filter helpers landed.
   - Engine fallback adoption landed for unmatched commands.
-  - Remaining scope: broader configurable adoption beyond the generic fallback path and any additional builtin reducers that justify declarative treatment.
-- Task 6 truncation and recovery policy
-  - Shared recovery contract and engine hinting landed.
-  - Representative stream and non-stream migrations landed for `git`, search/path-list, generic failure compaction, directory listing, and file-read previews.
-  - Remaining scope: family-by-family migration of any reducers that still omit meaningful output without `RecoveryInfo()` or equivalent shared recovery wiring.
+  - Explicit declarative builtin bridges now land in profile selection for line-only reducers such as `generic-summary`, `gh-run-list`, and `kubectl-top`.
+  - The remaining reducers that still look superficially "simple" depend on structured parsing, semantic failure compaction, grouping, or command-family behavior and should stay in Go.
 
 Dependency guardrails:
 
@@ -229,6 +227,57 @@ Add a lightweight declarative fallback layer for simple line-oriented reducers.
 - A contributor can add a simple fallback reducer without editing Go code.
 - Existing structured profiles remain code-defined.
 
+**Current implementation notes**
+
+- Builtin declarative reducers currently cover:
+  - `compact_lines`
+  - `interesting_error_lines`
+  - `read_minimal`
+- Declarative reducers are now used in three layers:
+  - generic filter helpers such as `CompactLines(...)`
+  - engine unmatched fallback selection
+  - explicit profile-level reducer selection for line-only summaries
+- Current explicit profile-level declarative adopters are:
+  - `generic-summary`
+  - `gh-run-list`
+  - `kubectl-top`
+
+**Adoption decision matrix**
+
+Move a reducer onto a declarative builtin only when all of the following are true:
+
+- the reducer is text-first and line-oriented
+- regex, keep or strip rules, and head or tail clipping are enough
+- there is no command-specific prepare logic in the reducer itself
+- there is no record grouping, aggregation, or semantic ranking step
+- recovery can be described as omitted lines rather than a richer artifact
+
+Keep the reducer in Go when any of the following are true:
+
+- it depends on structured input such as JSON, NDJSON, or tabular field extraction
+- it groups records or ranks failures rather than just clipping lines
+- it depends on command-family semantics or tool-specific output conventions
+- it needs custom recovery semantics beyond "more omitted lines exist"
+
+Reducers that are now explicitly treated as declarative-worthy:
+
+- `generic-summary`
+- `gh-run-list`
+- `kubectl-top`
+- unmatched-command fallback success compaction
+- unmatched-command fallback failure-biased extraction
+- read-preview helper use through `read_minimal`
+
+Reducers that should stay in Go for the current architecture:
+
+- failure-focused reducers such as `generic-test`, `go-build`, and `gh-pr-checks`
+- structured reducers such as `go-test-json`, `gh-pr-view`, `gh-run-view`, `json-query`, `sql-query`, and `http-api`
+- grouped log and event reducers such as `gh-run-log`, `kubectl-logs`, `kubectl-events`, and `cloud-logs`
+- inventory or table summarizers with domain-aware grouping such as `kubectl-get`, `docker ps`, `cloud-list`, `tabular`, and directory or tree previews
+- file, patch, compiler, and language-tooling reducers such as `cat-read`, `patch-diff`, `clang-tooling`, `pytest`, `cargo-*`, `python-tooling`, `php-tooling`, and `rust`
+
+Task 5 is considered complete once the declarative layer is available for true line-only reducers and the remaining reducer set has an explicit "stay in Go" boundary. That condition is now met.
+
 ## Task 6: Truncation And Recovery Policy
 
 **Objective**
@@ -261,7 +310,7 @@ Define one shared policy for hidden-output recovery.
 
 - Shared engine recovery helpers and filter-level recovery adapters are landed.
 - Task 5 reuses the same recovery helper contract for declarative fallback reducers instead of inventing a second hint/artifact path.
-- Family-by-family reducer migration should continue from the helpers that are now in place.
+- Task 6 is complete for the current builtin family set.
 - Current Task 6 migrations cover:
   - `cloud-list`
   - `cloud-logs`
@@ -296,8 +345,9 @@ Define one shared policy for hidden-output recovery.
   - `git diff`
   - core directory-listing/tree previews
   - core file-read previews
+  - `go-test-json`
   - `sql-query`
-- Remaining Task 6 targets should prioritize any residual core/build-test helpers that still truncate or collapse output without shared recovery metadata, especially `go-test-json` if we want the older buffered set fully closed out.
+- Future follow-up under Task 6 should only be needed for newly added reducers or any later-discovered omissions that bypass the shared recovery contract.
 
 ## Task 7: Contributor Docs By Ecosystem
 
@@ -386,9 +436,10 @@ These tasks can overlap once Task 1 lands:
 - [x] Task 4 complete
 - [x] Task 5 declarative runtime landed
 - [x] Task 5 engine fallback adoption landed
-- [ ] Task 5 complete
+- [x] Task 5 first-class profile builtin bridge landed
+- [x] Task 5 complete
 - [x] Task 6 helper API landed
-- [ ] Task 6 complete
+- [x] Task 6 complete
 - [x] Task 6 non-stream summarizer slice landed
 - [x] Task 6 additional stream reducer slice landed
 - [x] Task 7 complete
@@ -399,5 +450,5 @@ These tasks can overlap once Task 1 lands:
 - [x] `javascript` contributor guide landed
 - [x] declarative fallback contributor guide landed
 - [x] search/path-list families migrated
-- [ ] build/test families migrated
-- [ ] cloud/Kubernetes families migrated
+- [x] build/test families migrated
+- [x] cloud/Kubernetes families migrated

@@ -40,6 +40,28 @@ Good targets:
 - compact line fallback on success
 - empty output produces the configured fallback message
 
+## Current adoption
+
+The current declarative builtin surface is intentionally small:
+
+- `compact_lines`
+- `interesting_error_lines`
+- `read_minimal`
+
+These are used in three ways:
+
+- generic helper calls such as compact-line fallback
+- engine fallback for unmatched commands
+- explicit profile-level reducers for true line-only summaries
+
+Current explicit profile-level adopters:
+
+- `generic-summary`
+- `gh-run-list`
+- `kubectl-top`
+
+At the moment, that profile-level set is effectively the boundary for obvious line-only reducers in the builtin profile families.
+
 ## Code vs declarative fallback
 
 Use declarative fallback when all of the following are true:
@@ -56,3 +78,12 @@ Use Go code when any of the following are true:
 - the reducer needs custom recovery semantics
 - the reducer depends on command-family semantics
 - the reducer mutates command args or relies on profile capabilities
+
+Examples that should stay in Go in this repo:
+
+- failure compaction reducers such as `generic-test`, `go-build`, and `gh-pr-checks`
+- structured reducers such as `go-test-json`, `gh-pr-view`, `gh-run-view`, `json-query`, `sql-query`, and `http-api`
+- grouped log or event reducers such as `gh-run-log`, `kubectl-logs`, `kubectl-events`, and `cloud-logs`
+- domain-aware inventory summaries such as `kubectl-get`, `docker ps`, `cloud-list`, `tabular`, directory listings, and tree previews
+
+If a proposed migration needs command awareness to justify why one line matters more than another, it is not a declarative reducer candidate.

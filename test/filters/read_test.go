@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/devr-tools/szr/internal/filters"
+	fsfilter "github.com/devr-tools/szr/internal/filters/fs"
 )
 
 func TestReadLevels(t *testing.T) {
@@ -31,41 +32,41 @@ func TestReadLevels(t *testing.T) {
 }
 
 func TestSummarizeReadFile(t *testing.T) {
-	doc := filters.SummarizeReadFile("README.md", []byte("# Title\n\n- one\nBody\n"), 3)
+	doc := fsfilter.SummarizeReadFile("README.md", []byte("# Title\n\n- one\nBody\n"), 3)
 	for _, want := range []string{"# Title", "- one"} {
 		if !strings.Contains(doc, want) {
 			t.Fatalf("expected %q in doc preview %q", want, doc)
 		}
 	}
 
-	code := filters.SummarizeReadFile("main.go", []byte("package main\n\n// comment\nfunc main() { println(\"x\") }\n"), 3)
+	code := fsfilter.SummarizeReadFile("main.go", []byte("package main\n\n// comment\nfunc main() { println(\"x\") }\n"), 3)
 	for _, want := range []string{"1  package main", "4  func main() { ... }"} {
 		if !strings.Contains(code, want) {
 			t.Fatalf("expected %q in code preview %q", want, code)
 		}
 	}
 
-	jsonPreview := filters.SummarizeReadFile("cfg.json", []byte(`{"name":"x","items":[{"id":1}]}`), 8)
+	jsonPreview := fsfilter.SummarizeReadFile("cfg.json", []byte(`{"name":"x","items":[{"id":1}]}`), 8)
 	if !strings.Contains(jsonPreview, "name: string") || !strings.Contains(jsonPreview, "id: number") {
 		t.Fatalf("expected json structure preview, got %q", jsonPreview)
 	}
 
-	if kind, summary, requireRawCapture := filters.ReadFileRecoveryInfo("README.md", []byte("# Title\n\n- one\nBody\nAnother body line\n"), 2); kind != filters.RecoveryKindFullOutput || summary != "omitted 2 additional lines" || !requireRawCapture {
+	if kind, summary, requireRawCapture := fsfilter.ReadFileRecoveryInfo("README.md", []byte("# Title\n\n- one\nBody\nAnother body line\n"), 2); kind != filters.RecoveryKindFullOutput || summary != "omitted 2 additional lines" || !requireRawCapture {
 		t.Fatalf("unexpected read file recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
 	}
 
-	if kind, summary, requireRawCapture := filters.ReadFileRecoveryInfo("cfg.json", []byte(`{"name":"x","items":[{"id":1},{"id":2},{"id":3}],"meta":{"env":"dev","owner":"team","service":"api"},"flags":{"a":true,"b":false},"nested":{"child":{"leaf":"x"}}}`), 2); kind != filters.RecoveryKindFullOutput || summary == "" || !requireRawCapture {
+	if kind, summary, requireRawCapture := fsfilter.ReadFileRecoveryInfo("cfg.json", []byte(`{"name":"x","items":[{"id":1},{"id":2},{"id":3}],"meta":{"env":"dev","owner":"team","service":"api"},"flags":{"a":true,"b":false},"nested":{"child":{"leaf":"x"}}}`), 2); kind != filters.RecoveryKindFullOutput || summary == "" || !requireRawCapture {
 		t.Fatalf("expected json read preview recovery info, got kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
 	}
 }
 
 func TestSummarizeDirectoryAndTree(t *testing.T) {
-	listing := filters.SummarizeDirectoryListing("README.md\nMakefile\nsrc/\ndocs/\ninternal/\ntest/\n", 4)
+	listing := fsfilter.SummarizeDirectoryListing("README.md\nMakefile\nsrc/\ndocs/\ninternal/\ntest/\n", 4)
 	if !strings.Contains(listing, "dirs:") || !strings.Contains(listing, "files:") {
 		t.Fatalf("expected grouped directory listing, got %q", listing)
 	}
 
-	tree := filters.SummarizeTreeOutput(strings.Join([]string{
+	tree := fsfilter.SummarizeTreeOutput(strings.Join([]string{
 		"project",
 		"|-- cmd",
 		"|   |-- atlas",
