@@ -453,51 +453,84 @@ func (r *GitDiffReducer) recordLine(line string) {
 		r.fileCount++
 		r.startPatchFile(line)
 	}
-	if strings.HasPrefix(line, "rename from ") && r.currentPatch != nil {
-		r.currentPatch.IsRenamed = true
-		r.currentPatch.OldPath = strings.TrimSpace(strings.TrimPrefix(line, "rename from "))
+	if r.handlePatchMetadata(line) {
 		return
 	}
-	if strings.HasPrefix(line, "rename to ") && r.currentPatch != nil {
-		r.currentPatch.IsRenamed = true
-		r.currentPatch.NewPath = strings.TrimSpace(strings.TrimPrefix(line, "rename to "))
-		if r.currentPatch.Path == "" {
-			r.currentPatch.Path = r.currentPatch.NewPath
-		}
-		return
-	}
-	if strings.HasPrefix(line, "new file mode ") && r.currentPatch != nil {
-		r.currentPatch.IsNew = true
-		return
-	}
-	if strings.HasPrefix(line, "deleted file mode ") && r.currentPatch != nil {
-		r.currentPatch.IsDeleted = true
-		return
-	}
-	if strings.HasPrefix(line, "+++ ") || strings.HasPrefix(line, "--- ") {
+	if isDiffFilenameMarker(line) {
 		return
 	}
 	if strings.HasPrefix(line, "@@ ") {
 		r.recordPatchAnchor(line)
 		return
 	}
-	if strings.HasPrefix(line, "+") {
+	r.recordPatchDelta(line)
+	if len(r.summary) >= r.maxSummary {
+		return
+	}
+	if isDiffSummaryLine(line) {
+		r.summary = append(r.summary, line)
+	}
+}
+
+func (r *GitDiffReducer) handlePatchMetadata(line string) bool {
+	if r.currentPatch == nil {
+		return false
+	}
+	switch {
+	case strings.HasPrefix(line, "rename from "):
+		r.currentPatch.IsRenamed = true
+		r.currentPatch.OldPath = strings.TrimSpace(strings.TrimPrefix(line, "rename from "))
+		return true
+	case strings.HasPrefix(line, "rename to "):
+		r.currentPatch.IsRenamed = true
+		r.currentPatch.NewPath = strings.TrimSpace(strings.TrimPrefix(line, "rename to "))
+		if r.currentPatch.Path == "" {
+			r.currentPatch.Path = r.currentPatch.NewPath
+		}
+		return true
+	case strings.HasPrefix(line, "new file mode "):
+		r.currentPatch.IsNew = true
+		return true
+	case strings.HasPrefix(line, "deleted file mode "):
+		r.currentPatch.IsDeleted = true
+		return true
+	default:
+		return false
+	}
+}
+
+func isDiffFilenameMarker(line string) bool {
+	return strings.HasPrefix(line, "+++ ") || strings.HasPrefix(line, "--- ")
+}
+
+func (r *GitDiffReducer) recordPatchDelta(line string) {
+	switch classifyDiffDelta(line) {
+	case 1:
 		r.additions++
 		if r.currentPatch != nil {
 			r.currentPatch.Additions++
 		}
-	} else if strings.HasPrefix(line, "-") {
+	case -1:
 		r.deletions++
 		if r.currentPatch != nil {
 			r.currentPatch.Deletions++
 		}
 	}
-	if len(r.summary) >= r.maxSummary {
-		return
+}
+
+func classifyDiffDelta(line string) int {
+	switch {
+	case strings.HasPrefix(line, "+"):
+		return 1
+	case strings.HasPrefix(line, "-"):
+		return -1
+	default:
+		return 0
 	}
-	if strings.Contains(line, "|") || strings.Contains(line, "files changed") || strings.Contains(line, "file changed") {
-		r.summary = append(r.summary, line)
-	}
+}
+
+func isDiffSummaryLine(line string) bool {
+	return strings.Contains(line, "|") || strings.Contains(line, "files changed") || strings.Contains(line, "file changed")
 }
 
 func (r *GitDiffReducer) startPatchFile(line string) {

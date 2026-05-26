@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/devr-tools/szr/internal/bench"
+	"github.com/devr-tools/szr/internal/filters"
 	"github.com/devr-tools/szr/internal/installers"
 )
 
@@ -234,6 +236,8 @@ type benchResult struct {
 	FilteredBytes      int      `json:"filtered_bytes"`
 	EmittedBytes       int      `json:"emitted_bytes"`
 	SavedBytes         int      `json:"saved_bytes"`
+	RawLines           int      `json:"raw_lines"`
+	ReducedLines       int      `json:"reduced_lines"`
 	ByteSavingsPct     float64  `json:"byte_savings_pct"`
 	RawTokens          int      `json:"raw_tokens"`
 	FilteredTokens     int      `json:"filtered_tokens"`
@@ -243,8 +247,12 @@ type benchResult struct {
 	TeeRatePct         float64  `json:"tee_rate_pct"`
 	FailureRatePct     float64  `json:"failure_rate_pct"`
 	QualityScore       int      `json:"quality_score"`
+	ActionableLines    int      `json:"actionable_lines"`
+	PreservedFailures  int      `json:"preserved_failures"`
 	QualityIssues      []string `json:"quality_issues,omitempty"`
 	ProfileConfidence  string   `json:"profile_confidence"`
+	RawPreview         string   `json:"raw_preview,omitempty"`
+	ReducedPreview     string   `json:"reduced_preview,omitempty"`
 	ExpectedOK         bool     `json:"expected_ok"`
 	TokenSavingsOK     bool     `json:"token_savings_ok"`
 	QualityOK          bool     `json:"quality_ok"`
@@ -253,7 +261,7 @@ type benchResult struct {
 
 func (a *App) runBench(args []string) int {
 	asJSON := false
-	filters := []string{}
+	fixtureNames := []string{}
 	for _, arg := range args {
 		switch arg {
 		case "--json":
@@ -263,11 +271,11 @@ func (a *App) runBench(args []string) int {
 				fmt.Fprintf(os.Stderr, "szr: unknown bench flag %s\n", arg)
 				return 2
 			}
-			filters = append(filters, arg)
+			fixtureNames = append(fixtureNames, arg)
 		}
 	}
 
-	fixtures := selectBenchFixtures(bench.MustFixtures(), filters)
+	fixtures := selectBenchFixtures(bench.MustFixtures(), fixtureNames)
 	if len(fixtures) == 0 {
 		fmt.Fprintln(os.Stderr, "szr: no benchmark fixtures matched")
 		return 2
@@ -296,6 +304,8 @@ func (a *App) runBench(args []string) int {
 			FilteredBytes:      measurement.FilteredBytes,
 			EmittedBytes:       measurement.EmittedBytes,
 			SavedBytes:         measurement.SavedBytes,
+			RawLines:           countRenderedLines(measurement.RawCombined),
+			ReducedLines:       countRenderedLines(measurement.Rendered),
 			ByteSavingsPct:     measurement.ByteSavingsPct,
 			RawTokens:          measurement.RawTokens,
 			FilteredTokens:     measurement.FilteredTokens,
@@ -305,8 +315,12 @@ func (a *App) runBench(args []string) int {
 			TeeRatePct:         measurement.TeeRate,
 			FailureRatePct:     measurement.FailureRate,
 			QualityScore:       measurement.Quality.Score,
+			ActionableLines:    measurement.Quality.ActionableLines,
+			PreservedFailures:  measurement.Quality.PreservedFailures,
 			QualityIssues:      append([]string(nil), measurement.Quality.Issues...),
 			ProfileConfidence:  measurement.Quality.ProfileConfidence,
+			RawPreview:         filters.CompactLines(measurement.RawCombined, 8),
+			ReducedPreview:     filters.CompactLines(measurement.Rendered, 8),
 			ExpectedOK:         measurement.Expectation.ContainsOK,
 			TokenSavingsOK:     measurement.Expectation.TokenSavingsOK,
 			QualityOK:          measurement.Expectation.QualityOK,
@@ -324,11 +338,13 @@ func (a *App) runBench(args []string) int {
 	exitCode := 0
 	for _, result := range results {
 		fmt.Printf(
-			"%s profile=%s tokens=%.1f%% bytes=%.1f%% parsed=%dB dur_p50=%dus dur_p95=%dus quality=%d fallback=%.0f%% ok=%t\n",
+			"%s profile=%s tokens=%.1f%% bytes=%.1f%% lines=%d->%d parsed=%dB dur_p50=%dus dur_p95=%dus quality=%d fallback=%.0f%% ok=%t\n",
 			result.FixtureName,
 			result.ProfileName,
 			result.TokenSavingsPct,
 			result.ByteSavingsPct,
+			result.RawLines,
+			result.ReducedLines,
 			result.ParsedBytes,
 			result.DurationP50US,
 			result.DurationP95US,
@@ -340,7 +356,60 @@ func (a *App) runBench(args []string) int {
 			exitCode = 1
 		}
 	}
+	printBenchHotspots(results)
 	return exitCode
+}
+
+func printBenchHotspots(results []benchResult) {
+	hotspots := make([]benchResult, 0, len(results))
+	issueCounts := map[string]int{}
+	for _, result := range results {
+		for _, issue := range result.QualityIssues {
+			issueCounts[issue]++
+		}
+		if !result.OK || len(result.QualityIssues) > 0 {
+			hotspots = append(hotspots, result)
+		}
+	}
+	if len(hotspots) == 0 {
+		fmt.Printf("summary fixtures=%d hotspots=0\n", len(results))
+		return
+	}
+	fmt.Printf("summary fixtures=%d hotspots=%d\n", len(results), len(hotspots))
+	for _, result := range hotspots {
+		fmt.Printf(
+			"hotspot %s issues=%s tokens=%.1f%% quality=%d\n",
+			result.FixtureName,
+			strings.Join(result.QualityIssues, ","),
+			result.TokenSavingsPct,
+			result.QualityScore,
+		)
+	}
+	if len(issueCounts) == 0 {
+		return
+	}
+	fmt.Print("issue_counts")
+	for _, issue := range sortedBenchIssues(issueCounts) {
+		fmt.Printf(" %s=%d", issue, issueCounts[issue])
+	}
+	fmt.Println()
+}
+
+func sortedBenchIssues(counts map[string]int) []string {
+	issues := make([]string, 0, len(counts))
+	for issue := range counts {
+		issues = append(issues, issue)
+	}
+	sort.Strings(issues)
+	return issues
+}
+
+func countRenderedLines(value string) int {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+	return strings.Count(value, "\n") + 1
 }
 
 func selectBenchFixtures(fixtures []bench.Fixture, names []string) []bench.Fixture {

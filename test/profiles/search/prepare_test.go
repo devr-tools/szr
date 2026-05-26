@@ -12,6 +12,7 @@ import (
 func TestRipgrepProfilePrepare(t *testing.T) {
 	list := profiles.Builtins(6)
 	profile := testutil.FindProfile(t, list, "ripgrep")
+	filesProfile := testutil.FindProfile(t, list, "ripgrep-files")
 
 	if !profile.Match(engine.Invocation{Display: []string{"rg", "todo", "."}}) {
 		t.Fatal("expected rg to match ripgrep profile")
@@ -21,6 +22,12 @@ func TestRipgrepProfilePrepare(t *testing.T) {
 	}
 	if profile.Match(engine.Invocation{Display: []string{"rg", "--files"}}) {
 		t.Fatal("did not expect rg --files to match ripgrep profile")
+	}
+	if !filesProfile.Match(engine.Invocation{Display: []string{"rg", "--files"}}) {
+		t.Fatal("expected rg --files to match ripgrep-files profile")
+	}
+	if filesProfile.Match(engine.Invocation{Display: []string{"rg", "todo", "."}}) {
+		t.Fatal("did not expect plain rg search to match ripgrep-files profile")
 	}
 
 	got := profile.Prepare(engine.Invocation{Command: []string{"rg", "todo", "."}})
@@ -37,6 +44,19 @@ func TestRipgrepProfilePrepare(t *testing.T) {
 		"-g", "!" + "node_modules" + "/**",
 		"-g", "!" + "target" + "/**",
 		"-g", "!" + "vendor" + "/**",
+		"-g", "!" + ".gradle" + "/**",
+		"-g", "!" + ".mypy_cache" + "/**",
+		"-g", "!" + ".nox" + "/**",
+		"-g", "!" + ".nuxt" + "/**",
+		"-g", "!" + ".output" + "/**",
+		"-g", "!" + ".parcel-cache" + "/**",
+		"-g", "!" + ".pnpm-store" + "/**",
+		"-g", "!" + ".ruff_cache" + "/**",
+		"-g", "!" + ".svelte-kit" + "/**",
+		"-g", "!" + ".venv" + "/**",
+		"-g", "!" + ".yarn" + "/**",
+		"-g", "!" + "out" + "/**",
+		"-g", "!" + "tmp" + "/**",
 		"--color=never", "--no-heading", "-H", "-n", "todo", ".",
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -57,6 +77,19 @@ func TestRipgrepProfilePrepare(t *testing.T) {
 		"-g", "!" + "node_modules" + "/**",
 		"-g", "!" + "target" + "/**",
 		"-g", "!" + "vendor" + "/**",
+		"-g", "!" + ".gradle" + "/**",
+		"-g", "!" + ".mypy_cache" + "/**",
+		"-g", "!" + ".nox" + "/**",
+		"-g", "!" + ".nuxt" + "/**",
+		"-g", "!" + ".output" + "/**",
+		"-g", "!" + ".parcel-cache" + "/**",
+		"-g", "!" + ".pnpm-store" + "/**",
+		"-g", "!" + ".ruff_cache" + "/**",
+		"-g", "!" + ".svelte-kit" + "/**",
+		"-g", "!" + ".venv" + "/**",
+		"-g", "!" + ".yarn" + "/**",
+		"-g", "!" + "out" + "/**",
+		"-g", "!" + "tmp" + "/**",
 		"--color=always", "--heading", "-H", "-n", "todo", ".",
 	}; !reflect.DeepEqual(preserved, want) {
 		t.Fatalf("expected explicit ripgrep flags to be preserved: %#v", preserved)
@@ -65,6 +98,39 @@ func TestRipgrepProfilePrepare(t *testing.T) {
 	scoped := profile.Prepare(engine.Invocation{Command: []string{"rg", "todo", "vendor"}})
 	if reflect.DeepEqual(scoped, want) || len(scoped) == len(want) {
 		t.Fatalf("did not expect default ripgrep excludes for scoped search: %#v", scoped)
+	}
+
+	filesPrepared := filesProfile.Prepare(engine.Invocation{Command: []string{"rg", "--files"}})
+	filesWant := []string{
+		"rg",
+		"-g", "!" + ".git" + "/**",
+		"-g", "!" + ".next" + "/**",
+		"-g", "!" + ".turbo" + "/**",
+		"-g", "!" + ".cache" + "/**",
+		"-g", "!" + "__pycache__" + "/**",
+		"-g", "!" + "build" + "/**",
+		"-g", "!" + "coverage" + "/**",
+		"-g", "!" + "dist" + "/**",
+		"-g", "!" + "node_modules" + "/**",
+		"-g", "!" + "target" + "/**",
+		"-g", "!" + "vendor" + "/**",
+		"-g", "!" + ".gradle" + "/**",
+		"-g", "!" + ".mypy_cache" + "/**",
+		"-g", "!" + ".nox" + "/**",
+		"-g", "!" + ".nuxt" + "/**",
+		"-g", "!" + ".output" + "/**",
+		"-g", "!" + ".parcel-cache" + "/**",
+		"-g", "!" + ".pnpm-store" + "/**",
+		"-g", "!" + ".ruff_cache" + "/**",
+		"-g", "!" + ".svelte-kit" + "/**",
+		"-g", "!" + ".venv" + "/**",
+		"-g", "!" + ".yarn" + "/**",
+		"-g", "!" + "out" + "/**",
+		"-g", "!" + "tmp" + "/**",
+		"--files",
+	}
+	if !reflect.DeepEqual(filesPrepared, filesWant) {
+		t.Fatalf("unexpected ripgrep-files prepare: %#v", filesPrepared)
 	}
 }
 
@@ -85,6 +151,18 @@ func TestFindProfileMatch(t *testing.T) {
 	prepared := profile.Prepare(engine.Invocation{Command: []string{"find", ".", "-name", "*.py"}})
 	if len(prepared) <= 4 {
 		t.Fatalf("expected default find excludes to be injected, got %#v", prepared)
+	}
+	for _, want := range []string{"*/.venv/*", "*/.gradle/*", "*/tmp/*"} {
+		found := false
+		for _, arg := range prepared {
+			if arg == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("expected find prepare to include %q, got %#v", want, prepared)
+		}
 	}
 
 	preserved := profile.Prepare(engine.Invocation{Command: []string{"find", "vendor", "-name", "*.py"}})

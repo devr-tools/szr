@@ -22,28 +22,12 @@ func RunScaffold(rt Runtime, args []string) int {
 }
 
 func RunScaffoldProfile(rt Runtime, args []string) int {
-	printOnly := false
-	builtin := false
-	name := ""
-	for _, arg := range args {
-		switch arg {
-		case "--print":
-			printOnly = true
-		case "--builtin":
-			builtin = true
-		default:
-			if strings.HasPrefix(arg, "-") {
-				fmt.Fprintf(rt.Stderr, "szr: unknown scaffold profile flag %s\n", arg)
-				return 2
-			}
-			if name != "" {
-				fmt.Fprintln(rt.Stderr, "szr: scaffold profile accepts exactly one profile name")
-				return 2
-			}
-			name = arg
-		}
+	opts, err := parseScaffoldProfileArgs(args)
+	if err != nil {
+		fmt.Fprintln(rt.Stderr, "szr:", err)
+		return 2
 	}
-	if strings.TrimSpace(name) == "" {
+	if strings.TrimSpace(opts.name) == "" {
 		fmt.Fprintln(rt.Stderr, "szr: scaffold profile requires a name")
 		return 2
 	}
@@ -53,37 +37,69 @@ func RunScaffoldProfile(rt Runtime, args []string) int {
 		fmt.Fprintf(rt.Stderr, "szr: %v\n", err)
 		return 1
 	}
-	files := scaffoldProfileFiles(cwd, name, builtin)
+	files := scaffoldProfileFiles(cwd, opts.name, opts.builtin)
 	relative := rt.RelativeToRepo
 	if relative == nil {
 		relative = func(_ string, path string) string { return path }
 	}
-	if printOnly {
-		fmt.Fprintf(rt.Stdout, "plan: scaffold profile %s\n", name)
+	if opts.printOnly {
+		fmt.Fprintf(rt.Stdout, "plan: scaffold profile %s\n", opts.name)
 		for path, content := range files {
 			fmt.Fprintf(rt.Stdout, "  %s (%d bytes)\n", relative(cwd, path), len(content))
 		}
 		return 0
 	}
-	for path, content := range files {
-		if _, err := os.Stat(path); err == nil {
-			fmt.Fprintf(rt.Stderr, "szr: scaffold target already exists: %s\n", path)
-			return 1
-		}
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			fmt.Fprintf(rt.Stderr, "szr: failed to create %s: %v\n", filepath.Dir(path), err)
-			return 1
-		}
-		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-			fmt.Fprintf(rt.Stderr, "szr: failed to write %s: %v\n", path, err)
-			return 1
-		}
+	if err := writeScaffoldFiles(files); err != nil {
+		fmt.Fprintln(rt.Stderr, "szr:", err)
+		return 1
 	}
-	fmt.Fprintf(rt.Stdout, "scaffolded profile %s\n", name)
+	fmt.Fprintf(rt.Stdout, "scaffolded profile %s\n", opts.name)
 	for path := range files {
 		fmt.Fprintf(rt.Stdout, "  %s\n", relative(cwd, path))
 	}
 	return 0
+}
+
+type scaffoldProfileOptions struct {
+	printOnly bool
+	builtin   bool
+	name      string
+}
+
+func parseScaffoldProfileArgs(args []string) (scaffoldProfileOptions, error) {
+	var opts scaffoldProfileOptions
+	for _, arg := range args {
+		switch arg {
+		case "--print":
+			opts.printOnly = true
+		case "--builtin":
+			opts.builtin = true
+		default:
+			if strings.HasPrefix(arg, "-") {
+				return scaffoldProfileOptions{}, fmt.Errorf("unknown scaffold profile flag %s", arg)
+			}
+			if opts.name != "" {
+				return scaffoldProfileOptions{}, fmt.Errorf("scaffold profile accepts exactly one profile name")
+			}
+			opts.name = arg
+		}
+	}
+	return opts, nil
+}
+
+func writeScaffoldFiles(files map[string]string) error {
+	for path, content := range files {
+		if _, err := os.Stat(path); err == nil {
+			return fmt.Errorf("scaffold target already exists: %s", path)
+		}
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return fmt.Errorf("failed to create %s: %w", filepath.Dir(path), err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			return fmt.Errorf("failed to write %s: %w", path, err)
+		}
+	}
+	return nil
 }
 
 func scaffoldProfileFiles(root, name string, builtin bool) map[string]string {

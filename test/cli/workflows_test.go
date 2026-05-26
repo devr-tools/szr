@@ -63,7 +63,7 @@ func TestRecommendAndHotspotsCommands(t *testing.T) {
 	}
 }
 
-func TestRecommendWrapperGuidanceForFindAndGrep(t *testing.T) {
+func TestRecommendRoutingCoverageForFindAndGrep(t *testing.T) {
 	paths := testutil.Paths(t.TempDir())
 	testutil.EnsurePaths(t, paths)
 	store := history.New(paths.HistoryFile)
@@ -128,7 +128,14 @@ func TestRecommendWrapperGuidanceForFindAndGrep(t *testing.T) {
 	if code != 0 || stderr != "" {
 		t.Fatalf("unexpected wrapper recommend stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
-	for _, want := range []string{"[wrapper-guidance] /usr/bin/find /repo -name \"users.py\"", "szr find <path> --name ...", "[wrapper-guidance] /usr/bin/grep -rn links_service /repo", "szr grep <pattern> <path>"} {
+	for _, want := range []string{
+		"[custom-profile] /usr/bin/find /repo -name \"users.py\"",
+		"[routing-coverage] /usr/bin/find /repo -name \"users.py\"",
+		"route this family through szr by default; e.g. `szr find /repo --name users.py`",
+		"[custom-profile] /usr/bin/grep -rn links_service /repo",
+		"[routing-coverage] /usr/bin/grep -rn links_service /repo",
+		"route this family through szr by default; e.g. `szr grep links_service /repo`",
+	} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("expected wrapper recommend output %q in %q", want, stdout)
 		}
@@ -277,6 +284,17 @@ func TestCompareCommand(t *testing.T) {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("expected compare output %q in %q", want, stdout)
 		}
+	}
+}
+
+func TestCompareRejectsShellWrapper(t *testing.T) {
+	_, _, app := newWorkflowApp(t)
+	code, stdout, stderr := testutil.RunApp(t, app, "compare", "sh", "-c", "echo hi")
+	if code != 2 || stdout != "" {
+		t.Fatalf("unexpected compare rejection stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	if !strings.Contains(stderr, "shell wrapper commands are not allowed in compare") {
+		t.Fatalf("expected shell-wrapper rejection, got %q", stderr)
 	}
 }
 

@@ -36,17 +36,21 @@ type runResult struct {
 }
 
 type outputCollector struct {
-	builder   strings.Builder
-	bytes     int
-	capture   bool
-	limit     int
-	truncated bool
-	tokens    tokenCounter
+	builder        strings.Builder
+	bytes          int
+	capture        bool
+	limit          int
+	truncated      bool
+	accountTokens  bool
+	tokensDisabled bool
+	tokens         tokenCounter
 }
 
 func (c *outputCollector) Consume(chunk []byte) {
 	c.bytes += len(chunk)
-	c.tokens.Consume(chunk)
+	if c.accountTokens {
+		c.tokens.Consume(chunk)
+	}
 	if c.capture {
 		_, _ = c.builder.Write(chunk)
 		return
@@ -71,6 +75,11 @@ func (c *outputCollector) String() string {
 		return ""
 	}
 	return c.builder.String()
+}
+
+func (c *outputCollector) DisableTokenAccounting() {
+	c.accountTokens = false
+	c.tokensDisabled = true
 }
 
 func (c *outputCollector) TokenCount() int {
@@ -185,9 +194,11 @@ func runCommand(ctx context.Context, args []string, cwd string, options runOptio
 	var stdout outputCollector
 	stdout.capture = options.captureStdout
 	stdout.limit = options.stdoutPreviewBytes
+	stdout.accountTokens = true
 	var stderr outputCollector
 	stderr.capture = options.captureStderr
 	stderr.limit = options.stderrPreviewBytes
+	stderr.accountTokens = true
 
 	streamErr := collectCommandStreams(stdoutPipe, stderrPipe, &stdout, &stderr, tee, reducer, options)
 	waitErr := cmd.Wait()
@@ -300,14 +311,17 @@ func copyStream(
 		n, err := reader.Read(buf)
 		if n > 0 {
 			chunk := buf[:n]
+			reducerDone := reducer != nil && reduceLive && reducer.Done()
+			if reducerDone && collector.accountTokens {
+				// The reducer already has enough information; keep draining and capturing,
+				// but skip further token accounting on the remainder of the stream.
+				collector.DisableTokenAccounting()
+			}
 			collector.Consume(chunk)
 			if tee != nil {
 				tee.Write(chunk)
 			}
-			if reducer != nil && reduceLive {
-				if reducer.Done() {
-					continue
-				}
+			if reducer != nil && reduceLive && !reducerDone {
 				if isStdout {
 					reducer.ConsumeStdout(chunk)
 				} else {

@@ -32,6 +32,7 @@ type RipgrepReducer struct {
 	bytesParsed   int
 	groups        map[string]*ripgrepGroup
 	order         []string
+	totalMatches  int
 	extraFiles    int
 	suppressed    map[string]int
 }
@@ -85,6 +86,9 @@ func (r *RipgrepReducer) Done() bool {
 	if strings.TrimSpace(r.stderrReducer.Preview()) != "" || len(r.order) < r.maxGroups {
 		return false
 	}
+	if r.extraFiles == 0 && suppressedBucketTotal(r.suppressed) == 0 {
+		return false
+	}
 	totalPreviews := 0
 	for _, file := range r.order {
 		group := r.groups[file]
@@ -93,7 +97,7 @@ func (r *RipgrepReducer) Done() bool {
 		}
 		totalPreviews += len(group.previews)
 	}
-	return totalPreviews >= r.maxGroups+1
+	return totalPreviews >= minInt(r.maxLines-len(r.order), r.maxGroups+1)
 }
 
 func (r *RipgrepReducer) Preview() string {
@@ -105,10 +109,11 @@ func (r *RipgrepReducer) ingestLine(line string) {
 	if !ok {
 		return
 	}
-	if bucket := SearchNoiseBucket(file); bucket != "" {
+	if bucket := searchReducerNoiseBucket(file); bucket != "" {
 		r.suppressed[bucket]++
 		return
 	}
+	r.totalMatches++
 	group := r.groups[file]
 	if group == nil {
 		if len(r.order) >= r.maxGroups {
@@ -132,19 +137,34 @@ func (r *RipgrepReducer) render(preview bool) string {
 		}
 		return "no matches"
 	}
-	out := make([]string, 0, r.maxLines)
+	out := make([]string, 0, r.maxLines+1)
+	footerLines := 0
+	if r.extraFiles > 0 {
+		footerLines++
+	}
+	if summarizeSuppressedSearchBuckets(r.suppressed) != "" {
+		footerLines++
+	}
 	for _, file := range r.order {
 		group := r.groups[file]
 		if group == nil {
 			continue
 		}
-		out = append(out, fmt.Sprintf("%s (%d matches)", file, group.count))
-		out = append(out, group.previews...)
+		reserve := footerLines
 		if extra := group.count - len(group.previews); extra > 0 {
-			out = append(out, fmt.Sprintf("  ... +%d more", extra))
+			reserve++
 		}
-		if len(out) >= r.maxLines {
+		if len(out)+1+reserve > r.maxLines {
 			break
+		}
+		out = append(out, fmt.Sprintf("%s (%d matches)", file, group.count))
+		availablePreviews := maxInt(0, r.maxLines-len(out)-reserve)
+		if availablePreviews > len(group.previews) {
+			availablePreviews = len(group.previews)
+		}
+		out = append(out, group.previews[:availablePreviews]...)
+		if extra := group.count - availablePreviews; extra > 0 && len(out) < r.maxLines-reserve+1 {
+			out = append(out, fmt.Sprintf("  ... +%d more", extra))
 		}
 	}
 	if r.extraFiles > 0 && len(out) < r.maxLines {
@@ -157,6 +177,21 @@ func (r *RipgrepReducer) render(preview bool) string {
 		out = out[:r.maxLines]
 	}
 	return strings.Join(out, "\n")
+}
+
+func suppressedBucketTotal(counts map[string]int) int {
+	total := 0
+	for _, count := range counts {
+		total += count
+	}
+	return total
+}
+
+func maxInt(left, right int) int {
+	if left > right {
+		return left
+	}
+	return right
 }
 
 func parseRipgrepMatch(line string) (string, int, string, bool) {

@@ -76,6 +76,12 @@ func TestFindSummaries(t *testing.T) {
 	if !strings.Contains(suppressed, "suppressed noisy paths") {
 		t.Fatalf("expected suppressed-path note, got %q", suppressed)
 	}
+	reducerOnlySuppressed := filters.SummarizeFindPaths([]string{".venv/bin/python", "tmp/cache.txt", "src/a.py"}, 4)
+	for _, want := range []string{".venv", "tmp"} {
+		if !strings.Contains(reducerOnlySuppressed, want) {
+			t.Fatalf("expected reducer-only noise bucket %q in find summary:\n%s", want, reducerOnlySuppressed)
+		}
+	}
 }
 
 func TestSummarizeRipgrep(t *testing.T) {
@@ -107,6 +113,9 @@ func TestStreamingSearchReducers(t *testing.T) {
 	if got := rg.Result(); !strings.Contains(got, "suppressed noisy paths") {
 		t.Fatalf("expected ripgrep reducer suppression note, got %q", got)
 	}
+	if preview, result := rg.Preview(), rg.Result(); preview != result {
+		t.Fatalf("expected stable ripgrep preview/result, preview=%q result=%q", preview, result)
+	}
 
 	find := filters.NewFindReducer(4)
 	find.ConsumeStdout([]byte("/tmp/a.py\n/tmp/b.py\n/tmp/c.py\n/tmp/d.py\n/tmp/e.py\n"))
@@ -115,5 +124,30 @@ func TestStreamingSearchReducers(t *testing.T) {
 	}
 	if got := find.Result(); !strings.Contains(got, "... +2 more matches") {
 		t.Fatalf("expected find reducer overflow note, got %q", got)
+	}
+	if preview, result := find.Preview(), find.Result(); preview != result {
+		t.Fatalf("expected stable find preview/result, preview=%q result=%q", preview, result)
+	}
+}
+
+func TestStreamingSearchReducersSuppressReducerOnlyNoise(t *testing.T) {
+	rg := filters.NewRipgrepReducer(2, 6)
+	rg.ConsumeStdout([]byte(".venv/lib/site.py:1:ignored\n"))
+	rg.ConsumeStdout([]byte("src/generated.js.map:2:ignored\n"))
+	rg.ConsumeStdout([]byte("src/app.go:3:kept\n"))
+	got := rg.Result()
+	for _, want := range []string{"src/app.go (1 matches)", ".venv", "source maps"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in ripgrep reducer output:\n%s", want, got)
+		}
+	}
+
+	find := filters.NewFindReducer(4)
+	find.ConsumeStdout([]byte(".venv/bin/python\ntmp/build.log\nsrc/app.go\n"))
+	got = find.Result()
+	for _, want := range []string{"1 matches", "src/app.go", ".venv", "tmp"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in find reducer output:\n%s", want, got)
+		}
 	}
 }

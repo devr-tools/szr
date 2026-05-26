@@ -16,6 +16,70 @@ type FastPathDecision struct {
 	WarnLatency       bool
 }
 
+type fastPathRule struct {
+	MaxBytes  int
+	MaxTokens int
+	Reason    string
+}
+
+var familyFastPathRules = map[string]fastPathRule{
+	"ripgrep": {
+		MaxBytes:  320,
+		MaxTokens: 80,
+		Reason:    "tiny ripgrep output",
+	},
+	"path-find": {
+		MaxBytes:  320,
+		MaxTokens: 80,
+		Reason:    "tiny find output",
+	},
+	"directory-listing": {
+		MaxBytes:  288,
+		MaxTokens: 72,
+		Reason:    "short directory listing",
+	},
+	"directory-listing-tree": {
+		MaxBytes:  384,
+		MaxTokens: 96,
+		Reason:    "short tree output",
+	},
+	"git-diff": {
+		MaxBytes:  256,
+		MaxTokens: 64,
+		Reason:    "tiny git diff output",
+	},
+	"git-diff-names": {
+		MaxBytes:  384,
+		MaxTokens: 96,
+		Reason:    "short git diff name list",
+	},
+	"git-log": {
+		MaxBytes:  224,
+		MaxTokens: 56,
+		Reason:    "tiny git log output",
+	},
+	"git-ls-files": {
+		MaxBytes:  384,
+		MaxTokens: 96,
+		Reason:    "short tracked file list",
+	},
+	"git-status": {
+		MaxBytes:  192,
+		MaxTokens: 48,
+		Reason:    "short git status output",
+	},
+	"git-status-short": {
+		MaxBytes:  288,
+		MaxTokens: 72,
+		Reason:    "short git status listing",
+	},
+	"ripgrep-files": {
+		MaxBytes:  384,
+		MaxTokens: 96,
+		Reason:    "short ripgrep file list",
+	},
+}
+
 func ResolveBudget(profile Profile, inv Invocation, fallbackLines int) OutputBudget {
 	budget := profile.Budget
 	if budget.MaxLines <= 0 {
@@ -66,7 +130,7 @@ func ExpandBudgetForFailureEscape(budget OutputBudget, inv Invocation) OutputBud
 	return scaleBudget(budget, 3, 2)
 }
 
-func DecideFastPath(profile Profile, rawBytes, rawTokens int, duration time.Duration, exitCode int) FastPathDecision {
+func DecideFastPath(profile Profile, inv Invocation, rawBytes, rawTokens int, duration time.Duration, exitCode int) FastPathDecision {
 	decision := FastPathDecision{}
 	if profile.LatencyBudget > 0 && duration > profile.LatencyBudget {
 		decision.WarnLatency = true
@@ -79,7 +143,7 @@ func DecideFastPath(profile Profile, rawBytes, rawTokens int, duration time.Dura
 		decision.Reason = "stderr-only profile with empty stderr payload"
 		return decision
 	}
-	if bypass, reason := commandFamilyMicroBypass(profile.Name, rawBytes, rawTokens); bypass {
+	if bypass, reason := commandFamilyMicroBypass(profile, inv, rawBytes, rawTokens); bypass {
 		decision.BypassCompression = true
 		decision.Reason = reason
 		return decision
@@ -91,26 +155,98 @@ func DecideFastPath(profile Profile, rawBytes, rawTokens int, duration time.Dura
 	return decision
 }
 
-func commandFamilyMicroBypass(profileName string, rawBytes, rawTokens int) (bool, string) {
-	switch profileName {
-	case "ripgrep":
-		if rawBytes <= 320 && rawTokens <= 80 {
-			return true, "tiny ripgrep output"
-		}
-	case "path-find":
-		if rawBytes <= 320 && rawTokens <= 80 {
-			return true, "tiny find output"
-		}
-	case "git-diff":
-		if rawBytes <= 256 && rawTokens <= 64 {
-			return true, "tiny git diff output"
-		}
-	case "git-log":
-		if rawBytes <= 224 && rawTokens <= 56 {
-			return true, "tiny git log output"
-		}
+func commandFamilyMicroBypass(profile Profile, inv Invocation, rawBytes, rawTokens int) (bool, string) {
+	rule, ok := familyFastPathRules[fastPathRuleKey(profile, inv)]
+	if !ok {
+		return false, ""
+	}
+	if rawBytes <= rule.MaxBytes && rawTokens <= rule.MaxTokens {
+		return true, rule.Reason
 	}
 	return false, ""
+}
+
+func fastPathRuleKey(profile Profile, inv Invocation) string {
+	switch profile.Name {
+	case "directory-listing":
+		if isTreeShape(inv) {
+			return "directory-listing-tree"
+		}
+	case "git-diff":
+		if isGitDiffNameListShape(inv) {
+			return "git-diff-names"
+		}
+	case "git-status":
+		if isGitStatusShortShape(inv) {
+			return "git-status-short"
+		}
+	case "generic-summary":
+		if isGitLSFilesShape(inv) {
+			return "git-ls-files"
+		}
+		if isRipgrepFilesShape(inv) {
+			return "ripgrep-files"
+		}
+	case "ripgrep-files":
+		return "ripgrep-files"
+	}
+	return profile.Name
+}
+
+func isGitDiffNameListShape(inv Invocation) bool {
+	args := effectiveFastPathArgs(inv)
+	if !hasCommand(args, "git", "diff") {
+		return false
+	}
+	return containsAnyArg(args[2:], "--name-only", "--name-status")
+}
+
+func isGitLSFilesShape(inv Invocation) bool {
+	args := effectiveFastPathArgs(inv)
+	return hasCommand(args, "git", "ls-files")
+}
+
+func isGitStatusShortShape(inv Invocation) bool {
+	args := effectiveFastPathArgs(inv)
+	if !hasCommand(args, "git", "status") {
+		return false
+	}
+	return containsAnyArg(args[2:], "--short", "--porcelain", "-s")
+}
+
+func isTreeShape(inv Invocation) bool {
+	args := effectiveFastPathArgs(inv)
+	return len(args) > 0 && args[0] == "tree"
+}
+
+func isRipgrepFilesShape(inv Invocation) bool {
+	args := effectiveFastPathArgs(inv)
+	if len(args) == 0 || args[0] != "rg" {
+		return false
+	}
+	return containsAnyArg(args[1:], "--files")
+}
+
+func effectiveFastPathArgs(inv Invocation) []string {
+	if len(inv.Command) > 0 {
+		return inv.Command
+	}
+	return inv.Display
+}
+
+func hasCommand(args []string, head, sub string) bool {
+	return len(args) >= 2 && args[0] == head && args[1] == sub
+}
+
+func containsAnyArg(args []string, needles ...string) bool {
+	for _, arg := range args {
+		for _, needle := range needles {
+			if arg == needle {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func tuneBudgetByProfile(profile Profile, budget OutputBudget) OutputBudget {

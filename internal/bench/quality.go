@@ -90,8 +90,11 @@ func scoreQuality(actionable int, rawFailureTokens []string, preservedFailures i
 	if measurement.FallbackRate >= 100 && hasMaterialTokenVolume(measurement) {
 		issues = append(issues, "excessive_fallback_usage")
 		score -= 20
+	} else if measurement.FallbackRate >= 50 && hasMeaningfulSavingsOpportunity(measurement) {
+		issues = append(issues, "fallback_heavy")
+		score -= 10
 	}
-	if measurement.TokenSavingsPct < 5 && hasMeaningfulSavingsOpportunity(measurement) {
+	if hasMaterialLowSavings(measurement) {
 		issues = append(issues, "low_token_savings")
 		score -= 15
 	}
@@ -116,6 +119,20 @@ func hasMaterialTokenVolume(measurement Measurement) bool {
 
 func hasMeaningfulSavingsOpportunity(measurement Measurement) bool {
 	return measurement.RawTokens >= 128 || measurement.FilteredTokens >= 96 || measurement.SavedTokens >= 24
+}
+
+func hasMaterialLowSavings(measurement Measurement) bool {
+	if !hasMeaningfulSavingsOpportunity(measurement) {
+		return false
+	}
+	if measurement.SavedTokens < 0 && isTinyOutputOverhead(measurement) {
+		return false
+	}
+	threshold := 8.0
+	if measurement.RawTokens >= 256 || measurement.FilteredTokens >= 192 {
+		threshold = 10.0
+	}
+	return measurement.TokenSavingsPct < threshold
 }
 
 func isTinyOutputOverhead(measurement Measurement) bool {

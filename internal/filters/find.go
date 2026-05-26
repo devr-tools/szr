@@ -6,6 +6,22 @@ import (
 	"strings"
 )
 
+var reducerOnlySearchNoiseDirs = []string{
+	".gradle",
+	".mypy_cache",
+	".nox",
+	".nuxt",
+	".output",
+	".parcel-cache",
+	".pnpm-store",
+	".ruff_cache",
+	".svelte-kit",
+	".venv",
+	".yarn",
+	"out",
+	"tmp",
+}
+
 func SummarizeFindPaths(paths []string, maxLines int) string {
 	if len(paths) == 0 {
 		return "no matches"
@@ -20,7 +36,7 @@ func SummarizeFindPaths(paths []string, maxLines int) string {
 		if path == "" {
 			continue
 		}
-		if bucket := SearchNoiseBucket(path); bucket != "" {
+		if bucket := searchReducerNoiseBucket(path); bucket != "" {
 			suppressed[bucket]++
 			continue
 		}
@@ -71,6 +87,7 @@ type FindReducer struct {
 	sampleLimit   int
 	bytesParsed   int
 	matches       []string
+	seen          map[string]struct{}
 	totalMatches  int
 	suppressed    map[string]int
 }
@@ -88,6 +105,7 @@ func NewFindReducer(maxLines int) *FindReducer {
 		maxLines:      maxLines,
 		sampleLimit:   sampleLimit,
 		matches:       make([]string, 0, sampleLimit),
+		seen:          make(map[string]struct{}, sampleLimit),
 		suppressed:    map[string]int{},
 	}
 }
@@ -116,7 +134,7 @@ func (r *FindReducer) FallbackUsed() bool {
 }
 
 func (r *FindReducer) Done() bool {
-	return r.stderrReducer.Preview() == "" && len(r.matches) >= r.sampleLimit && r.totalMatches >= r.sampleLimit+2
+	return r.stderrReducer.Preview() == "" && len(r.matches) >= r.sampleLimit && r.totalMatches > len(r.matches)
 }
 
 func (r *FindReducer) Preview() string {
@@ -128,13 +146,18 @@ func (r *FindReducer) ingestPath(line string) {
 	if path == "" {
 		return
 	}
-	if bucket := SearchNoiseBucket(path); bucket != "" {
+	if bucket := searchReducerNoiseBucket(path); bucket != "" {
 		r.suppressed[bucket]++
 		return
 	}
+	if _, ok := r.seen[path]; ok {
+		return
+	}
+	r.seen[path] = struct{}{}
 	r.totalMatches++
 	if len(r.matches) < r.sampleLimit {
 		r.matches = append(r.matches, path)
+		sort.Strings(r.matches)
 	}
 }
 
@@ -150,13 +173,44 @@ func (r *FindReducer) render(preview bool) string {
 	if extra := r.totalMatches - len(r.matches); extra > 0 {
 		lines = append(lines, fmt.Sprintf("... +%d more matches", extra))
 	}
-	if !preview {
-		sort.Strings(lines[1:minInt(len(lines), 1+len(r.matches))])
-	}
 	if line := summarizeSuppressedSearchBuckets(r.suppressed); line != "" && len(lines) < r.maxLines+1 {
 		lines = append(lines, line)
 	}
 	return strings.Join(lines, "\n")
+}
+
+func searchReducerNoiseBucket(path string) string {
+	normalized := normalizeSearchPath(path)
+	if normalized == "" {
+		return ""
+	}
+	lower := strings.ToLower(normalized)
+	switch {
+	case strings.HasSuffix(lower, ".min.js"):
+		return "minified assets"
+	case strings.HasSuffix(lower, ".min.css"):
+		return "minified assets"
+	case strings.HasSuffix(lower, ".js.map"):
+		return "source maps"
+	case strings.HasSuffix(lower, ".css.map"):
+		return "source maps"
+	}
+	if bucket := SearchNoiseBucket(normalized); bucket != "" {
+		return bucket
+	}
+	trimmed := strings.TrimPrefix(normalized, "/")
+	parts := strings.Split(trimmed, "/")
+	for idx, part := range parts {
+		if strings.HasPrefix(normalized, "/") && idx == 0 {
+			continue
+		}
+		for _, dir := range reducerOnlySearchNoiseDirs {
+			if part == dir {
+				return dir
+			}
+		}
+	}
+	return ""
 }
 
 func summarizeSuppressedSearchBuckets(counts map[string]int) string {

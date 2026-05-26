@@ -75,30 +75,17 @@ func RunRulesCheck(rt Runtime, args []string) int {
 }
 
 func RunRulesTest(rt Runtime, args []string) int {
-	asJSON := false
-	path := ""
-	command := []string{}
-	for i := 0; i < len(args); i++ {
-		switch args[i] {
-		case "--json":
-			asJSON = true
-		case "--file":
-			if i+1 >= len(args) {
-				fmt.Fprintln(rt.Stderr, "szr: rules test requires a value after --file")
-				return 2
-			}
-			i++
-			path = args[i]
-		default:
-			command = append(command, args[i])
-		}
+	opts, err := parseRulesTestArgs(args)
+	if err != nil {
+		fmt.Fprintln(rt.Stderr, "szr:", err)
+		return 2
 	}
-	if len(command) == 0 {
+	if len(opts.command) == 0 {
 		fmt.Fprintln(rt.Stderr, "szr: rules test requires a command")
 		return 2
 	}
 
-	resolved, file, err := loadRulesFile(path)
+	resolved, file, err := loadRulesFile(opts.path)
 	if err != nil {
 		fmt.Fprintf(rt.Stderr, "szr: %v\n", err)
 		return 1
@@ -112,8 +99,8 @@ func RunRulesTest(rt Runtime, args []string) int {
 
 	cwd, _ := os.Getwd()
 	inv := engine.Invocation{
-		Command:             append([]string(nil), command...),
-		Display:             append([]string(nil), command...),
+		Command:             append([]string(nil), opts.command...),
+		Display:             append([]string(nil), opts.command...),
 		Cwd:                 cwd,
 		Verbose:             rt.Verbose,
 		UltraCompact:        rt.UltraCompact,
@@ -127,10 +114,10 @@ func RunRulesTest(rt Runtime, args []string) int {
 		describeSource = func(source string, _ string) string { return source }
 	}
 
-	if asJSON {
+	if opts.asJSON {
 		payload := map[string]any{
 			"rules":             resolved,
-			"command":           strings.Join(command, " "),
+			"command":           strings.Join(opts.command, " "),
 			"effective_command": strings.Join(effectiveInv.Command, " "),
 			"profile":           profile.Name,
 			"source":            describeSource(profile.Source, resolved),
@@ -144,7 +131,7 @@ func RunRulesTest(rt Runtime, args []string) int {
 	}
 
 	fmt.Fprintf(rt.Stdout, "rules: %s\n", resolved)
-	fmt.Fprintf(rt.Stdout, "command: %s\n", strings.Join(command, " "))
+	fmt.Fprintf(rt.Stdout, "command: %s\n", strings.Join(opts.command, " "))
 	if len(effectiveInv.Command) > 0 {
 		fmt.Fprintf(rt.Stdout, "effective command: %s\n", strings.Join(effectiveInv.Command, " "))
 	}
@@ -171,6 +158,31 @@ func RunRulesTest(rt Runtime, args []string) int {
 		}
 	}
 	return 0
+}
+
+type rulesTestOptions struct {
+	asJSON  bool
+	path    string
+	command []string
+}
+
+func parseRulesTestArgs(args []string) (rulesTestOptions, error) {
+	var opts rulesTestOptions
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--json":
+			opts.asJSON = true
+		case "--file":
+			if i+1 >= len(args) {
+				return rulesTestOptions{}, fmt.Errorf("rules test requires a value after --file")
+			}
+			i++
+			opts.path = args[i]
+		default:
+			opts.command = append(opts.command, args[i])
+		}
+	}
+	return opts, nil
 }
 
 func loadRulesFile(path string) (string, rules.File, error) {

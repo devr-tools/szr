@@ -1,0 +1,8 @@
+src/app/main.go:12:TODO tighten benchmark preview reporting so raw versus reduced output is visible in one place
+src/app/main.go:47:TODO preserve stderr ordering for compare output when multi-stream failures overlap
+src/search/index.go:8:TODO skip generated fixture directories during benchmark runs by default
+src/search/index.go:18:TODO collapse repeated warning blocks in reducer output before they hit the token budget
+src/history/store.go:77:TODO persist comparison snapshots for benchmark fixtures when quality drops
+node_modules/react/index.js:3:TODO bundled dependency noise should never dominate reducer summaries
+.venv/lib/python3.12/site-packages/pkg.py:4:TODO virtualenv noise should be suppressed from source search previews
+src/generated/app.js.map:1:TODO source map noise should be suppressed from source search previews

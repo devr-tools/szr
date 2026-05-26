@@ -115,7 +115,7 @@ func (e *Engine) runStreamingCommand(
 	rawCombined := combineStreams(runResult.stdout, runResult.stderr)
 	rawBytesRead := runResult.stdoutBytes + runResult.stderrBytes
 	rawTokens := runResult.rawTokens
-	fastPath := DecideFastPath(profile, bytesForFastPath(profile, runResult), rawTokens, duration, execResult.ExitCode)
+	fastPath := DecideFastPath(profile, inv, bytesForFastPath(profile, runResult), rawTokens, duration, execResult.ExitCode)
 	return runResult, execResult, fastPath, rawCombined, rawBytesRead, rawTokens, duration, err
 }
 
