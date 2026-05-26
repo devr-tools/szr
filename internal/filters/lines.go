@@ -3,12 +3,27 @@ package filters
 import (
 	"fmt"
 	"strings"
+
+	"github.com/devr-tools/szr/internal/filters/declarative"
 )
 
 func CompactLines(input string, maxLines int) string {
+	result, err := declarative.ApplyBuiltin("compact_lines", StripANSI(input), declarative.Options{LineLimit: maxLines})
+	if err == nil {
+		return result.Text
+	}
+
 	reducer := NewCompactLineReducer(maxLines, 0)
 	reducer.ConsumeStdout([]byte(input))
 	return reducer.Result()
+}
+
+func InterestingErrorLines(input string, maxLines int) string {
+	result, err := declarative.ApplyBuiltin("interesting_error_lines", StripANSI(input), declarative.Options{LineLimit: maxLines})
+	if err == nil {
+		return result.Text
+	}
+	return SummarizeGenericFailure(input, maxLines)
 }
 
 func DedupeLines(input string, maxLines int) string {
@@ -273,6 +288,13 @@ func (r *CompactLineReducer) Preview() string {
 		out = append(out, "... +more lines")
 	}
 	return strings.Join(out, "\n")
+}
+
+func (r *CompactLineReducer) RecoveryInfo() (string, string, bool) {
+	if r.extraLines <= 0 {
+		return NoRecovery()
+	}
+	return FullOutputRecovery(fmt.Sprintf("omitted %d additional lines", r.extraLines))
 }
 
 func (r *CompactLineReducer) consume(chunk []byte) {

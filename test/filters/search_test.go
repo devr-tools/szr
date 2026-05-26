@@ -106,6 +106,7 @@ func TestStreamingSearchReducers(t *testing.T) {
 	rg := filters.NewRipgrepReducer(2, 8)
 	rg.ConsumeStdout([]byte("a.go:1:first\na.go:2:second\n"))
 	rg.ConsumeStdout([]byte("b.go:9:third\n"))
+	rg.ConsumeStdout([]byte("c.go:4:fourth\n"))
 	rg.ConsumeStdout([]byte("node_modules/pkg/c.go:1:ignored\n"))
 	if !rg.Done() {
 		t.Fatal("expected ripgrep reducer to report done after filling visible groups")
@@ -115,6 +116,9 @@ func TestStreamingSearchReducers(t *testing.T) {
 	}
 	if preview, result := rg.Preview(), rg.Result(); preview != result {
 		t.Fatalf("expected stable ripgrep preview/result, preview=%q result=%q", preview, result)
+	}
+	if kind, summary, requireRawCapture := rg.RecoveryInfo(); kind != filters.RecoveryKindFullOutput || summary != "omitted 1 additional files" || !requireRawCapture {
+		t.Fatalf("unexpected ripgrep recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
 	}
 
 	find := filters.NewFindReducer(4)
@@ -127,6 +131,20 @@ func TestStreamingSearchReducers(t *testing.T) {
 	}
 	if preview, result := find.Preview(), find.Result(); preview != result {
 		t.Fatalf("expected stable find preview/result, preview=%q result=%q", preview, result)
+	}
+	if kind, summary, requireRawCapture := find.RecoveryInfo(); kind != filters.RecoveryKindFullOutput || summary != "omitted 2 additional matches" || !requireRawCapture {
+		t.Fatalf("unexpected find recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+}
+
+func TestStreamingRipgrepReducerMatchRecovery(t *testing.T) {
+	rg := filters.NewRipgrepReducer(2, 8)
+	rg.ConsumeStdout([]byte("a.go:1:first\na.go:2:second\na.go:3:third\na.go:4:fourth\n"))
+	if got := rg.Result(); !strings.Contains(got, "... +1 more") {
+		t.Fatalf("expected ripgrep reducer overflow note, got %q", got)
+	}
+	if kind, summary, requireRawCapture := rg.RecoveryInfo(); kind != filters.RecoveryKindFullOutput || summary != "omitted 1 additional matches" || !requireRawCapture {
+		t.Fatalf("unexpected ripgrep match recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
 	}
 }
 

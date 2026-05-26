@@ -44,25 +44,25 @@ func TestJSProfilesRender(t *testing.T) {
 func TestJSPackageTestProfileCoverage(t *testing.T) {
 	list := profiles.Builtins(4)
 	pm := testutil.FindProfile(t, list, "js-package-test")
-	if pm.Match(engine.Invocation{Display: []string{"npm"}}) {
+	if pm.Match(engine.Classify(engine.Invocation{Display: []string{"npm"}})) {
 		t.Fatal("did not expect short npm args to match")
 	}
-	if !pm.Match(engine.Invocation{Display: []string{"npm", "run", "test"}}) {
+	if !pm.Match(engine.Classify(engine.Invocation{Display: []string{"npm", "run", "test"}})) {
 		t.Fatal("expected npm run test to match")
 	}
-	if !pm.Match(engine.Invocation{Display: []string{"yarn", "test"}}) {
+	if !pm.Match(engine.Classify(engine.Invocation{Display: []string{"yarn", "test"}})) {
 		t.Fatal("expected yarn test to match")
 	}
-	if pm.Match(engine.Invocation{Display: []string{"pnpm", "lint"}}) {
+	if pm.Match(engine.Classify(engine.Invocation{Display: []string{"pnpm", "lint"}})) {
 		t.Fatal("did not expect non-test package manager command to match")
 	}
-	if got := pm.Prepare(engine.Invocation{Command: []string{"bun", "test"}}); strings.Join(got, ",") != "bun,test" {
+	if got := pm.Prepare(engine.Classify(engine.Invocation{Command: []string{"bun", "test"}})); strings.Join(got, ",") != "bun,test" {
 		t.Fatalf("expected unknown package manager passthrough, got %#v", got)
 	}
 
 	root := t.TempDir()
 	testutil.MustWriteFile(t, filepath.Join(root, "package.json"), `{"scripts":{"test":"jest"}}`)
-	if got := pm.Prepare(engine.Invocation{Cwd: root}); got != nil {
+	if got := pm.Prepare(engine.Classify(engine.Invocation{Cwd: root})); got != nil {
 		t.Fatalf("expected empty package-manager prepare to stay nil, got %#v", got)
 	}
 }

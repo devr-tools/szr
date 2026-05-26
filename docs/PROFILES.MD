@@ -6,6 +6,12 @@ Current coverage: `50` builtin profiles across `21` categories.
 
 Anything not listed here does not currently have a dedicated builtin profile in `szr`.
 
+Contributor guides for profile families:
+
+- [Git profile family](/Users/alex/Documents/GitHub/szr/docs/profile-families/git.md)
+- [JavaScript profile family](/Users/alex/Documents/GitHub/szr/docs/profile-families/javascript.md)
+- [Generic fallback and declarative reducers](/Users/alex/Documents/GitHub/szr/docs/profile-families/fallback-reducers.md)
+
 ## Coverage Summary
 
 | Category | Count | Covered commands and workflows |

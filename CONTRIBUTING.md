@@ -47,6 +47,9 @@ Relevant architecture docs:
 - [docs/ARCHITECTURE.md](/Users/alex/Documents/GitHub/szr/docs/ARCHITECTURE.md)
 - [docs/PROFILES.MD](/Users/alex/Documents/GitHub/szr/docs/PROFILES.MD)
 - [docs/PROFILE_REFACTOR_TASKS.md](/Users/alex/Documents/GitHub/szr/docs/PROFILE_REFACTOR_TASKS.md)
+- [docs/profile-families/git.md](/Users/alex/Documents/GitHub/szr/docs/profile-families/git.md)
+- [docs/profile-families/javascript.md](/Users/alex/Documents/GitHub/szr/docs/profile-families/javascript.md)
+- [docs/profile-families/fallback-reducers.md](/Users/alex/Documents/GitHub/szr/docs/profile-families/fallback-reducers.md)
 
 ## Coding expectations
 

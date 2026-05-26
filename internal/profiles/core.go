@@ -51,11 +51,16 @@ func directoryListingProfile(maxLines int) engine.Profile {
 			return filters.SummarizeDirectoryListing(exec.Stdout, maxLines)
 		},
 		StreamRender: func(inv engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-			return filters.NewBufferedTextReducer(true, false, func(input string) string {
+			return filters.NewBufferedTextReducerWithRecovery(true, false, func(input string) string {
 				if len(inv.Command) > 0 && inv.Command[0] == "tree" {
 					return filters.SummarizeTreeOutput(input, budget.MaxLines)
 				}
 				return filters.SummarizeDirectoryListing(input, budget.MaxLines)
+			}, func(input string) (string, string, bool) {
+				if len(inv.Command) > 0 && inv.Command[0] == "tree" {
+					return filters.TreeOutputRecoveryInfo(input, budget.MaxLines)
+				}
+				return filters.DirectoryListingRecoveryInfo(input, budget.MaxLines)
 			})
 		},
 		ParseBytes: profilekit.ParseStdout,
@@ -82,8 +87,10 @@ func catReadProfile(maxLines int) engine.Profile {
 		},
 		StreamRender: func(inv engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
 			path := inv.Command[len(inv.Command)-1]
-			return filters.NewBufferedTextReducer(true, false, func(input string) string {
+			return filters.NewBufferedTextReducerWithRecovery(true, false, func(input string) string {
 				return filters.SummarizeReadFile(path, []byte(input), budget.MaxLines)
+			}, func(input string) (string, string, bool) {
+				return filters.ReadFileRecoveryInfo(path, []byte(input), budget.MaxLines)
 			})
 		},
 		ParseBytes: profilekit.ParseStdout,

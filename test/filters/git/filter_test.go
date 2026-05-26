@@ -127,6 +127,9 @@ func assertGitLogReducer(t *testing.T) {
 	if preview := logReducer.Preview(); !strings.Contains(preview, "4 commits") {
 		t.Fatalf("expected git log preview to be populated, got %q", preview)
 	}
+	if kind, summary, requireRawCapture := logReducer.RecoveryInfo(); kind != "full-output" || summary != "omitted 2 commits" || !requireRawCapture {
+		t.Fatalf("unexpected git log recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
 }
 
 func assertGitDiffReducers(t *testing.T) {
@@ -140,6 +143,9 @@ func assertGitDiffReducers(t *testing.T) {
 	}
 	if preview := diffReducer.Preview(); !strings.Contains(preview, "files=1 +1 -1") {
 		t.Fatalf("expected git diff preview to be populated, got %q", preview)
+	}
+	if kind, summary, requireRawCapture := diffReducer.RecoveryInfo(); kind != "full-output" || summary != "omitted full diff hunks" || !requireRawCapture {
+		t.Fatalf("unexpected git diff recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
 	}
 
 	patchReducer := gitfilter.NewGitDiffReducer(4, 0)
@@ -162,6 +168,9 @@ func assertGitDiffReducers(t *testing.T) {
 	}
 	if preview := fallbackReducer.Preview(); preview != "" {
 		t.Fatalf("expected empty git diff preview without diff metadata, got %q", preview)
+	}
+	if kind, summary, requireRawCapture := fallbackReducer.RecoveryInfo(); kind != "" || summary != "" || requireRawCapture {
+		t.Fatalf("expected no git diff recovery info for fallback-only reducer, got kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
 	}
 }
 

@@ -41,7 +41,7 @@ func TestCoreFilesystemProfiles(t *testing.T) {
 	}
 
 	gitLsFiles := testutil.FindProfile(t, list, "git-ls-files")
-	if !gitLsFiles.Match(engine.Invocation{Display: []string{"git", "ls-files"}}) {
+	if !gitLsFiles.Match(engine.Classify(engine.Invocation{Display: []string{"git", "ls-files"}})) {
 		t.Fatal("git-ls-files should match git ls-files")
 	}
 	if got := gitLsFiles.Render(engine.Invocation{}, engine.Execution{Stdout: "cmd/main.go\ninternal/app.go\n"}); got == "" {
@@ -324,7 +324,7 @@ func TestGitHubProfiles(t *testing.T) {
 func TestWorkspaceAndToolingProfiles(t *testing.T) {
 	list := profiles.Builtins(3)
 	jsWorkspace := testutil.FindProfile(t, list, "js-workspace")
-	if !jsWorkspace.Match(engine.Invocation{Display: []string{"turbo", "run", "build"}}) || !jsWorkspace.Match(engine.Invocation{Display: []string{"npm", "install"}}) {
+	if !jsWorkspace.Match(engine.Classify(engine.Invocation{Display: []string{"turbo", "run", "build"}})) || !jsWorkspace.Match(engine.Classify(engine.Invocation{Display: []string{"npm", "install"}})) {
 		t.Fatal("js-workspace should match workspace tooling commands")
 	}
 	if got := jsWorkspace.Render(engine.Invocation{}, engine.Execution{Stderr: "npm ERR! missing script: build\n"}); got == "" {

@@ -11,6 +11,7 @@ type renderResult struct {
 	text         string
 	bytesParsed  int
 	fallbackUsed bool
+	recoveryPlan RecoveryPlan
 }
 
 type RenderedExecution struct {
@@ -45,6 +46,7 @@ func renderProfile(profile Profile, inv Invocation, exec Execution, fallbackLine
 				text:         text,
 				bytesParsed:  maxInt(reducer.BytesParsed(), 0),
 				fallbackUsed: reducer.FallbackUsed() || profile.Name == "passthrough",
+				recoveryPlan: reducerRecoveryPlan(reducer),
 			}
 		}
 	}

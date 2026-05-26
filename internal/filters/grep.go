@@ -104,6 +104,22 @@ func (r *RipgrepReducer) Preview() string {
 	return r.render(true)
 }
 
+func (r *RipgrepReducer) RecoveryInfo() (string, string, bool) {
+	r.stdoutScanner.Finish(r.ingestLine)
+	omittedMatches, omittedFiles := r.omittedCounts()
+	parts := make([]string, 0, 2)
+	if omittedMatches > 0 {
+		parts = append(parts, fmt.Sprintf("%d additional matches", omittedMatches))
+	}
+	if omittedFiles > 0 {
+		parts = append(parts, fmt.Sprintf("%d additional files", omittedFiles))
+	}
+	if len(parts) == 0 {
+		return NoRecovery()
+	}
+	return FullOutputRecovery("omitted " + strings.Join(parts, ", "))
+}
+
 func (r *RipgrepReducer) ingestLine(line string) {
 	file, lineNo, text, ok := parseRipgrepMatch(line)
 	if !ok {
@@ -218,6 +234,20 @@ func suppressedBucketTotal(counts map[string]int) int {
 		total += count
 	}
 	return total
+}
+
+func (r *RipgrepReducer) omittedCounts() (matches int, files int) {
+	files = r.extraFiles
+	for _, file := range r.order {
+		group := r.groups[file]
+		if group == nil {
+			continue
+		}
+		if group.count > len(group.previews) {
+			matches += group.count - len(group.previews)
+		}
+	}
+	return matches, files
 }
 
 func maxInt(left, right int) int {

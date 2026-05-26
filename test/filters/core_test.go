@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/devr-tools/szr/internal/filters"
+	"github.com/devr-tools/szr/internal/filters/declarative"
 )
 
 func TestLineHelpers(t *testing.T) {
@@ -15,6 +16,15 @@ func TestLineHelpers(t *testing.T) {
 	}
 	if got := filters.CompactLines("a\nb", 5); got != "a\nb" {
 		t.Fatalf("unexpected compact passthrough: %q", got)
+	}
+	if got := filters.CompactLines("\x1b[31ma\x1b[0m\n", 2); got != "a" {
+		t.Fatalf("unexpected compact ansi stripping: %q", got)
+	}
+	if got := filters.InterestingErrorLines("progress\nwarning: retry\nerror: boom\n", 5); got != "warning: retry\nerror: boom" {
+		t.Fatalf("unexpected interesting error lines: %q", got)
+	}
+	if kind, summary, requireRawCapture := filters.DeclarativeFullOutputRecovery(declarativeResultForTest(2, 0), "lines"); kind != filters.RecoveryKindFullOutput || summary != "omitted 2 additional lines" || !requireRawCapture {
+		t.Fatalf("unexpected declarative recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
 	}
 
 	deduped := filters.DedupeLines("a\na\nb\nc\nc\n", 2)
@@ -37,6 +47,10 @@ func TestLineHelpers(t *testing.T) {
 	}
 }
 
+func declarativeResultForTest(omittedBefore, omittedAfter int) declarative.Result {
+	return declarative.Result{OmittedBefore: omittedBefore, OmittedAfter: omittedAfter}
+}
+
 func TestFailureHelpers(t *testing.T) {
 	t.Parallel()
 
@@ -50,6 +64,11 @@ func TestFailureHelpers(t *testing.T) {
 	fallback := filters.SummarizeGenericFailure("line1\nline2\nline3\n", 2)
 	if fallback != "line1\nline2\n... +1 more lines" {
 		t.Fatalf("unexpected generic fallback: %q", fallback)
+	}
+	fallbackReducer := filters.NewGenericFailureReducer(2, 0)
+	fallbackReducer.ConsumeStdout([]byte("line1\nline2\nline3\n"))
+	if kind, summary, requireRawCapture := fallbackReducer.RecoveryInfo(); kind != filters.RecoveryKindFullOutput || summary != "omitted 1 additional lines" || !requireRawCapture {
+		t.Fatalf("unexpected generic fallback recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
 	}
 
 	reducer := filters.NewGenericFailureReducer(2, 0)
@@ -115,6 +134,19 @@ func TestFailureHelpers(t *testing.T) {
 	if !strings.Contains(prefiltered, "(+1 similar frames)") {
 		t.Fatalf("expected repeated stack frame compaction, got %q", prefiltered)
 	}
+	prefilterReducer := filters.NewGenericFailureReducer(5, 0)
+	prefilterReducer.ConsumeStdout([]byte(strings.Join([]string{
+		"Downloading registry index",
+		"Resolving: total 12, reused 0, downloaded 6",
+		"added 487 packages in 8s",
+		"error: build failed",
+		"/Users/alex/Documents/GitHub/szr/internal/filters/failure.go:201:3 undefined: noiseGate",
+		"/Users/alex/Documents/GitHub/szr/internal/filters/failure.go:201:3 undefined: noiseGate",
+		"help: rerun with --verbose",
+	}, "\n")))
+	if kind, summary, requireRawCapture := prefilterReducer.RecoveryInfo(); kind != filters.RecoveryKindFullOutput || summary != "omitted 2 progress lines, 1 install lines" || !requireRawCapture {
+		t.Fatalf("unexpected prefiltered recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
 }
 
 func TestUtilityHelpers(t *testing.T) {
@@ -145,6 +177,9 @@ func TestUtilityHelpers(t *testing.T) {
 	compact.ConsumeStderr([]byte("2\x1b[0m\nc\n"))
 	if got := compact.Result(); got != "a\nb2\n... +1 more lines" {
 		t.Fatalf("unexpected streaming compact lines: %q", got)
+	}
+	if kind, summary, requireRawCapture := compact.RecoveryInfo(); kind != filters.RecoveryKindFullOutput || summary != "omitted 1 additional lines" || !requireRawCapture {
+		t.Fatalf("unexpected compact recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
 	}
 
 	entropyCompact := filters.NewCompactLineReducer(2, 0)
@@ -182,5 +217,24 @@ func TestFilesystemSummaries(t *testing.T) {
 	lines := strings.Split(compact, "\n")
 	if len(lines) != 2 || lines[0] != "project" || lines[1] != "2 directories, 2 files" {
 		t.Fatalf("expected compact tree summary to preserve root and footer, got %q", compact)
+	}
+
+	if kind, summary, requireRawCapture := filters.TreeOutputRecoveryInfo(tree, 2); kind != filters.RecoveryKindFullOutput || summary != "omitted tree entries" || !requireRawCapture {
+		t.Fatalf("unexpected tree recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+
+	listingInput := "README.md\nMakefile\nsrc/\ndocs/\ninternal/\ntest/\npkg/\n"
+	if kind, summary, requireRawCapture := filters.DirectoryListingRecoveryInfo(listingInput, 4); kind != filters.RecoveryKindFullOutput || summary != "omitted 7 directory entries" || !requireRawCapture {
+		t.Fatalf("unexpected directory listing recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+
+	reducer := filters.NewBufferedTextReducerWithRecovery(true, false, func(input string) string {
+		return filters.SummarizeDirectoryListing(input, 4)
+	}, func(input string) (string, string, bool) {
+		return filters.DirectoryListingRecoveryInfo(input, 4)
+	})
+	reducer.ConsumeStdout([]byte(listingInput))
+	if kind, summary, requireRawCapture := reducer.RecoveryInfo(); kind != filters.RecoveryKindFullOutput || summary != "omitted 7 directory entries" || !requireRawCapture {
+		t.Fatalf("unexpected buffered recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
 	}
 }

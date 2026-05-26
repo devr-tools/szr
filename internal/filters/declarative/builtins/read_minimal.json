@@ -1,0 +1,9 @@
+{
+  "name": "read_minimal",
+  "description": "Strip single-line shell and source comments and keep the first N lines.",
+  "strip_patterns": [
+    "^\\s*//",
+    "^\\s*#"
+  ],
+  "head": 80
+}

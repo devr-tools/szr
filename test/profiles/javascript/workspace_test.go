@@ -36,24 +36,24 @@ func TestJSWorkspaceProfilePrepare(t *testing.T) {
 		{"bun", "run", "build"},
 		{"node", "scripts/build.mjs"},
 	} {
-		if !workspace.Match(engine.Invocation{Display: display}) {
+		if !workspace.Match(engine.Classify(engine.Invocation{Display: display})) {
 			t.Fatalf("expected %#v to match js-workspace", display)
 		}
 	}
 
-	if workspace.Match(engine.Invocation{Display: []string{"npm", "test"}}) {
+	if workspace.Match(engine.Classify(engine.Invocation{Display: []string{"npm", "test"}})) {
 		t.Fatal("did not expect npm test to match js-workspace")
 	}
-	if workspace.Match(engine.Invocation{Display: []string{"node", "server.js"}}) {
+	if workspace.Match(engine.Classify(engine.Invocation{Display: []string{"node", "server.js"}})) {
 		t.Fatal("did not expect plain node scripts to match js-workspace")
 	}
-	if got := workspace.Prepare(engine.Invocation{Command: []string{"npm", "install"}, Advanced: advanced}); !reflect.DeepEqual(got, []string{"npm", "install", "--no-progress", "--no-fund", "--no-audit", "--color=false"}) {
+	if got := workspace.Prepare(engine.Classify(engine.Invocation{Command: []string{"npm", "install"}, Advanced: advanced})); !reflect.DeepEqual(got, []string{"npm", "install", "--no-progress", "--no-fund", "--no-audit", "--color=false"}) {
 		t.Fatalf("unexpected npm workspace prepare: %#v", got)
 	}
-	if got := workspace.Prepare(engine.Invocation{Command: []string{"pnpm", "lint"}, Advanced: advanced}); !reflect.DeepEqual(got, []string{"pnpm", "lint", "--reporter=append-only", "--color=false"}) {
+	if got := workspace.Prepare(engine.Classify(engine.Invocation{Command: []string{"pnpm", "lint"}, Advanced: advanced})); !reflect.DeepEqual(got, []string{"pnpm", "lint", "--reporter=append-only", "--color=false"}) {
 		t.Fatalf("unexpected pnpm workspace prepare: %#v", got)
 	}
-	if got := workspace.Prepare(engine.Invocation{Command: []string{"turbo", "run", "build"}, Advanced: advanced}); !reflect.DeepEqual(got, []string{"turbo", "run", "build"}) {
+	if got := workspace.Prepare(engine.Classify(engine.Invocation{Command: []string{"turbo", "run", "build"}, Advanced: advanced})); !reflect.DeepEqual(got, []string{"turbo", "run", "build"}) {
 		t.Fatalf("expected non-package js-workspace prepare passthrough, got %#v", got)
 	}
 }

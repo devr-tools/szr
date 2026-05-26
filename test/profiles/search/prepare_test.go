@@ -9,6 +9,25 @@ import (
 	"github.com/devr-tools/szr/test/testutil"
 )
 
+func TestSearchProfilesCapabilities(t *testing.T) {
+	list := profiles.Builtins(6)
+	for _, name := range []string{"grep", "ripgrep", "ripgrep-files", "ripgrep-files-with-matches", "path-find"} {
+		profile := testutil.FindProfile(t, list, name)
+		if profile.Capabilities.StructuredMode != engine.StructuredModePreferred {
+			t.Fatalf("expected %s to prefer structured mode, got %q", name, profile.Capabilities.StructuredMode)
+		}
+		if !profile.Capabilities.InjectsPrepareArgs {
+			t.Fatalf("expected %s to declare prepare arg injection", name)
+		}
+		if profile.Capabilities.FastPathBypass != engine.FastPathBypassSafeOnly {
+			t.Fatalf("expected %s to use safe-only fast-path bypass, got %q", name, profile.Capabilities.FastPathBypass)
+		}
+		if !profile.Capabilities.RequireFullCapture {
+			t.Fatalf("expected %s to require full capture for recovery", name)
+		}
+	}
+}
+
 func TestRipgrepProfilePrepare(t *testing.T) {
 	list := profiles.Builtins(6)
 	grepProfile := testutil.FindProfile(t, list, "grep")
@@ -179,7 +198,8 @@ func TestRipgrepProfilePrepare(t *testing.T) {
 
 func assertProfileMatches(t *testing.T, profile engine.Profile, display []string, want bool) {
 	t.Helper()
-	if profile.Match(engine.Invocation{Display: display}) != want {
+	inv := engine.Classify(engine.Invocation{Display: display})
+	if profile.Match(inv) != want {
 		t.Fatalf("unexpected match result for %#v", display)
 	}
 }
@@ -188,13 +208,13 @@ func TestFindProfileMatch(t *testing.T) {
 	list := profiles.Builtins(6)
 	profile := testutil.FindProfile(t, list, "path-find")
 
-	if !profile.Match(engine.Invocation{Display: []string{"find", ".", "-name", "*.py"}}) {
+	if !profile.Match(engine.Classify(engine.Invocation{Display: []string{"find", ".", "-name", "*.py"}})) {
 		t.Fatal("expected plain find to match path-find profile")
 	}
-	if profile.Match(engine.Invocation{Display: []string{"find", ".", "-exec", "rm", "{}", ";"}}) {
+	if profile.Match(engine.Classify(engine.Invocation{Display: []string{"find", ".", "-exec", "rm", "{}", ";"}})) {
 		t.Fatal("did not expect destructive find to match path-find profile")
 	}
-	if profile.Match(engine.Invocation{Display: []string{"find", ".", "-prune"}}) {
+	if profile.Match(engine.Classify(engine.Invocation{Display: []string{"find", ".", "-prune"}})) {
 		t.Fatal("did not expect prune-heavy find to match path-find profile")
 	}
 

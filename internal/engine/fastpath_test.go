@@ -15,6 +15,9 @@ func TestDecideFastPathSkipsBypassOnNonZeroExit(t *testing.T) {
 	if decision.Reason != "" {
 		t.Fatalf("expected no bypass reason on nonzero exit, got %q", decision.Reason)
 	}
+	if decision.BypassKind != FastPathBypassKindNone {
+		t.Fatalf("expected no bypass kind on nonzero exit, got %q", decision.BypassKind)
+	}
 }
 
 func TestDecideFastPathBypassesEmptyStderrOnlyProfile(t *testing.T) {
@@ -26,6 +29,9 @@ func TestDecideFastPathBypassesEmptyStderrOnlyProfile(t *testing.T) {
 	}
 	if decision.Reason != "stderr-only profile with empty stderr payload" {
 		t.Fatalf("unexpected reason: %q", decision.Reason)
+	}
+	if decision.BypassKind != FastPathBypassKindEmptyPreferredStream {
+		t.Fatalf("unexpected bypass kind: %q", decision.BypassKind)
 	}
 }
 
@@ -85,6 +91,9 @@ func TestDecideFastPathFallsBackToGenericTinyOutput(t *testing.T) {
 	if decision.Reason != "tiny output fast path" {
 		t.Fatalf("unexpected reason: %q", decision.Reason)
 	}
+	if decision.BypassKind != FastPathBypassKindTinyOutput {
+		t.Fatalf("unexpected bypass kind: %q", decision.BypassKind)
+	}
 }
 
 func TestDecideFastPathSetsLatencyWarningIndependently(t *testing.T) {
@@ -96,5 +105,43 @@ func TestDecideFastPathSetsLatencyWarningIndependently(t *testing.T) {
 	}
 	if !decision.BypassCompression {
 		t.Fatalf("expected family-aware bypass to remain active, got %+v", decision)
+	}
+}
+
+func TestShouldApplyBypassUsesCapabilities(t *testing.T) {
+	decision := FastPathDecision{
+		BypassCompression: true,
+		BypassKind:        FastPathBypassKindTinyOutput,
+		Reason:            "tiny output fast path",
+	}
+
+	safeOnly := Profile{
+		Name:         "safe-only",
+		StreamRender: func(Invocation, OutputBudget) StreamReducer { return nil },
+		Capabilities: ProfileCapabilities{FastPathBypass: FastPathBypassSafeOnly},
+	}
+	if shouldApplyBypass(safeOnly, decision) {
+		t.Fatal("expected safe-only profile to reject tiny-output bypass")
+	}
+
+	smallOutput := Profile{
+		Name:         "small-output",
+		StreamRender: func(Invocation, OutputBudget) StreamReducer { return nil },
+		Capabilities: ProfileCapabilities{FastPathBypass: FastPathBypassSmallOutput},
+	}
+	if !shouldApplyBypass(smallOutput, decision) {
+		t.Fatal("expected small-output profile to allow tiny-output bypass")
+	}
+}
+
+func TestShouldUseFailureEscapeUsesCapabilities(t *testing.T) {
+	profile := Profile{Capabilities: ProfileCapabilities{AllowFailureEscape: true}}
+	if !shouldUseFailureEscape(profile, 1, false, true) {
+		t.Fatal("expected failure escape when capability is enabled")
+	}
+
+	profile.Capabilities.AllowFailureEscape = false
+	if shouldUseFailureEscape(profile, 1, false, true) {
+		t.Fatal("did not expect failure escape when capability is disabled")
 	}
 }

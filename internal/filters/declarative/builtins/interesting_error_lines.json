@@ -1,0 +1,20 @@
+{
+  "name": "interesting_error_lines",
+  "description": "Keep common error-like lines, clip width, and emit ok when no signal remains.",
+  "keep_patterns": [
+    "(?i)error",
+    "(?i)warn",
+    "(?i)fail",
+    "(?i)fatal",
+    "(?i)panic",
+    "(?i)exception",
+    "(?i)traceback",
+    "(?i)timeout",
+    "(?i)refused",
+    "(?i)denied"
+  ],
+  "drop_empty": true,
+  "head": 12,
+  "max_line_width": 160,
+  "empty_message": "ok"
+}

@@ -12,9 +12,17 @@ const (
 
 type FastPathDecision struct {
 	BypassCompression bool
+	BypassKind        string
 	Reason            string
 	WarnLatency       bool
 }
+
+const (
+	FastPathBypassKindNone                 = ""
+	FastPathBypassKindTinyOutput           = "tiny-output"
+	FastPathBypassKindFamilyRule           = "family-rule"
+	FastPathBypassKindEmptyPreferredStream = "empty-preferred-stream"
+)
 
 type fastPathRule struct {
 	MaxBytes  int
@@ -168,16 +176,19 @@ func DecideFastPath(profile Profile, inv Invocation, rawBytes, rawTokens int, du
 	}
 	if profile.StreamPreference == StreamStderrOnly && rawBytes == 0 {
 		decision.BypassCompression = true
+		decision.BypassKind = FastPathBypassKindEmptyPreferredStream
 		decision.Reason = "stderr-only profile with empty stderr payload"
 		return decision
 	}
 	if bypass, reason := commandFamilyMicroBypass(profile, inv, rawBytes, rawTokens); bypass {
 		decision.BypassCompression = true
+		decision.BypassKind = FastPathBypassKindFamilyRule
 		decision.Reason = reason
 		return decision
 	}
 	if rawBytes <= defaultTinyOutputBypassBytes && rawTokens <= defaultTinyOutputBypassTokens {
 		decision.BypassCompression = true
+		decision.BypassKind = FastPathBypassKindTinyOutput
 		decision.Reason = "tiny output fast path"
 	}
 	return decision

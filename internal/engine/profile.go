@@ -23,6 +23,19 @@ const (
 	StreamStderrFirst = "stderr-first"
 )
 
+const (
+	StructuredModeNone           = ""
+	StructuredModePreferred      = "preferred"
+	StructuredModeStdoutOnly     = "stdout-only"
+	StructuredModeStdoutRequired = "stdout-required"
+)
+
+const (
+	FastPathBypassNever       = ""
+	FastPathBypassSafeOnly    = "safe-only"
+	FastPathBypassSmallOutput = "small-output"
+)
+
 type OutputBudget struct {
 	MaxLines           int
 	MaxBytes           int
@@ -55,6 +68,15 @@ type StreamReducerPreview interface {
 
 type StreamRenderFactory func(Invocation, OutputBudget) StreamReducer
 
+type ProfileCapabilities struct {
+	StructuredMode            string
+	InjectsPrepareArgs        bool
+	SupportsAggressivePrepare bool
+	FastPathBypass            string
+	AllowFailureEscape        bool
+	RequireFullCapture        bool
+}
+
 type PartialResult struct {
 	ProfileName       string
 	ProfileConfidence string
@@ -85,6 +107,7 @@ type Profile struct {
 	Description      string
 	Source           string
 	Confidence       string
+	Capabilities     ProfileCapabilities
 	StreamPreference string
 	Budget           OutputBudget
 	LatencyBudget    time.Duration

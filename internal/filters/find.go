@@ -141,6 +141,14 @@ func (r *FindReducer) Preview() string {
 	return r.render(true)
 }
 
+func (r *FindReducer) RecoveryInfo() (string, string, bool) {
+	extra := r.totalMatches - len(r.matches)
+	if extra <= 0 {
+		return NoRecovery()
+	}
+	return FullOutputRecovery(fmt.Sprintf("omitted %d additional matches", extra))
+}
+
 func (r *FindReducer) ingestPath(line string) {
 	path := normalizeSearchPath(line)
 	if path == "" {

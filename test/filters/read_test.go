@@ -16,6 +16,10 @@ func TestReadLevels(t *testing.T) {
 	if readMinimal != "a" {
 		t.Fatalf("unexpected read minimal: %q", readMinimal)
 	}
+	readMinimalLimited := filters.ReadLevel([]byte("a\nb\nc"), "minimal", false, 2)
+	if readMinimalLimited != "a\nb\n... +1 more lines" {
+		t.Fatalf("unexpected declarative read minimal limit: %q", readMinimalLimited)
+	}
 	readAggressive := filters.ReadLevel([]byte("func x() { return 1 }\n\n# c"), "aggressive", true, 1)
 	if !strings.Contains(readAggressive, "func x() { ... }") || strings.Contains(readAggressive, "... +") {
 		t.Fatalf("unexpected read aggressive: %q", readAggressive)
@@ -44,6 +48,14 @@ func TestSummarizeReadFile(t *testing.T) {
 	jsonPreview := filters.SummarizeReadFile("cfg.json", []byte(`{"name":"x","items":[{"id":1}]}`), 8)
 	if !strings.Contains(jsonPreview, "name: string") || !strings.Contains(jsonPreview, "id: number") {
 		t.Fatalf("expected json structure preview, got %q", jsonPreview)
+	}
+
+	if kind, summary, requireRawCapture := filters.ReadFileRecoveryInfo("README.md", []byte("# Title\n\n- one\nBody\nAnother body line\n"), 2); kind != filters.RecoveryKindFullOutput || summary != "omitted 2 additional lines" || !requireRawCapture {
+		t.Fatalf("unexpected read file recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+
+	if kind, summary, requireRawCapture := filters.ReadFileRecoveryInfo("cfg.json", []byte(`{"name":"x","items":[{"id":1},{"id":2},{"id":3}],"meta":{"env":"dev","owner":"team","service":"api"},"flags":{"a":true,"b":false},"nested":{"child":{"leaf":"x"}}}`), 2); kind != filters.RecoveryKindFullOutput || summary == "" || !requireRawCapture {
+		t.Fatalf("expected json read preview recovery info, got kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
 	}
 }
 

@@ -167,6 +167,15 @@ func (r *GenericFailureReducer) Preview() string {
 	return ""
 }
 
+func (r *GenericFailureReducer) RecoveryInfo() (string, string, bool) {
+	r.scanner.Finish(r.ingestLine)
+	r.flushPending()
+	if summary := r.recoverySummary(); summary != "" {
+		return FullOutputRecovery(summary)
+	}
+	return NoRecovery()
+}
+
 func (r *GenericFailureReducer) consume(chunk []byte) {
 	r.bytesParsed += len(chunk)
 	r.scanner.Consume(chunk, r.ingestLine)
@@ -303,16 +312,34 @@ func (r *GenericFailureReducer) omissionSummary(used int) string {
 	if r.extra > 0 {
 		parts = append(parts, fmt.Sprintf("%d more lines", r.extra))
 	}
+	parts = append(parts, r.droppedNoiseSummaryParts()...)
+	if len(parts) == 0 || used >= r.maxLines {
+		return ""
+	}
+	return "... omitted " + strings.Join(parts, ", ")
+}
+
+func (r *GenericFailureReducer) recoverySummary() string {
+	parts := []string{}
+	if r.extra > 0 {
+		parts = append(parts, fmt.Sprintf("%d additional lines", r.extra))
+	}
+	parts = append(parts, r.droppedNoiseSummaryParts()...)
+	if len(parts) == 0 {
+		return ""
+	}
+	return "omitted " + strings.Join(parts, ", ")
+}
+
+func (r *GenericFailureReducer) droppedNoiseSummaryParts() []string {
+	parts := []string{}
 	if count := r.droppedNoise["progress"]; count > 0 {
 		parts = append(parts, fmt.Sprintf("%d progress lines", count))
 	}
 	if count := r.droppedNoise["install"]; count > 0 {
 		parts = append(parts, fmt.Sprintf("%d install lines", count))
 	}
-	if len(parts) == 0 || used >= r.maxLines {
-		return ""
-	}
-	return "... omitted " + strings.Join(parts, ", ")
+	return parts
 }
 
 func renderFailureItem(item failureItem, label string) string {

@@ -30,6 +30,38 @@ This document breaks the `profiles` refactor into agent-sized tasks. The goal is
 7. Write contributor docs by ecosystem and extension path.
 8. Migrate profiles incrementally.
 
+## Active Delegation
+
+Current parallel workstreams:
+
+- `Task 4` is delegated to agent `Lovelace`.
+  - Scope: reusable profile builders plus representative migration in `git` and `javascript`.
+  - Status: `completed and integrated`
+- `Task 5` is delegated to agent `Poincare`.
+  - Scope: declarative fallback reducer layer for simple line-based reducers.
+  - Status: `runtime landed; engine fallback adoption landed; broader integration still in progress`
+- `Task 6` is delegated as a split migration wave.
+  - `Worker A`
+  - Scope: non-stream `Render`-only summarizers and adjacent tests/docs.
+  - Write scope: `internal/filters/**` for non-stream summarizers, `internal/profiles/**` only if needed to consume already-existing recovery-aware helpers, `test/filters/**`, and this task doc only if the worker finishes a meaningful slice.
+  - Status: `spawned`
+  - Remaining slices after worker A: additional stream reducers, profile-local renderers that still omit content without recovery, and any remaining family-specific truncators.
+- `Task 7` is delegated to agent `Dewey`.
+  - Scope: contributor docs for `git`, `javascript`, and generic fallback/declarative reducers.
+  - Status: `spawned`
+- `Task 8` is delegated to agent `Hilbert` for a narrow first slice only.
+  - Scope: search/path-list family migration, because the needed infrastructure is already merged for that family.
+  - Status: `spawned`
+
+Dependency guardrails for active agents:
+
+- Task 4 starts after Task 3 because builders must populate stable capability metadata.
+- Task 5 starts after Task 1 because the fallback boundary is now defined.
+- Task 6 may proceed before Task 5 finishes, but Task 5 should consume the shared recovery API that Task 6 defines instead of inventing a parallel one.
+  - Current state: the declarative reducer result now exposes reusable omission metadata and the top-level filter layer can map that into the shared recovery contract.
+- Task 8 remains blocked for families whose needed infrastructure is not yet merged.
+  - Current state: only the search/path-list family is in scope for the first migration slice.
+
 ## Task 1: Architecture Contracts
 
 **Objective**
@@ -226,6 +258,20 @@ Define one shared policy for hidden-output recovery.
 
 - Any reducer that hides meaningful content provides a deterministic recovery path.
 
+**Current implementation notes**
+
+- The first slice should land shared engine recovery helpers before broad family migration.
+- Task 5 should reuse the same recovery helper contract for declarative fallback reducers instead of inventing a second hint/artifact path.
+- Family-by-family reducer migration can follow after the helper layer is merged.
+- Recent Task 6 stream migrations now cover:
+  - `find`
+  - `ripgrep`
+  - generic failure compaction
+  - `git log`
+  - `git diff`
+  - core directory-listing/tree previews
+  - core file-read previews
+
 ## Task 7: Contributor Docs By Ecosystem
 
 **Objective**
@@ -307,15 +353,24 @@ These tasks can overlap once Task 1 lands:
 
 ## Migration Checklist
 
-- [ ] Task 1 complete
-- [ ] Task 2 complete
-- [ ] Task 3 complete
-- [ ] Task 4 complete
+- [x] Task 1 complete
+- [x] Task 2 complete
+- [x] Task 3 complete
+- [x] Task 4 complete
+- [x] Task 5 declarative runtime landed
+- [x] Task 5 engine fallback adoption landed
 - [ ] Task 5 complete
+- [x] Task 6 helper API landed
 - [ ] Task 6 complete
-- [ ] Task 7 complete
-- [ ] `git` family migrated
-- [ ] `javascript` family migrated
-- [ ] search/path-list families migrated
+- [x] Task 6 non-stream summarizer slice landed
+- [x] Task 6 additional stream reducer slice landed
+- [x] Task 7 complete
+- [x] Task 8 unblocked
+- [x] `git` family migrated
+- [x] `javascript` family migrated
+- [ ] `git` contributor guide landed
+- [ ] `javascript` contributor guide landed
+- [ ] declarative fallback contributor guide landed
+- [x] search/path-list families migrated
 - [ ] build/test families migrated
 - [ ] cloud/Kubernetes families migrated

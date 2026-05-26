@@ -3,9 +3,18 @@ package filters
 import (
 	"fmt"
 	"strings"
+
+	"github.com/devr-tools/szr/internal/filters/declarative"
 )
 
 func ReadLevel(data []byte, level string, lineNumbers bool, maxLines int) string {
+	if level == "minimal" && !lineNumbers {
+		result, err := declarative.ApplyBuiltin("read_minimal", string(data), declarative.Options{LineLimit: maxLines})
+		if err == nil {
+			return result.Text
+		}
+	}
+
 	lines := strings.Split(string(data), "\n")
 	filtered := make([]string, 0, len(lines))
 	for i, raw := range lines {
