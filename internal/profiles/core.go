@@ -1,6 +1,9 @@
 package profiles
 
 import (
+	"path/filepath"
+	"strings"
+
 	"github.com/devr-tools/szr/internal/engine"
 	"github.com/devr-tools/szr/internal/filters"
 	"github.com/devr-tools/szr/internal/profilekit"
@@ -222,7 +225,16 @@ func isSingleFileCat(command []string) bool {
 	if len(command) != 2 || command[0] != "cat" {
 		return false
 	}
-	return command[1] != "" && command[1][0] != '-'
+	return command[1] != "" && command[1][0] != '-' && !isJSONLikePath(command[1])
+}
+
+func isJSONLikePath(path string) bool {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".json", ".jsonl", ".ndjson":
+		return true
+	default:
+		return false
+	}
 }
 
 func prepareLSCommand(command []string) []string {

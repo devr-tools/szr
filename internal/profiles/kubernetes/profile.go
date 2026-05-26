@@ -17,7 +17,7 @@ func Profiles(maxLines int) []engine.Profile {
 			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 10)),
 			LatencyBudget:    profilekit.LatencyBudget(30),
 			Match: func(inv engine.Invocation) bool {
-				return isKubectlCommand(inv.Display, "get")
+				return isKubectlCommand(inv.Display, "get") && !hasKubectlWideOutput(inv.Display)
 			},
 			Prepare: func(inv engine.Invocation) []string {
 				if containsAny(inv.Command, "-o", "--output", "-w", "--watch", "--watch-only") || containsPrefix(inv.Command, "-o=") || containsPrefix(inv.Command, "--output=") {

@@ -3,6 +3,7 @@ package profiles_test
 import (
 	"testing"
 
+	"github.com/devr-tools/szr/internal/config"
 	"github.com/devr-tools/szr/internal/engine"
 	"github.com/devr-tools/szr/internal/profiles"
 	"github.com/devr-tools/szr/test/testutil"
@@ -32,6 +33,9 @@ func TestCoreFilesystemProfiles(t *testing.T) {
 	if !catRead.Match(engine.Invocation{Command: []string{"cat", "README.md"}}) || catRead.Match(engine.Invocation{Command: []string{"cat", "-n", "README.md"}}) {
 		t.Fatal("unexpected cat-read match behavior")
 	}
+	if catRead.Match(engine.Invocation{Command: []string{"cat", "data.json"}}) {
+		t.Fatal("cat-read should not match JSON files")
+	}
 	if got := catRead.Render(engine.Invocation{Command: []string{"cat", "README.md"}}, engine.Execution{Stdout: "# Title\n\nBody\n"}); got == "" {
 		t.Fatal("expected cat-read render output")
 	}
@@ -45,6 +49,34 @@ func TestCoreFilesystemProfiles(t *testing.T) {
 	}
 	if gitLsFiles.StreamPreference != engine.StreamStdoutOnly || gitLsFiles.StreamRender == nil {
 		t.Fatalf("unexpected git-ls-files stream metadata: %#v", gitLsFiles)
+	}
+}
+
+func TestSelectionPrefersSpecificConflictProfiles(t *testing.T) {
+	paths := testutil.Paths(t.TempDir())
+	testutil.EnsurePaths(t, paths)
+	cfg := config.Default()
+	e := engine.New(cfg, paths, nil, profiles.Builtins(cfg.MaxPreviewLines))
+
+	if got := e.Explain(engine.Invocation{
+		Command: []string{"cat", "data.json"},
+		Display: []string{"cat", "data.json"},
+	}).Name; got != "json-query" {
+		t.Fatalf("expected cat data.json to select json-query, got %q", got)
+	}
+
+	if got := e.Explain(engine.Invocation{
+		Command: []string{"kubectl", "get", "pods", "-o", "wide"},
+		Display: []string{"kubectl", "get", "pods", "-o", "wide"},
+	}).Name; got != "csv-tabular" {
+		t.Fatalf("expected kubectl get -o wide to select csv-tabular, got %q", got)
+	}
+
+	if got := e.Explain(engine.Invocation{
+		Command: []string{"curl", "https://api.example.test/v1/users"},
+		Display: []string{"curl", "https://api.example.test/v1/users"},
+	}).Name; got != "http-api" {
+		t.Fatalf("expected API curl request to select http-api, got %q", got)
 	}
 }
 

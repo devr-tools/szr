@@ -19,6 +19,9 @@ func TestKubectlProfilesPrepare(t *testing.T) {
 	if !kubectlGet.Match(engine.Invocation{Display: []string{"kubectl", "-n", "default", "get", "pods"}}) {
 		t.Fatal("expected namespaced kubectl get to match")
 	}
+	if kubectlGet.Match(engine.Invocation{Display: []string{"kubectl", "get", "pods", "-o", "wide"}}) {
+		t.Fatal("expected explicit wide kubectl get to bypass kubectl-get")
+	}
 	if got := kubectlGet.Prepare(engine.Invocation{Command: []string{"kubectl", "get", "pods"}}); !reflect.DeepEqual(got, []string{"kubectl", "get", "pods", "-o", "json"}) {
 		t.Fatalf("unexpected kubectl get prepare: %#v", got)
 	}
