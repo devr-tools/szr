@@ -1,15 +1,14 @@
 package filters
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
-
-	"github.com/devr-tools/szr/internal/filters/declarative"
 )
 
 func ReadLevel(data []byte, level string, lineNumbers bool, maxLines int) string {
 	if level == "minimal" && !lineNumbers {
-		return fastReadLevelMinimal(data, maxLines)
+		return renderReadMinimal(data, maxLines)
 	}
 
 	lines := strings.Split(string(data), "\n")
@@ -25,18 +24,49 @@ func ReadLevel(data []byte, level string, lineNumbers bool, maxLines int) string
 	return strings.Join(filtered, "\n")
 }
 
-func fastReadLevelMinimal(data []byte, maxLines int) string {
-	lines := strings.Split(string(data), "\n")
-	filtered := make([]string, 0, len(lines))
-	for _, raw := range lines {
-		trimmed := strings.TrimSpace(raw)
-		if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "#") {
-			continue
+func renderReadMinimal(data []byte, maxLines int) string {
+	visible := 0
+	var builder strings.Builder
+	scanByteLines(data, func(line []byte) {
+		trimmed := bytes.TrimSpace(line)
+		if bytes.HasPrefix(trimmed, []byte("//")) || bytes.HasPrefix(trimmed, []byte("#")) {
+			return
 		}
-		filtered = append(filtered, raw)
+		visible++
+		if maxLines <= 0 || visible <= maxLines {
+			if builder.Len() > 0 {
+				builder.WriteByte('\n')
+			}
+			builder.Write(line)
+		}
+	})
+	if maxLines > 0 && visible > maxLines {
+		if builder.Len() > 0 {
+			builder.WriteByte('\n')
+		}
+		builder.WriteString(fmt.Sprintf("... +%d more lines", visible-maxLines))
 	}
-	filtered = limitReadLines(filtered, maxLines)
-	return strings.Join(filtered, "\n")
+	return builder.String()
+}
+
+func scanByteLines(data []byte, emit func([]byte)) {
+	start := 0
+	for i := 0; i < len(data); i++ {
+		switch data[i] {
+		case '\n':
+			emit(data[start:i])
+			start = i + 1
+		case '\r':
+			emit(data[start:i])
+			if i+1 < len(data) && data[i+1] == '\n' {
+				i++
+			}
+			start = i + 1
+		}
+	}
+	if start < len(data) {
+		emit(data[start:])
+	}
 }
 
 func filterReadLine(raw string, level string) (string, bool) {

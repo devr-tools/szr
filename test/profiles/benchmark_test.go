@@ -1,6 +1,7 @@
 package profiles_test
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -38,6 +39,40 @@ var (
 		"cron-28937412-zr8mq\t3m\t32Mi",
 		"ingest-6848d8b5db-kr2rp\t180m\t412Mi",
 	}, "\n")
+	benchmarkGHRunListLongInput       = buildGHRunListLongInput(30)
+	benchmarkKubectlTopLongInput      = buildKubectlTopLongInput(30)
+	benchmarkCompactStreamStdoutHeavy = strings.Join([]string{
+		"out-01",
+		"out-02",
+		"out-03",
+		"out-04",
+		"out-05",
+		"out-06",
+		"out-07",
+		"out-08",
+	}, "\n")
+	benchmarkCompactStreamStderrHeavy = strings.Join([]string{
+		"err-01",
+		"err-02",
+		"err-03",
+		"err-04",
+		"err-05",
+		"err-06",
+		"err-07",
+		"err-08",
+	}, "\n")
+	benchmarkCompactStreamMixedStdout = strings.Join([]string{
+		"out-01",
+		"out-02",
+		"out-03",
+	}, "\n")
+	benchmarkCompactStreamMixedStderr = strings.Join([]string{
+		"err-01",
+		"err-02",
+		"err-03",
+		"err-04",
+		"err-05",
+	}, "\n")
 )
 
 func BenchmarkDeclarativeProfileRender(b *testing.B) {
@@ -71,7 +106,7 @@ func BenchmarkDeclarativeProfileRender(b *testing.B) {
 	for _, bench := range benches {
 		profile := findProfileForBenchmark(b, list, bench.profile)
 		b.Run(bench.name, func(b *testing.B) {
-			benchProfileComparison(b, len(bench.exec.Stdout)+len(bench.exec.Stderr),
+			benchProfileComparison(b, len(bench.exec.Stdout)+len(bench.exec.Stderr), bench.exec.Stdout+"\n"+bench.exec.Stderr,
 				func() string {
 					return profile.Render(bench.inv, bench.exec)
 				},
@@ -115,7 +150,7 @@ func BenchmarkDeclarativeProfileStreamRender(b *testing.B) {
 	for _, bench := range benches {
 		profile := findProfileForBenchmark(b, list, bench.profile)
 		b.Run(bench.name, func(b *testing.B) {
-			benchProfileComparison(b, len(bench.stdout)+len(bench.stderr),
+			benchProfileComparison(b, len(bench.stdout)+len(bench.stderr), bench.stdout+"\n"+bench.stderr,
 				func() string {
 					reducer := profile.StreamRender(bench.inv, profile.Budget)
 					reducer.ConsumeStdout([]byte(bench.stdout))
@@ -132,7 +167,134 @@ func BenchmarkDeclarativeProfileStreamRender(b *testing.B) {
 	}
 }
 
-func benchProfileComparison(b *testing.B, inputBytes int, current func() string, legacy func() string) {
+func BenchmarkDeclarativeProfileStreamRenderChunked(b *testing.B) {
+	list := profiles.Builtins(6)
+	benches := []struct {
+		name       string
+		profile    string
+		inv        engine.Invocation
+		stdout     string
+		stderr     string
+		chunkStyle string
+	}{
+		{
+			name:       "gh-run-list/fixed-32",
+			profile:    "gh-run-list",
+			inv:        engine.Invocation{Display: []string{"gh", "run", "list"}},
+			stdout:     benchmarkGHRunListInput,
+			chunkStyle: "fixed-32",
+		},
+		{
+			name:       "gh-run-list/line",
+			profile:    "gh-run-list",
+			inv:        engine.Invocation{Display: []string{"gh", "run", "list"}},
+			stdout:     benchmarkGHRunListInput,
+			chunkStyle: "line",
+		},
+		{
+			name:       "kubectl-top/fixed-32",
+			profile:    "kubectl-top",
+			inv:        engine.Invocation{Display: []string{"kubectl", "top", "pods"}},
+			stdout:     benchmarkKubectlTopInput,
+			chunkStyle: "fixed-32",
+		},
+		{
+			name:       "kubectl-top/line",
+			profile:    "kubectl-top",
+			inv:        engine.Invocation{Display: []string{"kubectl", "top", "pods"}},
+			stdout:     benchmarkKubectlTopInput,
+			chunkStyle: "line",
+		},
+	}
+
+	for _, bench := range benches {
+		profile := findProfileForBenchmark(b, list, bench.profile)
+		b.Run(bench.name, func(b *testing.B) {
+			benchProfileComparison(b, len(bench.stdout)+len(bench.stderr), bench.stdout+"\n"+bench.stderr,
+				func() string {
+					reducer := profile.StreamRender(bench.inv, profile.Budget)
+					feedReducerChunks(reducer, bench.stdout, bench.stderr, bench.chunkStyle)
+					return reducer.Result()
+				},
+				func() string {
+					reducer := filters.NewCompactLineReducer(6, 0)
+					feedReducerChunks(reducer, bench.stdout, bench.stderr, bench.chunkStyle)
+					return reducer.Result()
+				},
+			)
+		})
+	}
+}
+
+func BenchmarkDeclarativeProfileTokenSavings(b *testing.B) {
+	list := profiles.Builtins(6)
+	benches := []struct {
+		name    string
+		profile string
+		inv     engine.Invocation
+		exec    engine.Execution
+	}{
+		{
+			name:    "gh-run-list-long",
+			profile: "gh-run-list",
+			inv:     engine.Invocation{Display: []string{"gh", "run", "list"}},
+			exec:    engine.Execution{Stdout: benchmarkGHRunListLongInput},
+		},
+		{
+			name:    "kubectl-top-long",
+			profile: "kubectl-top",
+			inv:     engine.Invocation{Display: []string{"kubectl", "top", "pods"}},
+			exec:    engine.Execution{Stdout: benchmarkKubectlTopLongInput},
+		},
+	}
+
+	for _, bench := range benches {
+		profile := findProfileForBenchmark(b, list, bench.profile)
+		b.Run(bench.name, func(b *testing.B) {
+			benchProfileComparison(b, len(bench.exec.Stdout)+len(bench.exec.Stderr), bench.exec.Stdout+"\n"+bench.exec.Stderr,
+				func() string {
+					return profile.Render(bench.inv, bench.exec)
+				},
+				func() string {
+					return legacyProfileRender(bench.exec.Stdout, bench.exec.Stderr, 6)
+				},
+			)
+		})
+	}
+}
+
+func BenchmarkCompactLinesTwoStreamComparison(b *testing.B) {
+	cases := []struct {
+		name   string
+		stdout string
+		stderr string
+	}{
+		{name: "stdout-heavy", stdout: benchmarkCompactStreamStdoutHeavy, stderr: "err-01"},
+		{name: "stderr-heavy", stdout: "out-01", stderr: benchmarkCompactStreamStderrHeavy},
+		{name: "mixed", stdout: benchmarkCompactStreamMixedStdout, stderr: benchmarkCompactStreamMixedStderr},
+	}
+
+	for _, bench := range cases {
+		b.Run(bench.name, func(b *testing.B) {
+			benchProfileComparison(b, len(bench.stdout)+len(bench.stderr), bench.stdout+"\n"+bench.stderr,
+				func() string {
+					reducer := filters.NewDeclarativeBuiltinReducer("compact_lines", "lines", 6, true, true)
+					reducer.ConsumeStdout([]byte(bench.stdout))
+					reducer.ConsumeStderr([]byte(bench.stderr))
+					return reducer.Result()
+				},
+				func() string {
+					reducer := filters.NewCompactLineReducer(6, 0)
+					reducer.ConsumeStdout([]byte(bench.stdout))
+					reducer.ConsumeStderr([]byte(bench.stderr))
+					return reducer.Result()
+				},
+			)
+		})
+	}
+}
+
+func benchProfileComparison(b *testing.B, inputBytes int, inputText string, current func() string, legacy func() string) {
 	b.Helper()
 	for _, candidate := range []struct {
 		name string
@@ -144,6 +306,8 @@ func benchProfileComparison(b *testing.B, inputBytes int, current func() string,
 		b.Run(candidate.name, func(b *testing.B) {
 			b.ReportAllocs()
 			b.SetBytes(int64(inputBytes))
+			sample := candidate.fn()
+			reportApproxTokenSavings(b, inputText, sample)
 			for i := 0; i < b.N; i++ {
 				if got := candidate.fn(); got == "" {
 					b.Fatal("expected profile output")
@@ -151,6 +315,119 @@ func benchProfileComparison(b *testing.B, inputBytes int, current func() string,
 			}
 		})
 	}
+}
+
+type streamConsumer interface {
+	ConsumeStdout([]byte)
+	ConsumeStderr([]byte)
+}
+
+func feedReducerChunks(reducer streamConsumer, stdout string, stderr string, chunkStyle string) {
+	feedStream := func(consume func([]byte), input string) {
+		switch chunkStyle {
+		case "line":
+			lines := strings.Split(input, "\n")
+			for i, line := range lines {
+				if i < len(lines)-1 {
+					consume([]byte(line + "\n"))
+					continue
+				}
+				if line != "" {
+					consume([]byte(line))
+				}
+			}
+		case "fixed-32":
+			for start := 0; start < len(input); start += 32 {
+				end := start + 32
+				if end > len(input) {
+					end = len(input)
+				}
+				consume([]byte(input[start:end]))
+			}
+		default:
+			if input != "" {
+				consume([]byte(input))
+			}
+		}
+	}
+
+	if stdout != "" {
+		feedStream(reducer.ConsumeStdout, stdout)
+	}
+	if stderr != "" {
+		feedStream(reducer.ConsumeStderr, stderr)
+	}
+}
+
+func reportApproxTokenSavings(b *testing.B, input string, output string) {
+	inputTokens := approxTokenCount(input)
+	outputTokens := approxTokenCount(output)
+	if inputTokens <= 0 {
+		return
+	}
+	retained := (float64(outputTokens) / float64(inputTokens)) * 100
+	saved := 100 - retained
+	b.ReportMetric(retained, "tokens_retained_pct")
+	b.ReportMetric(saved, "tokens_saved_pct")
+}
+
+func approxTokenCount(input string) int {
+	if input == "" {
+		return 0
+	}
+	return len(strings.Fields(input))
+}
+
+func buildGHRunListLongInput(rows int) string {
+	lines := make([]string, 0, rows)
+	for i := 0; i < rows; i++ {
+		status := "completed"
+		conclusion := "success"
+		event := "push"
+		if i%5 == 1 {
+			conclusion = "failure"
+		}
+		if i%7 == 2 {
+			status = "queued"
+			conclusion = ""
+			event = "workflow_dispatch"
+		}
+		lines = append(lines, strings.Join([]string{
+			status,
+			conclusion,
+			"workflow-" + twoDigitIndex(i),
+			"feature/refactor-" + twoDigitIndex(i),
+			event,
+			"1234567" + twoDigitIndex(i),
+			"2" + twoDigitIndex(i) + "s",
+			"2026-05-26T08:" + twoDigitIndex(i) + ":00Z",
+		}, "\t"))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func buildKubectlTopLongInput(rows int) string {
+	lines := make([]string, 0, rows+1)
+	lines = append(lines, "NAME\tCPU(cores)\tMEMORY(bytes)")
+	for i := 0; i < rows; i++ {
+		lines = append(lines, strings.Join([]string{
+			"pod-" + twoDigitIndex(i),
+			itoaTest(10+i) + "m",
+			itoaTest(128+i*8) + "Mi",
+		}, "\t"))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func twoDigitIndex(i int) string {
+	if i < 10 {
+		return "0" + itoaTest(i)
+	}
+	return itoaTest(i)
+}
+
+func itoaTest(i int) string {
+	return strconv.Itoa(i)
 }
 
 func legacyProfileRender(stdout string, stderr string, maxLines int) string {

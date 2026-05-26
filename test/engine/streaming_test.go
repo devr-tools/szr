@@ -249,6 +249,48 @@ func TestExecutePersistsRecoveryArtifactOnSuccessfulOmission(t *testing.T) {
 	}
 }
 
+func TestExecutePersistsRecoveryArtifactOnCompressionContract(t *testing.T) {
+	t.Parallel()
+
+	binDir := t.TempDir()
+	longOutPath := testutil.WriteExecutable(t, binDir, "longout", "#!/bin/sh\nfor i in $(seq 1 80); do printf 'token-%02d\\n' \"$i\"; done\n")
+
+	root := t.TempDir()
+	paths := testutil.Paths(root)
+	testutil.EnsurePaths(t, paths)
+
+	cfg := config.Default()
+	e := engine.New(cfg, paths, history.New(paths.HistoryFile), []engine.Profile{{
+		Name:   "contract-render",
+		Budget: engine.OutputBudget{MaxLines: 12, MaxTokens: 16},
+		Match: func(inv engine.Invocation) bool {
+			return len(inv.Display) > 0 && inv.Display[0] == "longout"
+		},
+		Render: func(_ engine.Invocation, exec engine.Execution) string {
+			return exec.Stdout
+		},
+	}})
+
+	result, err := e.Execute(context.Background(), engine.Invocation{
+		Command: []string{longOutPath},
+		Display: []string{"longout"},
+		Cwd:     root,
+	}, false)
+	if err != nil {
+		t.Fatalf("execute long output: %v", err)
+	}
+	if result.TeePath == "" {
+		t.Fatalf("expected tee path for compressed successful output, got %#v", result)
+	}
+	if !strings.Contains(result.Display, "[full output") {
+		t.Fatalf("expected budget-aware recovery suffix in display, got %q", result.Display)
+	}
+	allowed := 16
+	if got := history.EstimateTokens(result.Display); got > allowed {
+		t.Fatalf("expected final display <= %d tokens after hint decoration, got %d (%q)", allowed, got, result.Display)
+	}
+}
+
 func TestExecuteCountsTokensWithoutFullyCapturingIgnoredStream(t *testing.T) {
 	t.Parallel()
 

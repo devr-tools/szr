@@ -76,15 +76,16 @@ func renderProfile(profile Profile, inv Invocation, exec Execution, fallbackLine
 
 func RenderExecution(profile Profile, inv Invocation, exec Execution, fallbackLines int, passthrough bool) RenderedExecution {
 	rawCombined := combineStreams(exec.Stdout, exec.Stderr)
+	budget := ResolveBudget(profile, inv, fallbackLines)
 	rendered := renderProfile(profile, inv, exec, fallbackLines, passthrough)
 	text := rendered.text
 	if shouldUseFailureEscape(profile, exec.ExitCode, passthrough, rendered.fallbackUsed) && rawCombined != "" {
-		budget := ResolveBudget(profile, inv, fallbackLines)
 		escapeBudget := ExpandBudgetForFailureEscape(budget, inv)
 		if escaped := filters.CompactLines(rawCombined, escapeBudget.MaxLines); strings.TrimSpace(escaped) != "" {
 			text = escaped
 		}
 	}
+	text, _, _ = enforceCompressionContract(text, rawCombined, budget, rendered.recoveryPlan, passthrough)
 	return RenderedExecution{
 		Text:           text,
 		RawCombined:    rawCombined,

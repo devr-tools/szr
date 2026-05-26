@@ -96,6 +96,21 @@ func TestDeclarativeBuiltinBridge(t *testing.T) {
 	}
 }
 
+func TestDeclarativeCompactLinesStreamSemantics(t *testing.T) {
+	t.Parallel()
+
+	reducer := filters.NewDeclarativeBuiltinReducer("compact_lines", "lines", 3, true, true)
+	reducer.ConsumeStdout([]byte("dup\ndup\n"))
+	reducer.ConsumeStderr([]byte("err-1\nerr-2\n"))
+
+	if got := reducer.Result(); got != "dup\ndup\nerr-1\n... +1 more lines" {
+		t.Fatalf("unexpected compact lines stream output: %q", got)
+	}
+	if kind, summary, requireRawCapture := reducer.RecoveryInfo(); kind != filters.RecoveryKindFullOutput || summary != "omitted 1 additional line" || !requireRawCapture {
+		t.Fatalf("unexpected compact lines stream recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+}
+
 func containsString(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {

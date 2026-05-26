@@ -1,6 +1,11 @@
 package engine
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"github.com/devr-tools/szr/internal/history"
+)
 
 func TestReducerRecoveryPlanReadsProvider(t *testing.T) {
 	reducer := &recoveryStubReducer{
@@ -22,6 +27,25 @@ func TestAppendRecoveryHint(t *testing.T) {
 	}, "/tmp/full.log", false)
 	if rendered != "summary\n[recovery: omitted 2 commits; full output: /tmp/full.log]" {
 		t.Fatalf("unexpected recovery hint: %q", rendered)
+	}
+}
+
+func TestFinalizeRenderedDisplayRespectsCompressionContract(t *testing.T) {
+	raw := strings.Repeat("token ", 80)
+	rendered := strings.Repeat("token ", 40)
+	budget := OutputBudget{MaxTokens: 16}
+
+	final := finalizeRenderedDisplay(rendered, raw, budget, RecoveryPlan{
+		Kind:    RecoveryKindFullOutput,
+		Summary: "omitted many lines",
+	}, "/tmp/full.log", false)
+
+	allowed := compressionContractAllowedTokens(history.EstimateTokens(raw), budget)
+	if got := history.EstimateTokens(final); got > allowed {
+		t.Fatalf("expected final rendered display <= %d tokens, got %d (%q)", allowed, got, final)
+	}
+	if !strings.Contains(final, "[") {
+		t.Fatalf("expected recovery or full-output suffix, got %q", final)
 	}
 }
 

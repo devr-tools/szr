@@ -1,6 +1,10 @@
 package engine
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/devr-tools/szr/internal/history"
+)
 
 const RecoveryKindFullOutput = "full-output"
 
@@ -46,4 +50,62 @@ func appendRecoveryHint(rendered string, plan RecoveryPlan, artifactPath string,
 		return line
 	}
 	return strings.TrimRight(rendered, "\n") + "\n" + line
+}
+
+func finalizeRenderedDisplay(rendered string, rawCombined string, budget OutputBudget, plan RecoveryPlan, artifactPath string, passthrough bool) string {
+	if passthrough {
+		return rendered
+	}
+	suffixes := displayArtifactSuffixes(plan, artifactPath)
+	if len(suffixes) == 0 {
+		return rendered
+	}
+	rawTokens := history.EstimateTokens(rawCombined)
+	if rawTokens < compressionContractMinRawTokens {
+		return appendDisplaySuffix(rendered, suffixes[0])
+	}
+	allowedTokens := compressionContractAllowedTokens(rawTokens, budget)
+	for _, suffix := range suffixes {
+		suffixTokens := history.EstimateTokens(suffix)
+		if suffixTokens >= allowedTokens {
+			continue
+		}
+		remaining := allowedTokens - suffixTokens
+		shrunk := rendered
+		if history.EstimateTokens(rendered) > remaining {
+			shrunk = hardCapTokens(rendered, remaining)
+		}
+		final := appendDisplaySuffix(shrunk, suffix)
+		if history.EstimateTokens(final) <= allowedTokens {
+			return final
+		}
+	}
+	return suffixes[len(suffixes)-1]
+}
+
+func displayArtifactSuffixes(plan RecoveryPlan, artifactPath string) []string {
+	if artifactPath == "" {
+		return nil
+	}
+	if plan.Kind != "" && plan.Summary != "" {
+		return []string{
+			"[recovery: " + plan.Summary + "; full output: " + artifactPath + "]",
+			"[full output: " + artifactPath + "]",
+			"[full output saved]",
+		}
+	}
+	return []string{
+		"[full output: " + artifactPath + "]",
+		"[full output saved]",
+	}
+}
+
+func appendDisplaySuffix(rendered string, suffix string) string {
+	if strings.TrimSpace(suffix) == "" {
+		return rendered
+	}
+	if strings.TrimSpace(rendered) == "" {
+		return suffix
+	}
+	return strings.TrimRight(rendered, "\n") + "\n" + suffix
 }

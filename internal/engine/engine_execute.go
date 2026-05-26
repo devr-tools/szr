@@ -29,10 +29,7 @@ func (e *Engine) ExecuteStreaming(
 	runResult, execResult, fastPath, rawCombined, rawBytesRead, rawTokens, duration, err := e.runStreamingCommand(ctx, inv, command, profile, streamReducer, options)
 	rendered, fallbackUsed, recoveryPlan := renderStreamingOutput(profile, preparedInv, execResult, streamReducer, budget, rawCombined, passthrough, fastPath)
 	teePath := e.ensureStreamingArtifactPath(runResult.teePath, execResult.ExitCode, rawCombined, command, recoveryPlan, passthrough)
-	if recoveryPlan.Kind == "" || recoveryPlan.Summary == "" {
-		rendered = appendTeeReference(rendered, teePath, passthrough)
-	}
-	rendered = appendRecoveryHint(rendered, recoveryPlan, teePath, passthrough)
+	rendered = finalizeRenderedDisplay(rendered, rawCombined, budget, recoveryPlan, teePath, passthrough)
 	bytesParsed := streamingBytesParsed(streamReducer, profile, execResult, rawBytesRead)
 	bytesEmitted := len(rendered)
 	record := buildStreamingHistoryRecord(inv, profile, profileConfidence, duration, execResult.ExitCode, rawBytesRead, bytesParsed, bytesEmitted, rawTokens, fallbackUsed, teePath, rendered)
@@ -147,6 +144,7 @@ func renderStreamingOutput(
 			rendered = escaped
 		}
 	}
+	rendered, recoveryPlan, _ = enforceCompressionContract(rendered, rawCombined, budget, recoveryPlan, passthrough)
 	return rendered, fallbackUsed, recoveryPlan
 }
 

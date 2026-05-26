@@ -8,10 +8,23 @@ import (
 
 type compiledSpec struct {
 	spec    Spec
-	keep    []*regexp.Regexp
-	strip   []*regexp.Regexp
+	keep    []lineMatcher
+	strip   []lineMatcher
 	limit   int
 	useTail bool
+}
+
+type matcherKind uint8
+
+const (
+	matcherRegex matcherKind = iota
+	matcherTrimmedPrefix
+)
+
+type lineMatcher struct {
+	kind    matcherKind
+	literal string
+	regex   *regexp.Regexp
 }
 
 func Apply(spec Spec, input string, opts Options) (Result, error) {
@@ -111,28 +124,54 @@ func compileValidatedSpec(spec Spec, opts Options) (compiledSpec, error) {
 	return compiled, nil
 }
 
-func compilePatterns(patterns []string) ([]*regexp.Regexp, error) {
+func compilePatterns(patterns []string) ([]lineMatcher, error) {
 	if len(patterns) == 0 {
 		return nil, nil
 	}
-	out := make([]*regexp.Regexp, 0, len(patterns))
+	out := make([]lineMatcher, 0, len(patterns))
 	for _, pattern := range patterns {
+		if literal, ok := parseTrimmedPrefixPattern(pattern); ok {
+			out = append(out, lineMatcher{kind: matcherTrimmedPrefix, literal: literal})
+			continue
+		}
 		re, err := regexp.Compile(pattern)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, re)
+		out = append(out, lineMatcher{kind: matcherRegex, regex: re})
 	}
 	return out, nil
 }
 
-func matchesAny(patterns []*regexp.Regexp, line string) bool {
+func matchesAny(patterns []lineMatcher, line string) bool {
 	for _, pattern := range patterns {
-		if pattern.MatchString(line) {
+		if pattern.match(line) {
 			return true
 		}
 	}
 	return false
+}
+
+func (m lineMatcher) match(line string) bool {
+	switch m.kind {
+	case matcherTrimmedPrefix:
+		return strings.HasPrefix(strings.TrimSpace(line), m.literal)
+	case matcherRegex:
+		return m.regex != nil && m.regex.MatchString(line)
+	default:
+		return false
+	}
+}
+
+func parseTrimmedPrefixPattern(pattern string) (string, bool) {
+	switch pattern {
+	case "^\\s*//":
+		return "//", true
+	case "^\\s*#":
+		return "#", true
+	default:
+		return "", false
+	}
 }
 
 func splitLines(input string) []string {

@@ -114,8 +114,11 @@ func TestExecuteAppliesHistoryDrivenBudgetLoosening(t *testing.T) {
 	if seenBudget.MaxLines != 15 || seenBudget.MaxBytes != 2400 || seenBudget.MaxTokens != 480 {
 		t.Fatalf("expected conservative loosen cap, got %#v", seenBudget)
 	}
-	if got := strings.Count(result.Display, "\n") + 1; got != 15 {
-		t.Fatalf("expected adapted reducer budget to limit to 15 lines, got %d display=%q", got, result.Display)
+	if strings.TrimSpace(result.Display) == "" {
+		t.Fatalf("expected adapted reducer display, got %q", result.Display)
+	}
+	if result.TeePath == "" {
+		t.Fatalf("expected recovery artifact for compressed adapted output, got %#v", result)
 	}
 }
 
