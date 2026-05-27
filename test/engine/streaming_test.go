@@ -74,7 +74,7 @@ func TestExecuteWritesFailureTeeWithoutStreamReducer(t *testing.T) {
 	cfg := config.Default()
 	e := engine.New(cfg, paths, history.New(paths.HistoryFile), []engine.Profile{{
 		Name:       "render-only",
-		Confidence: engine.ConfidenceHigh,
+		Confidence: engine.ConfidenceMedium,
 		Match: func(inv engine.Invocation) bool {
 			return len(inv.Display) > 0 && inv.Display[0] == "renderfail"
 		},
@@ -100,6 +100,47 @@ func TestExecuteWritesFailureTeeWithoutStreamReducer(t *testing.T) {
 	teeData := string(testutil.MustReadFile(t, result.TeePath))
 	if !strings.Contains(teeData, "stdout-one") || !strings.Contains(teeData, "stderr-one") {
 		t.Fatalf("expected tee output to contain both streams, got %q", teeData)
+	}
+}
+
+func TestExecuteSkipsFailureTeeForHighConfidenceStructuredFailure(t *testing.T) {
+	t.Parallel()
+
+	binDir := t.TempDir()
+	failPath := testutil.WriteExecutable(t, binDir, "renderfailhc", "#!/bin/sh\nprintf 'stdout-one\\n'\nprintf 'stderr-one\\n' >&2\nexit 11\n")
+
+	root := t.TempDir()
+	paths := testutil.Paths(root)
+	testutil.EnsurePaths(t, paths)
+
+	cfg := config.Default()
+	e := engine.New(cfg, paths, history.New(paths.HistoryFile), []engine.Profile{{
+		Name:       "git-status",
+		Confidence: engine.ConfidenceHigh,
+		Match: func(inv engine.Invocation) bool {
+			return len(inv.Display) > 0 && inv.Display[0] == "renderfailhc"
+		},
+		Render: func(_ engine.Invocation, exec engine.Execution) string {
+			return exec.Stderr
+		},
+	}})
+
+	result, err := e.Execute(context.Background(), engine.Invocation{
+		Command: []string{failPath},
+		Display: []string{"renderfailhc"},
+		Cwd:     root,
+	}, false)
+	if err != nil {
+		t.Fatalf("execute high-confidence failure: %v", err)
+	}
+	if result.ExitCode != 11 {
+		t.Fatalf("expected exit 11, got %#v", result)
+	}
+	if result.TeePath != "" || strings.Contains(result.Display, "[tee: ") {
+		t.Fatalf("did not expect tee artifact for high-confidence failure, got %#v", result)
+	}
+	if strings.TrimSpace(result.Display) != "stderr-one" {
+		t.Fatalf("expected rendered stderr without tee suffix, got %q", result.Display)
 	}
 }
 

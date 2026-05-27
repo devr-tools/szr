@@ -3,10 +3,12 @@ package search
 import (
 	"strings"
 
+	"github.com/devr-tools/szr/internal/engine"
 	"github.com/devr-tools/szr/internal/profilekit"
 )
 
 func isRipgrepCommand(args []string) bool {
+	args = engine.CanonicalArgsForClassification(args)
 	if len(args) == 0 || args[0] != "rg" {
 		return false
 	}
@@ -17,6 +19,7 @@ func isRipgrepCommand(args []string) bool {
 }
 
 func isRecursiveGrepCommand(args []string) bool {
+	args = engine.CanonicalArgsForClassification(args)
 	if len(args) == 0 || args[0] != "grep" {
 		return false
 	}
@@ -36,6 +39,7 @@ func isRecursiveGrepCommand(args []string) bool {
 }
 
 func isRipgrepFilesCommand(args []string) bool {
+	args = engine.CanonicalArgsForClassification(args)
 	if len(args) == 0 || args[0] != "rg" {
 		return false
 	}
@@ -43,6 +47,7 @@ func isRipgrepFilesCommand(args []string) bool {
 }
 
 func isRipgrepFilesWithMatchesCommand(args []string) bool {
+	args = engine.CanonicalArgsForClassification(args)
 	if len(args) == 0 || args[0] != "rg" {
 		return false
 	}

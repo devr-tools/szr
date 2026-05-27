@@ -202,6 +202,31 @@ func TestLoadAllErrorsAndHelpers(t *testing.T) {
 	}
 }
 
+func TestStoreClear(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.jsonl")
+	store := history.New(path)
+	if err := store.Append(history.Record{Command: "szr git status"}); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+	if err := store.Clear(); err != nil {
+		t.Fatalf("clear: %v", err)
+	}
+	records, err := store.LoadAll()
+	if err != nil {
+		t.Fatalf("load after clear: %v", err)
+	}
+	if len(records) != 0 {
+		t.Fatalf("expected no records after clear, got %#v", records)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat cleared file: %v", err)
+	}
+	if info.Size() != 0 {
+		t.Fatalf("expected cleared file size 0, got %d", info.Size())
+	}
+}
+
 func TestLoadAllScannerError(t *testing.T) {
 	longLine := strings.Repeat("x", 70*1024)
 	path := filepath.Join(t.TempDir(), "long.jsonl")

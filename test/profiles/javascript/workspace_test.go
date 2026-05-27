@@ -30,6 +30,7 @@ func TestJSWorkspaceProfilePrepare(t *testing.T) {
 		{"vite", "build"},
 		{"eslint", "."},
 		{"tsc", "--noEmit"},
+		{"npx", "tsc", "--noEmit"},
 		{"tsx", "scripts/dev.ts"},
 		{"tsup", "src/index.ts"},
 		{"webpack", "--config", "webpack.config.js"},
