@@ -202,43 +202,43 @@ jobs:
           "$scc_bin" --by-file --format json "${files[@]}" > scc.json
 
           if python3 - "$MAX_GO_FILE_CODE_LINES" scc.json >> "$GITHUB_STEP_SUMMARY" <<'PY'
-import json
-import sys
+          import json
+          import sys
+          
+          limit = int(sys.argv[1])
+          path = sys.argv[2]
+          payload = json.load(open(path, encoding="utf-8"))
+          rows = payload if isinstance(payload, list) else payload.get("files", [])
+          offenders = []
 
-limit = int(sys.argv[1])
-path = sys.argv[2]
-payload = json.load(open(path, encoding="utf-8"))
-rows = payload if isinstance(payload, list) else payload.get("files", [])
-offenders = []
-
-for row in rows:
-    if not isinstance(row, dict):
-        continue
-    name = row.get("Name") or row.get("name")
-    if not name:
-        continue
-    code = int(row.get("Code", row.get("code", 0)) or 0)
-    if code > limit:
-        offenders.append((name, code))
-
-offenders.sort()
-
-if offenders:
-    print(f"Files above the code-line limit of {limit}:")
-    print("```")
-    for name, code in offenders:
-        print(f"{code:>5}  {name}")
-    print("```")
-    raise SystemExit(1)
-
-print(f"No changed non-test Go files exceeded the code-line limit of {limit}.")
-PY
-          then
-            exit 0
-          fi
-
-          echo "::error title=God file size budget exceeded::One or more changed Go files exceeded the maximum code-line budget"
-          exit 1
+          for row in rows:
+              if not isinstance(row, dict):
+                  continue
+              name = row.get("Name") or row.get("name")
+              if not name:
+                  continue
+              code = int(row.get("Code", row.get("code", 0)) or 0)
+              if code > limit:
+                  offenders.append((name, code))
+          
+          offenders.sort()
+          
+          if offenders:
+              print(f"Files above the code-line limit of {limit}:")
+              print("```")
+              for name, code in offenders:
+                  print(f"{code:>5}  {name}")
+              print("```")
+              raise SystemExit(1)
+          
+          print(f"No changed non-test Go files exceeded the code-line limit of {limit}.")
+          PY
+                    then
+                      exit 0
+                    fi
+          
+                    echo "::error title=God file size budget exceeded::One or more changed Go files exceeded the maximum code-line budget"
+                    exit 1
 
   golangci-lint:
     name: golangci-lint
