@@ -68,9 +68,9 @@ func assertGitDiffRender(t *testing.T, gitDiff engine.Profile) {
 		"9 files changed, 62 insertions(+), 14 deletions(-)",
 	}, "\n")
 	got := gitDiff.Render(engine.Invocation{}, engine.Execution{Stdout: largeStat})
-	assertRenderContainsAll(t, got, "files=9 +62 -14", "f.txt | 20", "d.txt | 12", "b.txt | 8", "... +4 more files")
+	assertRenderContainsAll(t, got, "files=9 +62 -14", "f.txt | 20", "d.txt | 12", "b.txt | 8", "... +5 more files")
 	aggressive := gitDiff.Render(engine.Invocation{ReasoningBudgetMode: "aggressive"}, engine.Execution{Stdout: largeStat})
-	if strings.Contains(aggressive, "... +4 more files") || !strings.Contains(aggressive, "... +6 more files") {
+	if strings.Contains(aggressive, "... +5 more files") || !strings.Contains(aggressive, "... +7 more files") {
 		t.Fatalf("expected aggressive git-diff render to keep fewer files, got %q", aggressive)
 	}
 	if gitDiff.StreamPreference != engine.StreamStdoutOnly || gitDiff.StreamRender == nil {

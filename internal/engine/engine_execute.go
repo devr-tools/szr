@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -28,7 +29,7 @@ func (e *Engine) ExecuteStreaming(
 	preparedInv, profile, command, budget, streamReducer, options, profileConfidence := e.prepareStreamingExecution(inv, passthrough, onPartial)
 	runResult, execResult, fastPath, rawCombined, rawBytesRead, rawTokens, duration, err := e.runStreamingCommand(ctx, inv, command, profile, streamReducer, options)
 	rendered, fallbackUsed, recoveryPlan := renderStreamingOutput(profile, preparedInv, execResult, streamReducer, budget, rawCombined, passthrough, fastPath)
-	teePath := e.ensureStreamingArtifactPath(runResult.teePath, execResult.ExitCode, rawCombined, command, recoveryPlan, passthrough)
+	teePath := e.ensureStreamingArtifactPath(runResult.teePath, execResult.ExitCode, rawCombined, command, profile, fallbackUsed, recoveryPlan, passthrough)
 	rendered = finalizeRenderedDisplay(rendered, rawCombined, budget, recoveryPlan, teePath, passthrough, preparedInv.Advanced.CompactArtifactRefs, preparedInv.Advanced.CompressionContract, shouldGuardSmallOutput(profile, passthrough))
 	bytesParsed := streamingBytesParsed(streamReducer, profile, execResult, rawBytesRead)
 	bytesEmitted := len(rendered)
@@ -187,19 +188,35 @@ func (e *Engine) ensureStreamingArtifactPath(
 	exitCode int,
 	rawCombined string,
 	command []string,
+	profile Profile,
+	fallbackUsed bool,
 	recoveryPlan RecoveryPlan,
 	passthrough bool,
 ) string {
 	if teePath != "" {
-		return teePath
+		if shouldPersistRecoveryArtifact(recoveryPlan, rawCombined, passthrough) {
+			return teePath
+		}
+		if exitCode != 0 && e.config.TeeOnFailure && shouldPersistFailureArtifact(profile, fallbackUsed, passthrough) {
+			return teePath
+		}
+		_ = os.Remove(teePath)
+		return ""
 	}
 	if rawCombined == "" {
 		return ""
 	}
-	if exitCode == 0 && !shouldPersistRecoveryArtifact(recoveryPlan, rawCombined, passthrough) {
+	if shouldPersistRecoveryArtifact(recoveryPlan, rawCombined, passthrough) {
+		path, teeErr := e.writeTee(rawCombined, command)
+		if teeErr != nil {
+			return ""
+		}
+		return path
+	}
+	if exitCode == 0 {
 		return ""
 	}
-	if exitCode != 0 && !e.config.TeeOnFailure && !shouldPersistRecoveryArtifact(recoveryPlan, rawCombined, passthrough) {
+	if !e.config.TeeOnFailure || !shouldPersistFailureArtifact(profile, fallbackUsed, passthrough) {
 		return ""
 	}
 	path, teeErr := e.writeTee(rawCombined, command)
@@ -207,6 +224,16 @@ func (e *Engine) ensureStreamingArtifactPath(
 		return ""
 	}
 	return path
+}
+
+func shouldPersistFailureArtifact(profile Profile, fallbackUsed bool, passthrough bool) bool {
+	if passthrough {
+		return true
+	}
+	if profile.Name == "passthrough" || fallbackUsed {
+		return true
+	}
+	return profile.Confidence != ConfidenceHigh
 }
 
 func appendTeeReference(rendered string, teePath string, passthrough bool) string {

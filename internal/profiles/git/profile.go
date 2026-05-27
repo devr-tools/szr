@@ -119,17 +119,17 @@ func Profiles(maxLines int) []engine.Profile {
 				}
 				if !inv.Advanced.AggressivePrepareRewrites {
 					if inv.Classification.Command.Git.DiffFormatRequested {
-						return inv.Command
+						return ensureGitDiffNoiseFlags(inv.Command)
 					}
-					return append(inv.Command, "--stat=120,40")
+					return ensureGitDiffNoiseFlags(append(inv.Command, "--stat=96,20", "--compact-summary"))
 				}
 				if inv.Classification.Command.Git.DiffFormatRequested {
 					return ensureGitDiffNoiseFlags(inv.Command)
 				}
 				if isAggressiveGitDiff(inv) {
-					return ensureGitDiffNoiseFlags(append(inv.Command, "--stat=72,12", "--compact-summary"))
+					return ensureGitDiffNoiseFlags(append(inv.Command, "--stat=56,8", "--compact-summary"))
 				}
-				return ensureGitDiffNoiseFlags(append(inv.Command, "--stat=96,24", "--compact-summary"))
+				return ensureGitDiffNoiseFlags(append(inv.Command, "--stat=72,12", "--compact-summary"))
 			},
 			Render: func(inv engine.Invocation, exec engine.Execution) string {
 				return newGitDiffReducer(inv, maxLines, 0).Reduce(shared.StripANSI(exec.Stdout))
@@ -151,9 +151,9 @@ func newGitDiffReducer(inv engine.Invocation, maxLines int, maxBytes int) *gitfi
 		MaxLines:              maxLines,
 		MaxBytes:              maxBytes,
 		Aggressive:            isAggressiveGitDiff(inv),
-		LargeFileThreshold:    8,
-		LargeSummaryTopN:      5,
-		AggressiveSummaryTopN: 3,
+		LargeFileThreshold:    5,
+		LargeSummaryTopN:      4,
+		AggressiveSummaryTopN: 2,
 	})
 }
 

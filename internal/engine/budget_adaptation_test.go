@@ -111,7 +111,7 @@ func TestExecuteAppliesHistoryDrivenBudgetLoosening(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
-	if seenBudget.MaxLines != 15 || seenBudget.MaxBytes != 2400 || seenBudget.MaxTokens != 480 {
+	if seenBudget.MaxLines != 18 || seenBudget.MaxBytes != 2800 || seenBudget.MaxTokens != 560 {
 		t.Fatalf("expected conservative loosen cap, got %#v", seenBudget)
 	}
 	if strings.TrimSpace(result.Display) == "" {

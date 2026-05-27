@@ -78,6 +78,10 @@ func Family(command string) string {
 	if !ok || len(words) == 0 {
 		return ""
 	}
+	words = canonicalRewriteWords(words)
+	if len(words) == 0 {
+		return ""
+	}
 	name := strings.ToLower(filepath.Base(words[0]))
 	if len(words) > 1 {
 		second := strings.ToLower(words[1])
@@ -140,11 +144,94 @@ func autoRewriteCommand(words []string) (routePlan, bool) {
 	if len(words) == 0 {
 		return routePlan{}, false
 	}
+	words = canonicalRewriteWords(words)
+	if len(words) == 0 {
+		return routePlan{}, false
+	}
 	name := strings.ToLower(filepath.Base(words[0]))
 	if plan, ok, handled := autoRewriteStructuredCommand(name, words); handled {
 		return plan, ok
 	}
 	return routePlan{}, false
+}
+
+func canonicalRewriteWords(words []string) []string {
+	if len(words) == 0 {
+		return nil
+	}
+	switch filepath.Base(words[0]) {
+	case "npx":
+		return stripNpxWords(words[1:])
+	default:
+		return words
+	}
+}
+
+func stripNpxWords(words []string) []string {
+	return stripPrefixedCommand(words, rewriteNpxOptionStep)
+}
+
+func stripPrefixedCommand(words []string, step func([]string) int) []string {
+	for i := 0; i < len(words); {
+		if words[i] == "--" {
+			return rewriteWordsAfterSeparator(words, i)
+		}
+		if next := step(words[i:]); next > 0 {
+			i += next
+			continue
+		}
+		return words[i:]
+	}
+	return nil
+}
+
+func rewriteWordsAfterSeparator(words []string, index int) []string {
+	if index+1 < len(words) {
+		return words[index+1:]
+	}
+	return nil
+}
+
+func rewriteNpxOptionStep(words []string) int {
+	arg := words[0]
+	switch {
+	case rewriteNpxConsumesValue(arg):
+		if len(words) < 2 {
+			return len(words)
+		}
+		return 2
+	case rewriteNpxInlineValue(arg), rewriteNpxStandaloneFlag(arg), strings.HasPrefix(arg, "-"):
+		return 1
+	default:
+		return 0
+	}
+}
+
+func rewriteNpxConsumesValue(arg string) bool {
+	switch arg {
+	case "-p", "--package", "-c", "--call", "--node-options", "--shell", "--userconfig":
+		return true
+	default:
+		return false
+	}
+}
+
+func rewriteNpxInlineValue(arg string) bool {
+	for _, prefix := range []string{"--package=", "--call=", "--node-options=", "--shell=", "--userconfig="} {
+		if strings.HasPrefix(arg, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func rewriteNpxStandaloneFlag(arg string) bool {
+	switch arg {
+	case "--yes", "--no", "-y", "-q", "--quiet", "--ignore-existing":
+		return true
+	default:
+		return false
+	}
 }
 
 func autoRewriteStructuredCommand(name string, words []string) (routePlan, bool, bool) {
@@ -171,6 +258,9 @@ func autoRewriteStructuredCommand(name string, words []string) (routePlan, bool,
 		return plan, ok, true
 	case "fd":
 		return routePlan{}, isSafeFD(words), true
+	case "tsc":
+		plan, ok := rewriteStructuredCommand("tsc", words[1:], true)
+		return plan, ok, true
 	case "npm", "pnpm", "yarn", "bun", "pytest", "cargo", "docker", "kubectl", "gh", "uv", "poetry", "pip", "pip3", "ruff", "mypy", "make", "just", "task", "bazel", "ninja", "cmake", "terraform", "tofu", "helm", "gradle", "mvn", "clang-tidy", "clang-format", "bear", "ctest", "diff", "patch", "rg":
 		return routePlan{}, true, true
 	case "python", "python3":

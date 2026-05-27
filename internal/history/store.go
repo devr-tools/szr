@@ -54,6 +54,14 @@ func (s *Store) LoadAll() ([]Record, error) {
 	return records, nil
 }
 
+func (s *Store) Clear() error {
+	file, err := os.OpenFile(s.path, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	return file.Close()
+}
+
 func (s *Store) SuggestBudgets(opts BudgetSuggestionOptions) ([]BudgetSuggestion, error) {
 	records, err := s.LoadAll()
 	if err != nil {

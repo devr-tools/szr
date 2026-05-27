@@ -69,6 +69,8 @@ func TestCommandErrorMatrix(t *testing.T) {
 		{"rewrite missing hook value", []string{"rewrite", "--hook"}, 2, nil, []string{"rewrite requires a value for --hook"}},
 		{"rewrite missing command value", []string{"rewrite", "--command"}, 2, nil, []string{"rewrite requires a value for --command"}},
 		{"rewrite missing binary value", []string{"rewrite", "--binary"}, 2, nil, []string{"rewrite requires a value for --binary"}},
+		{"clear spread extra args", []string{"clear-spread", "now"}, 2, nil, []string{"clear-spread does not accept arguments"}},
+		{"reset history extra args", []string{"reset-history", "now"}, 2, nil, []string{"reset-history does not accept arguments"}},
 	}
 
 	for _, tc := range errorCases {
@@ -145,6 +147,16 @@ func TestSpreadCommandEmptyAndErrorCases(t *testing.T) {
 	code, stdout, stderr = testutil.RunApp(t, app, "gain")
 	if code != 0 || !strings.Contains(stdout, "Total commands:") || stderr != "" {
 		t.Fatalf("unexpected gain alias output stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+
+	code, stdout, stderr = testutil.RunApp(t, app, "clear-spread")
+	if code != 0 || strings.TrimSpace(stdout) != "cleared spread history" || stderr != "" {
+		t.Fatalf("unexpected clear-spread output stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+
+	code, stdout, stderr = testutil.RunApp(t, app, "spread")
+	if code != 0 || strings.TrimSpace(stdout) != "no tracked commands yet" || stderr != "" {
+		t.Fatalf("unexpected spread-after-clear output stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
 }
 

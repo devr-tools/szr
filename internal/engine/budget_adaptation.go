@@ -108,7 +108,7 @@ func normalizeHistoryBudgetAdapterOptions(opts HistoryBudgetAdapterOptions) Hist
 		opts.MaxLoosenPercent = 25
 	}
 	if opts.MaxFallbackHeavyLoosenPercent <= 0 {
-		opts.MaxFallbackHeavyLoosenPercent = 50
+		opts.MaxFallbackHeavyLoosenPercent = 75
 	}
 	if opts.MinDeltaLines <= 0 {
 		opts.MinDeltaLines = 2
@@ -157,8 +157,15 @@ func adaptBudgetConservatively(
 		adapted = maxBudget(suggested, tightest)
 	case history.BudgetSuggestionLoosen:
 		percent := 100 + opts.MaxLoosenPercent
-		if suggestion.Reason == history.BudgetSuggestionFallbackHeavy && suggestion.Confidence == "high" {
-			percent = 100 + opts.MaxFallbackHeavyLoosenPercent
+		if suggestion.Reason == history.BudgetSuggestionFallbackHeavy {
+			switch suggestion.Confidence {
+			case "high":
+				percent = 100 + opts.MaxFallbackHeavyLoosenPercent
+			case "medium":
+				percent = 100 + maxInt(opts.MaxLoosenPercent, 50)
+			default:
+				percent = 100 + maxInt(opts.MaxLoosenPercent, 35)
+			}
 		}
 		loosest := scaleBudgetByPercent(base, percent)
 		adapted = minBudget(suggested, loosest)

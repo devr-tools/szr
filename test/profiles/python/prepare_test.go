@@ -21,6 +21,9 @@ func TestPytestProfilePrepare(t *testing.T) {
 	if !profile.Match(engine.Invocation{Display: []string{"python", "-m", "pytest", "tests"}}) {
 		t.Fatal("expected python -m pytest to match")
 	}
+	if !profile.Match(engine.Classify(engine.Invocation{Display: []string{"env", "PYTEST_ADDOPTS=-q", "/opt/venv/bin/python", "-m", "pytest", "tests"}})) {
+		t.Fatal("expected env-wrapped absolute python pytest to match")
+	}
 	if !profile.Match(engine.Invocation{Display: []string{"uv", "run", "pytest", "tests"}}) {
 		t.Fatal("expected uv run pytest to match")
 	}
@@ -70,6 +73,9 @@ func TestPythonToolingProfilePrepare(t *testing.T) {
 	}
 	if profile.Match(engine.Invocation{Display: []string{"uv", "run", "pytest"}}) {
 		t.Fatal("did not expect uv run pytest to match python-tooling")
+	}
+	if !profile.Match(engine.Classify(engine.Invocation{Display: []string{"env", "COMPLEXITY_TARGET=/tmp/worktree", "/opt/venv/bin/python", "-m", "ruff", "check", "."}})) {
+		t.Fatal("expected env-wrapped absolute python ruff to match python-tooling")
 	}
 
 	if got := profile.Prepare(engine.Invocation{Command: []string{"ruff", "check", "."}}); !reflect.DeepEqual(got, []string{"ruff", "check", ".", "--output-format", "concise"}) {

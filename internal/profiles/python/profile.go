@@ -74,10 +74,11 @@ func Profiles(maxLines int) []engine.Profile {
 }
 
 func isPytestCommand(args []string) bool {
+	args = engine.CanonicalArgsForClassification(args)
 	switch {
 	case len(args) >= 1 && args[0] == "pytest":
 		return true
-	case len(args) >= 3 && args[0] == "python" && args[1] == "-m" && args[2] == "pytest":
+	case len(args) >= 3 && (args[0] == "python" || args[0] == "python3") && args[1] == "-m" && args[2] == "pytest":
 		return true
 	case len(args) >= 3 && args[0] == "uv" && args[1] == "run" && args[2] == "pytest":
 		return true
@@ -87,6 +88,7 @@ func isPytestCommand(args []string) bool {
 }
 
 func isPythonToolingCommand(args []string) bool {
+	args = engine.CanonicalArgsForClassification(args)
 	if len(args) == 0 {
 		return false
 	}
@@ -95,7 +97,7 @@ func isPythonToolingCommand(args []string) bool {
 		return !(len(args) >= 3 && args[1] == "run" && args[2] == "pytest")
 	case "poetry", "pip", "pip3", "ruff", "mypy":
 		return true
-	case "python":
+	case "python", "python3":
 		return len(args) >= 3 && args[1] == "-m" && args[2] != "pytest" && (args[2] == "pip" || args[2] == "ruff" || args[2] == "mypy")
 	default:
 		return false
@@ -131,21 +133,19 @@ func preparePythonToolingCommand(command []string) []string {
 }
 
 func detectPythonTool(command []string) string {
-	if len(command) == 0 {
+	canonical := engine.CanonicalArgsForClassification(command)
+	if len(canonical) == 0 {
 		return ""
 	}
-	switch command[0] {
+	switch canonical[0] {
 	case "ruff", "mypy", "uv", "poetry", "pip", "pip3":
-		if command[0] == "python" && len(command) >= 3 {
-			return command[2]
+		if canonical[0] == "uv" && len(canonical) >= 3 && canonical[1] == "run" {
+			return canonical[2]
 		}
-		if command[0] == "uv" && len(command) >= 3 && command[1] == "run" {
-			return command[2]
-		}
-		return command[0]
-	case "python":
-		if len(command) >= 3 && command[1] == "-m" {
-			return command[2]
+		return canonical[0]
+	case "python", "python3":
+		if len(canonical) >= 3 && canonical[1] == "-m" {
+			return canonical[2]
 		}
 	}
 	return ""

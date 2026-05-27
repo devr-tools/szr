@@ -128,7 +128,7 @@ func ResolveBudgetWithAdapter(profile Profile, inv Invocation, fallbackLines int
 	budget.EarlyCaptureStop = inv.Advanced.EarlyCaptureStop
 	budget.AggressiveRewrites = inv.Advanced.AggressivePrepareRewrites
 
-	budget = tuneBudgetByProfile(profile, budget)
+	budget = tuneBudgetByProfile(profile, inv, budget)
 	budget = tuneBudgetByReasoningMode(inv.ReasoningBudgetMode, budget)
 	if inv.UltraCompact {
 		budget = scaleBudget(budget, 3, 5)
@@ -308,21 +308,88 @@ func containsAnyArg(args []string, needles ...string) bool {
 	return false
 }
 
-func tuneBudgetByProfile(profile Profile, budget OutputBudget) OutputBudget {
+func tuneBudgetByProfile(profile Profile, inv Invocation, budget OutputBudget) OutputBudget {
 	name := profile.Name
-	switch {
-	case strings.Contains(name, "log"):
-		if budget.MaxLines < 12 {
-			budget.MaxLines = 12
-		}
-	case name == "ripgrep", name == "generic-summary", name == "git-log", name == "git-status":
-		budget = scaleBudget(budget, 4, 5)
-	case strings.Contains(name, "test"), strings.Contains(name, "build"), name == "pytest", name == "ctest":
-		if budget.MaxLines < 10 {
-			budget.MaxLines = 10
-		}
+	if strings.Contains(name, "log") {
+		return ensureBudgetLinesAtLeast(budget, 12)
+	}
+	if isCompactSummaryProfile(name) {
+		return scaleBudget(budget, 4, 5)
+	}
+	if name == "js-workspace" {
+		return tuneJSWorkspaceBudget(inv, budget)
+	}
+	if name == "python-tooling" {
+		return scaleBudget(ensureBudgetLinesAtLeast(budget, 10), 9, 8)
+	}
+	if name == "pytest" {
+		return scaleBudget(ensureBudgetLinesAtLeast(budget, 12), 5, 4)
+	}
+	if isTestOrBuildProfile(name) {
+		return ensureBudgetLinesAtLeast(budget, 10)
 	}
 	return budget
+}
+
+func ensureBudgetLinesAtLeast(budget OutputBudget, minimum int) OutputBudget {
+	if budget.MaxLines < minimum {
+		budget.MaxLines = minimum
+	}
+	return budget
+}
+
+func isCompactSummaryProfile(name string) bool {
+	switch name {
+	case "ripgrep", "generic-summary", "git-log", "git-status":
+		return true
+	default:
+		return false
+	}
+}
+
+func tuneJSWorkspaceBudget(inv Invocation, budget OutputBudget) OutputBudget {
+	if isPackageManagerWorkspaceCommand(inv) {
+		budget = scaleBudget(budget, 3, 4)
+	}
+	if isTypeScriptCompilerCommand(inv) {
+		budget = scaleBudget(ensureBudgetLinesAtLeast(budget, 12), 9, 8)
+	}
+	return budget
+}
+
+func isTestOrBuildProfile(name string) bool {
+	return strings.Contains(name, "test") || strings.Contains(name, "build") || name == "ctest"
+}
+
+func isPackageManagerWorkspaceCommand(inv Invocation) bool {
+	args := effectiveBudgetArgs(inv)
+	if len(args) < 2 {
+		return false
+	}
+	switch args[0] {
+	case "npm", "pnpm", "yarn":
+		return !(args[1] == "test" || (len(args) >= 3 && args[1] == "run" && args[2] == "test"))
+	default:
+		return false
+	}
+}
+
+func isTypeScriptCompilerCommand(inv Invocation) bool {
+	args := effectiveBudgetArgs(inv)
+	if len(args) == 0 {
+		return false
+	}
+	if args[0] == "tsc" {
+		return true
+	}
+	return len(args) >= 2 && args[0] == "npx" && args[1] == "tsc"
+}
+
+func effectiveBudgetArgs(inv Invocation) []string {
+	if len(inv.Command) > 0 {
+		return CanonicalArgsForClassification(inv.Command)
+	}
+	return CanonicalArgsForClassification(inv.Display)
 }
 
 func tuneBudgetByReasoningMode(mode string, budget OutputBudget) OutputBudget {

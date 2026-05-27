@@ -66,6 +66,34 @@ func TestResolveBudget(t *testing.T) {
 	if lowConfidenceBudget.MaxLines <= 10 {
 		t.Fatalf("expected low-confidence budget expansion, got %#v", lowConfidenceBudget)
 	}
+
+	pytestBudget := engine.ResolveBudget(engine.Profile{Name: "pytest", Budget: engine.OutputBudget{MaxLines: 8}, Confidence: engine.ConfidenceHigh}, engine.Invocation{}, 12)
+	if pytestBudget.MaxLines < 15 {
+		t.Fatalf("expected pytest budget expansion, got %#v", pytestBudget)
+	}
+
+	pythonToolingBudget := engine.ResolveBudget(engine.Profile{Name: "python-tooling", Budget: engine.OutputBudget{MaxLines: 8}, Confidence: engine.ConfidenceHigh}, engine.Invocation{}, 12)
+	if pythonToolingBudget.MaxLines < 12 {
+		t.Fatalf("expected python-tooling budget expansion, got %#v", pythonToolingBudget)
+	}
+
+	jsWorkspaceBudget := engine.ResolveBudget(
+		engine.Profile{Name: "js-workspace", Budget: engine.OutputBudget{MaxLines: 12}, Confidence: engine.ConfidenceHigh},
+		engine.Classify(engine.Invocation{Command: []string{"npm", "run", "lint"}}),
+		12,
+	)
+	if jsWorkspaceBudget.MaxLines >= 12 {
+		t.Fatalf("expected js-workspace lint budget tightening, got %#v", jsWorkspaceBudget)
+	}
+
+	tscBudget := engine.ResolveBudget(
+		engine.Profile{Name: "js-workspace", Budget: engine.OutputBudget{MaxLines: 8}, Confidence: engine.ConfidenceHigh},
+		engine.Classify(engine.Invocation{Command: []string{"tsc", "--noEmit"}}),
+		12,
+	)
+	if tscBudget.MaxLines < 14 {
+		t.Fatalf("expected tsc budget expansion, got %#v", tscBudget)
+	}
 }
 
 func TestResolveBudgetAgentMode(t *testing.T) {

@@ -33,6 +33,7 @@ func TestAnalyze(t *testing.T) {
 		{name: "ls structured direct", command: "ls ./internal", autoRewrite: true, rewriteCommand: "szr ls ./internal"},
 		{name: "tree rewrites to ls", command: "tree ./internal", autoRewrite: true, rewriteCommand: "szr ls ./internal"},
 		{name: "ls flags remain unsupported", command: "ls -la", checkHint: true, wantHint: true},
+		{name: "npx tsc direct", command: "npx tsc --noEmit", autoRewrite: true, rewriteCommand: "szr tsc --noEmit"},
 	}
 
 	for _, tc := range cases {
@@ -85,6 +86,7 @@ func TestFamily(t *testing.T) {
 		"fd needle src":                       "fd",
 		"ls ./internal":                       "ls",
 		"tree ./internal":                     "tree",
+		"npx tsc --noEmit":                    "tsc",
 		"python -m pytest tests/unit":         "python",
 		"git diff HEAD~1..HEAD --stat | tail": "git diff",
 	}

@@ -85,6 +85,8 @@ func TestRunRoutes(t *testing.T) {
 		{"rewrite hint", []string{"rewrite", "--format", "hint", "--command", "/usr/bin/grep -rn needle ."}, 0, []string{"szr grep <pattern> <path>"}, nil, ""},
 		{"rewrite pipeline", []string{"rewrite", "--command", "git diff HEAD~1..HEAD --stat | tail -30"}, 0, []string{"szr proxy git diff HEAD~1..HEAD --stat | tail -30"}, nil, ""},
 		{"rewrite json", []string{"rewrite", "--format", "json", "--command", "git diff HEAD~1..HEAD --stat | tail -30"}, 0, []string{`"auto_rewrite":true`, `"wrap_mode":"proxy"`, `"producer_only":true`}, nil, ""},
+		{"clear spread", []string{"clear-spread"}, 0, []string{"cleared spread history"}, nil, ""},
+		{"reset history", []string{"reset-history"}, 0, []string{"cleared spread history"}, nil, ""},
 		{"explain", []string{"explain", "git", "status"}, 0, []string{"profile: git-status"}, nil, ""},
 		{"ls", []string{"ls", root}, 0, []string{filepath.Base(root), "dir", "sub"}, nil, ""},
 		{"ls default root", []string{"ls"}, 0, []string{filepath.Base(".")}, nil, ""},

@@ -45,6 +45,8 @@ func (a *App) printHelp() {
 		title: "Insight:",
 		rows: [][]string{
 			{"szr spread [--history|--json]", "Review savings, usage, hotspots, and fallback behavior."},
+			{"szr reset-history", "Clear the recorded command history used by spread, gain, hotspots, and recommend."},
+			{"szr clear-spread", "Clear the recorded command history used by spread, gain, hotspots, and recommend."},
 			{"szr recommend [--json]", "Turn command history into concrete tuning next steps."},
 			{"szr hotspots [--json]", "Rank low-savings, fallback-heavy, and slow fingerprints."},
 			{"szr explain <cmd...>", "Show the matched profile, budget, and rewrite decisions."},
@@ -125,6 +127,8 @@ func (a *App) printCommands() {
 		title: "Insight:",
 		rows: [][]string{
 			{"szr spread [--history|--json]", "Summarize savings, hotspots, and fallback rates."},
+			{"szr reset-history", "Reset the recorded spread history without touching tee artifacts."},
+			{"szr clear-spread", "Reset the recorded spread history without touching tee artifacts."},
 			{"szr gain [--history|--json]", "Alias for spread."},
 			{"szr recommend [--json]", "Emit concrete tuning recommendations from command history."},
 			{"szr hotspots [--json]", "Rank the commands that most need reducer work."},

@@ -36,6 +36,7 @@ func TestRipgrepProfilePrepare(t *testing.T) {
 	filesWithMatchesProfile := testutil.FindProfile(t, list, "ripgrep-files-with-matches")
 
 	assertProfileMatches(t, grepProfile, []string{"grep", "-rn", "todo", "."}, true)
+	assertProfileMatches(t, grepProfile, []string{"/usr/bin/grep", "-rn", "todo", "."}, true)
 	assertProfileMatches(t, grepProfile, []string{"grep", "-n", "todo", "."}, false)
 	assertProfileMatches(t, grepProfile, []string{"grep", "-rnh", "todo", "."}, false)
 	assertProfileMatches(t, profile, []string{"rg", "todo", "."}, true)

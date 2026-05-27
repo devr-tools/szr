@@ -17,6 +17,9 @@ func TestGitProfilesPrepare(t *testing.T) {
 	if !gitStatus.Match(engine.Classify(engine.Invocation{Display: []string{"git", "status"}})) {
 		t.Fatal("expected git status to match")
 	}
+	if !gitStatus.Match(engine.Classify(engine.Invocation{Display: []string{"git", "-C", "/tmp/worktree", "status"}})) {
+		t.Fatal("expected git -C status to match")
+	}
 	preparedStatus := gitStatus.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "status"}}))
 	if preparedStatus[len(preparedStatus)-1] != "--branch" {
 		t.Fatalf("unexpected prepared status: %#v", preparedStatus)
@@ -30,6 +33,9 @@ func TestGitProfilesPrepare(t *testing.T) {
 	if !gitLog.Match(engine.Classify(engine.Invocation{Display: []string{"git", "log"}})) {
 		t.Fatal("expected git log to match")
 	}
+	if !gitLog.Match(engine.Classify(engine.Invocation{Display: []string{"git", "--no-pager", "-C", "/tmp/worktree", "log"}})) {
+		t.Fatal("expected git global-option log to match")
+	}
 	if len(gitLog.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "log"}}))) <= 2 {
 		t.Fatal("expected git-log prepare to add flags")
 	}
@@ -41,9 +47,12 @@ func TestGitProfilesPrepare(t *testing.T) {
 	if !gitDiff.Match(engine.Classify(engine.Invocation{Display: []string{"git", "diff"}})) {
 		t.Fatal("expected git diff to match")
 	}
-	assertPreparedLengthAndArgs(t, "git diff standard", gitDiff.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "diff"}, Advanced: advanced})), 6, []string{"--stat=96,24", "--compact-summary", "--no-color", "--no-ext-diff"})
+	if !gitDiff.Match(engine.Classify(engine.Invocation{Display: []string{"git", "-C", "/tmp/worktree", "diff"}})) {
+		t.Fatal("expected git -C diff to match")
+	}
+	assertPreparedLengthAndArgs(t, "git diff standard", gitDiff.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "diff"}, Advanced: advanced})), 6, []string{"--stat=72,12", "--compact-summary", "--no-color", "--no-ext-diff"})
 	assertPreparedLengthAndArgs(t, "git diff explicit stat", gitDiff.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "diff", "--stat"}, Advanced: advanced})), 5, []string{"--no-color", "--no-ext-diff"})
-	assertPreparedLengthAndArgs(t, "git diff aggressive", gitDiff.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "diff"}, ReasoningBudgetMode: "aggressive", Advanced: advanced})), 6, []string{"--stat=72,12"})
+	assertPreparedLengthAndArgs(t, "git diff aggressive", gitDiff.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "diff"}, ReasoningBudgetMode: "aggressive", Advanced: advanced})), 6, []string{"--stat=56,8"})
 	assertPreparedLengthAndArgs(t, "git diff quiet", gitDiff.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "diff", "--quiet"}, Advanced: advanced})), 3, nil)
 }
 
