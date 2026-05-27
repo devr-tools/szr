@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.0](https://github.com/devr-tools/szr/compare/v0.5.0...v0.6.0) (2026-05-27)
+
+
+### Features
+
+* add clear command and harden git profile ([b01128b](https://github.com/devr-tools/szr/commit/b01128b6557ec131ae466b360fe10bc37ec9c4a3))
+* add clear command and harden git profile ([2a57100](https://github.com/devr-tools/szr/commit/2a57100ad3919d9b68017fc3a64b4f768228c29a))
+
 ## [0.5.0](https://github.com/devr-tools/szr/compare/v0.4.0...v0.5.0) (2026-05-26)
 
 
