@@ -60,6 +60,13 @@ func TestJSONStructure(t *testing.T) {
 	if got := filters.RenderJSONStructure([]byte(`[]`)); got != "[]" {
 		t.Fatalf("unexpected empty array shape: %q", got)
 	}
+
+	rendered := filters.RenderJSON([]byte(`{"a":"x","items":[{"id":1}]}`), filters.JSONModeStructure, 3)
+	for _, want := range []string{"a: string", "id: number"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected %q in json structure render:\n%s", want, rendered)
+		}
+	}
 }
 
 func TestJSONPreview(t *testing.T) {
@@ -112,5 +119,20 @@ func TestJSONPreview(t *testing.T) {
 			t.Fatalf("expected %q after prior priority fields in preview:\n%s", want, prioritized)
 		}
 		last = idx
+	}
+
+	rendered := filters.RenderJSON([]byte(`{"user":{"id":7,"name":"alex"},"items":[{"name":"alpha"}],"ok":true}`), filters.JSONModePreview, 6)
+	for _, want := range []string{"root: object keys=3", "items: array len=1 sample=object{name}", "user: object keys=2", "user.id=7"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected %q in rendered json preview:\n%s", want, rendered)
+		}
+	}
+}
+
+func TestRenderJSONModeValidation(t *testing.T) {
+	t.Parallel()
+
+	if got := filters.RenderJSON([]byte(`{"ok":true}`), "detail", 4); got != "unsupported json mode: detail" {
+		t.Fatalf("unexpected unsupported mode response: %q", got)
 	}
 }

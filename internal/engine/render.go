@@ -85,9 +85,10 @@ func RenderExecution(profile Profile, inv Invocation, exec Execution, fallbackLi
 			text = escaped
 		}
 	}
+	text = applyUltraCompactRender(inv, exec, text, rawCombined)
 	text, _, _ = enforceCompressionContract(text, rawCombined, budget, rendered.recoveryPlan, passthrough, inv.Advanced.CompressionContract)
-	if shouldGuardSmallOutput(profile, passthrough) {
-		text = preferRawSmallOutput(text, rawCombined)
+	if shouldGuardSmallOutput(profile, passthrough) && !inv.UltraCompact {
+		text = preferRawSmallOutputForProfile(profile, text, rawCombined, exec.ExitCode)
 	}
 	return RenderedExecution{
 		Text:           text,

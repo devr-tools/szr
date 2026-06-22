@@ -1,32 +1,18 @@
 FROM golang:1.26.3-bookworm
 
-ARG GOVULNCHECK_VERSION=v1.3.0
-ARG GOCYCLO_VERSION=v0.6.0
-ARG SCC_VERSION=v3.7.0
 ARG GOLANGCI_LINT_VERSION=v2.12.2
+ARG CODEGUARD_VERSION=v0.2.0
 
 ENV DEBIAN_FRONTEND=noninteractive
-ENV PIP_DISABLE_PIP_VERSION_CHECK=1
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV VIRTUAL_ENV=/opt/semgrep-venv
-ENV PATH=/opt/semgrep-venv/bin:/usr/local/go/bin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ENV PATH=/usr/local/go/bin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends \
 		ca-certificates \
 		git \
-		python3 \
-		python3-venv \
-		python3-pip \
 	&& rm -rf /var/lib/apt/lists/*
 
-RUN python3 -m venv "${VIRTUAL_ENV}" \
-	&& "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir --upgrade pip \
-	&& "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir semgrep==1.83.0
-
-RUN GOBIN=/usr/local/bin go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" \
-	&& GOBIN=/usr/local/bin go install "github.com/fzipp/gocyclo/cmd/gocyclo@${GOCYCLO_VERSION}" \
-	&& GOBIN=/usr/local/bin go install "github.com/boyter/scc/v3@${SCC_VERSION}" \
-	&& GOBIN=/usr/local/bin go install "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_LINT_VERSION}"
+RUN GOBIN=/usr/local/bin go install "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_LINT_VERSION}" \
+	&& GOBIN=/usr/local/bin go install "github.com/devr-tools/codeguard/cmd/codeguard@${CODEGUARD_VERSION}"
 
 WORKDIR /workspace

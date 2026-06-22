@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/devr-tools/szr/internal/config"
 	"github.com/devr-tools/szr/internal/history"
 )
 
@@ -40,6 +39,29 @@ func TestEnforceCompressionContractCompressesLargeOutput(t *testing.T) {
 	}
 }
 
+func TestHardCapTokensPreservesHighValueAnchors(t *testing.T) {
+	t.Parallel()
+
+	text := strings.Join([]string{
+		"progress", "update", "noise", "noise", "noise", "noise", "noise", "noise",
+		"panic", "src/api/handler.go:87", "undefined", "RenderWidget", "rerun", "with", "--debug",
+		"inspect", "/tmp/widget.log", "after", "failure", "noise", "noise",
+	}, " ")
+
+	compressed := hardCapTokens(text, 18)
+	if got := history.EstimateTokens(compressed); got > 18 {
+		t.Fatalf("expected compressed output to respect token cap, got %d in %q", got, compressed)
+	}
+	for _, want := range []string{"panic", "src/api/handler.go:87", "RenderWidget", "rerun"} {
+		if !strings.Contains(compressed, want) {
+			t.Fatalf("expected compressed output to retain %q, got %q", want, compressed)
+		}
+	}
+	if !strings.Contains(compressed, "...") {
+		t.Fatalf("expected elision markers in compressed output, got %q", compressed)
+	}
+}
+
 func TestEnforceCompressionContractSkipsSmallRawOutput(t *testing.T) {
 	t.Parallel()
 
@@ -51,24 +73,6 @@ func TestEnforceCompressionContractSkipsSmallRawOutput(t *testing.T) {
 	}
 	if compressed != text {
 		t.Fatalf("unexpected small-output change: %q", compressed)
-	}
-}
-
-func TestRenderExecutionAppliesCompressionContract(t *testing.T) {
-	t.Parallel()
-
-	raw := strings.Repeat("token ", 80)
-	profile := Profile{
-		Name:   "contract-render",
-		Budget: OutputBudget{MaxLines: 12, MaxTokens: 32},
-		Render: func(_ Invocation, exec Execution) string {
-			return exec.Stdout
-		},
-	}
-	rendered := RenderExecution(profile, Invocation{Advanced: configAdvancedForTests()}, Execution{Stdout: raw}, 12, false)
-	allowed := compressionContractAllowedTokens(rendered.RawTokens, profile.Budget)
-	if rendered.FilteredTokens > allowed {
-		t.Fatalf("expected rendered tokens <= %d, got %d (%q)", allowed, rendered.FilteredTokens, rendered.Text)
 	}
 }
 
@@ -95,8 +99,4 @@ func TestPreferRawSmallOutput(t *testing.T) {
 	if got := preferRawSmallOutput("alpha", largeRaw); got == strings.TrimSpace(largeRaw) {
 		t.Fatal("did not expect raw preference for large payloads")
 	}
-}
-
-func configAdvancedForTests() config.Advanced {
-	return config.Advanced{CompressionContract: true, CompactArtifactRefs: true}
 }

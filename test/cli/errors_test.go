@@ -60,6 +60,9 @@ func TestCommandErrorMatrix(t *testing.T) {
 		{"grep missing rg", []string{"grep", "match", "."}, 1, nil, []string{"executable file not found"}},
 		{"grep error", []string{"grep", "pattern", ".", "__error__"}, 2, nil, []string{"bad rg"}},
 		{"json missing args", []string{"json"}, 2, nil, []string{"json requires a file"}},
+		{"json missing mode value", []string{"json", "--mode"}, 2, nil, []string{"missing value for --mode"}},
+		{"json missing max-lines value", []string{"json", "--max-lines"}, 2, nil, []string{"missing value for --max-lines"}},
+		{"json bad mode", []string{"json", "--mode", "detail", file}, 2, nil, []string{`unsupported json mode "detail"`}},
 		{"json read error", []string{"json", filepath.Join(root, "missing.json")}, 1, nil, []string{"no such file"}},
 		{"log read error", []string{"log", filepath.Join(root, "missing.log")}, 1, nil, []string{"no such file"}},
 		{"ls error", []string{"ls", filepath.Join(root, "missing-dir")}, 1, nil, []string{"no such file"}},
@@ -71,6 +74,9 @@ func TestCommandErrorMatrix(t *testing.T) {
 		{"rewrite missing binary value", []string{"rewrite", "--binary"}, 2, nil, []string{"rewrite requires a value for --binary"}},
 		{"clear spread extra args", []string{"clear-spread", "now"}, 2, nil, []string{"clear-spread does not accept arguments"}},
 		{"reset history extra args", []string{"reset-history", "now"}, 2, nil, []string{"reset-history does not accept arguments"}},
+		{"discover bad flag", []string{"discover", "--bad"}, 2, nil, []string{"unknown discover flag"}},
+		{"discover missing limit", []string{"discover", "--limit"}, 2, nil, []string{"discover requires a value after --limit"}},
+		{"discover invalid limit", []string{"discover", "--limit", "0"}, 2, nil, []string{"invalid discover limit"}},
 	}
 
 	for _, tc := range errorCases {

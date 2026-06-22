@@ -35,10 +35,17 @@ func TestFinalizeRenderedDisplayRespectsCompressionContract(t *testing.T) {
 	rendered := strings.Repeat("token ", 40)
 	budget := OutputBudget{MaxTokens: 16}
 
-	final := finalizeRenderedDisplay(rendered, raw, budget, RecoveryPlan{
-		Kind:    RecoveryKindFullOutput,
-		Summary: "omitted many lines",
-	}, "/tmp/full.log", false, true, true, false)
+	final := renderedDisplayFinalizer{
+		profile:             Profile{},
+		exitCode:            0,
+		rendered:            rendered,
+		rawCombined:         raw,
+		budget:              budget,
+		plan:                RecoveryPlan{Kind: RecoveryKindFullOutput, Summary: "omitted many lines"},
+		artifactPath:        "/tmp/full.log",
+		compactArtifactRefs: true,
+		compressionContract: true,
+	}.finalize()
 
 	allowed := compressionContractAllowedTokens(history.EstimateTokens(raw), budget)
 	if got := history.EstimateTokens(final); got > allowed {
@@ -46,6 +53,38 @@ func TestFinalizeRenderedDisplayRespectsCompressionContract(t *testing.T) {
 	}
 	if !strings.Contains(final, "[") {
 		t.Fatalf("expected recovery or full-output suffix, got %q", final)
+	}
+}
+
+func TestFinalizeRenderedDisplayPreservesFailureAnchorsWhenMakingRoomForSuffix(t *testing.T) {
+	raw := strings.Repeat("token ", 80)
+	rendered := strings.Join([]string{
+		"summary", "noise", "noise", "noise", "noise", "noise", "noise",
+		"error", "cmd/build.go:42", "undefined", "BuildGraph", "rerun", "with", "--trace",
+		"inspect", "/tmp/build.log", "for", "recovery", "noise", "noise",
+	}, " ")
+	budget := OutputBudget{MaxTokens: 20}
+
+	final := renderedDisplayFinalizer{
+		profile:             Profile{},
+		exitCode:            0,
+		rendered:            rendered,
+		rawCombined:         raw,
+		budget:              budget,
+		plan:                RecoveryPlan{Kind: RecoveryKindFullOutput, Summary: "compressed failure"},
+		artifactPath:        "/tmp/full.log",
+		compactArtifactRefs: true,
+		compressionContract: true,
+	}.finalize()
+
+	allowed := compressionContractAllowedTokens(history.EstimateTokens(raw), budget)
+	if got := history.EstimateTokens(final); got > allowed {
+		t.Fatalf("expected final rendered display <= %d tokens, got %d (%q)", allowed, got, final)
+	}
+	for _, want := range []string{"error", "cmd/build.go:42", "[recovery: compressed failure; tee:"} {
+		if !strings.Contains(final, want) {
+			t.Fatalf("expected final rendered display to retain %q, got %q", want, final)
+		}
 	}
 }
 

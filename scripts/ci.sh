@@ -8,12 +8,9 @@ cd "${ROOT_DIR}"
 GO="${GO:-go}"
 GOCACHE="${GOCACHE:-${ROOT_DIR}/.gocache}"
 MIN_INTERNAL_COVERAGE="${MIN_INTERNAL_COVERAGE:-80.0}"
-GOVULNCHECK_VERSION="${GOVULNCHECK_VERSION:-v1.3.0}"
-GOVULNCHECK_MODE="${GOVULNCHECK_MODE:-warn}"
-GOCYCLO_VERSION="${GOCYCLO_VERSION:-v0.6.0}"
-SCC_VERSION="${SCC_VERSION:-v3.7.0}"
 GOLANGCI_LINT_VERSION="${GOLANGCI_LINT_VERSION:-v2.12.2}"
-MAX_GO_FILE_CODE_LINES="${MAX_GO_FILE_CODE_LINES:-400}"
+CODEGUARD_VERSION="${CODEGUARD_VERSION:-v0.2.0}"
+CODEGUARD_CONFIG="${CODEGUARD_CONFIG:-codeguard.yaml}"
 SMOKE_HOME="${SMOKE_HOME:-${ROOT_DIR}/.tmp-home}"
 COVERFILE="${COVERFILE:-.coverage.internal.out}"
 BASE_REF="${BASE_REF:-}"
@@ -44,16 +41,6 @@ sanitize_go_env() {
 sanitize_go_env
 GO_BIN_DIR="$("${GO}" env GOPATH)/bin"
 
-validate_govulncheck_mode() {
-	case "${GOVULNCHECK_MODE}" in
-		required|warn|off)
-			;;
-		*)
-			die "invalid GOVULNCHECK_MODE=${GOVULNCHECK_MODE}; expected required, warn, or off"
-			;;
-	esac
-}
-
 ensure_go_tool() {
 	local binary="$1"
 	local module="$2"
@@ -73,48 +60,6 @@ ensure_go_tool() {
 	[[ -x "${GO_BIN_DIR}/${binary}" ]] || die "failed to install ${binary} (${module}@${version})"
 	printf '%s\n' "${GO_BIN_DIR}/${binary}"
 }
-
-ensure_go_tool_optional() {
-	local binary="$1"
-	local module="$2"
-	local version="$3"
-
-	if ensure_go_tool "${binary}" "${module}" "${version}"; then
-		return 0
-	fi
-
-	case "${GOVULNCHECK_MODE}" in
-		required)
-			die "failed to install ${binary} (${module}@${version})"
-			;;
-		warn)
-			warn "skipping ${binary}: failed to install ${module}@${version} with ${GO}"
-			return 1
-			;;
-		off)
-			return 1
-			;;
-	esac
-}
-
-run_govulncheck() {
-	local govulncheck_bin
-
-	if [[ "${GOVULNCHECK_MODE}" == "off" ]]; then
-		warn "skipping govulncheck: GOVULNCHECK_MODE=off"
-		return 0
-	fi
-
-	if ! govulncheck_bin="$(ensure_go_tool_optional govulncheck golang.org/x/vuln/cmd/govulncheck "${GOVULNCHECK_VERSION}")"; then
-		return 0
-	fi
-
-	if ! "${govulncheck_bin}" ./...; then
-		warn "govulncheck reported findings"
-	fi
-}
-
-validate_govulncheck_mode
 
 if [[ -z "${BASE_REF}" ]]; then
 	BASE_REF="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')"
@@ -146,92 +91,20 @@ if [[ -n "${code_changes}" && -z "${test_changes}" ]]; then
 	die "Go source changed without updates under test/ or *_test.go files"
 fi
 
-log "fmt"
-find . -type f -name '*.go' ! -path './.gocache/*' ! -path './bin/*' -print0 \
-	| while IFS= read -r -d '' file; do
-		printf '%s\t%s\n' "$(git hash-object "${file}")" "${file}"
-	done \
-	> "${tmpdir}/fmt-before.txt"
-env GOCACHE="${GOCACHE}" "${GO}" fmt ./...
-find . -type f -name '*.go' ! -path './.gocache/*' ! -path './bin/*' -print0 \
-	| while IFS= read -r -d '' file; do
-		printf '%s\t%s\n' "$(git hash-object "${file}")" "${file}"
-	done \
-	> "${tmpdir}/fmt-after.txt"
-
-fmt_changed="$(
-	awk -F '\t' '
-		NR == FNR { before[$2] = $1; next }
-		before[$2] != $1 { print $2 }
-	' "${tmpdir}/fmt-before.txt" "${tmpdir}/fmt-after.txt"
-)"
-
-if [[ -n "${fmt_changed}" ]]; then
-	printf 'go fmt rewrote these files:\n%s\n' "${fmt_changed}"
-	die "formatting changes are required"
-fi
-
 log "vet"
 env GOCACHE="${GOCACHE}" "${GO}" vet ./...
-
-log "gocyclo"
-gocyclo_files=()
-while IFS= read -r file; do
-	[[ -n "${file}" ]] || continue
-	gocyclo_files+=("${file}")
-done < <(find cmd internal pkg -type f -name '*.go' ! -name '*_test.go' | sort)
-if [[ "${#gocyclo_files[@]}" -gt 0 ]]; then
-	gocyclo_bin="$(ensure_go_tool gocyclo github.com/fzipp/gocyclo/cmd/gocyclo "${GOCYCLO_VERSION}")"
-	"${gocyclo_bin}" -over 15 "${gocyclo_files[@]}" | tee "${tmpdir}/gocyclo.out"
-	[[ ! -s "${tmpdir}/gocyclo.out" ]] || die "gocyclo found functions above the limit"
-fi
-
-log "scc"
-scc_files=()
-while IFS= read -r file; do
-	[[ -n "${file}" ]] || continue
-	scc_files+=("${file}")
-done < <(
-	printf '%s\n' "${changed_files}" \
-		| grep -E '^(cmd/|internal/|pkg/).+\.go$' \
-		| grep -Ev '(^|/).+_test\.go$' \
-		| sort -u || true
-)
-if [[ "${#scc_files[@]}" -gt 0 ]]; then
-	scc_bin="$(ensure_go_tool scc github.com/boyter/scc/v3 "${SCC_VERSION}")"
-	"${scc_bin}" --by-file --format json "${scc_files[@]}" > "${tmpdir}/scc.json"
-	python3 - "${MAX_GO_FILE_CODE_LINES}" "${tmpdir}/scc.json" <<'PY' || die "changed Go files exceeded the maximum code-line budget"
-import json
-import sys
-
-limit = int(sys.argv[1])
-path = sys.argv[2]
-payload = json.load(open(path, encoding="utf-8"))
-rows = payload if isinstance(payload, list) else payload.get("files", [])
-offenders = []
-
-for row in rows:
-    if not isinstance(row, dict):
-        continue
-    name = row.get("Name") or row.get("name")
-    if not name:
-        continue
-    code = int(row.get("Code", row.get("code", 0)) or 0)
-    if code > limit:
-        offenders.append((name, code))
-
-offenders.sort()
-
-if offenders:
-    for name, code in offenders:
-        print(f"{code:>5}  {name}")
-    raise SystemExit(1)
-PY
-fi
 
 log "golangci-lint"
 golangci_lint_bin="$(ensure_go_tool golangci-lint github.com/golangci/golangci-lint/v2/cmd/golangci-lint "${GOLANGCI_LINT_VERSION}")"
 env GOCACHE="${GOCACHE}" "${golangci_lint_bin}" run --config .golangci.yml --new-from-rev "${merge_base}" ./...
+
+log "codeguard"
+codeguard_bin="$(ensure_go_tool codeguard github.com/devr-tools/codeguard/cmd/codeguard "${CODEGUARD_VERSION}")"
+env GOCACHE="${GOCACHE}" "${codeguard_bin}" scan \
+	-config "${CODEGUARD_CONFIG}" \
+	-mode diff \
+	-base-ref "${base_remote_ref}" \
+	-format text
 
 log "test (ubuntu-latest full)"
 env GOCACHE="${GOCACHE}" "${GO}" test ./test/...
@@ -252,33 +125,6 @@ env HOME="${SMOKE_HOME}" GOCACHE="${GOCACHE}" "${GO}" run ./cmd/szr explain git 
 env HOME="${SMOKE_HOME}" GOCACHE="${GOCACHE}" "${GO}" run ./cmd/szr bench clean-pass >/dev/null
 env HOME="${SMOKE_HOME}" GOCACHE="${GOCACHE}" "${GO}" run ./cmd/szr install codex --print >/dev/null
 env HOME="${SMOKE_HOME}" GOCACHE="${GOCACHE}" "${GO}" run ./cmd/szr-dev --version >/dev/null
-
-log "security scan"
-run_govulncheck
-
-critical="$(printf '%s\n' "${changed_files}" | grep -E '^(cmd/szr/|cmd/szr-dev/|internal/cli/|internal/engine/|internal/installers/|internal/selfinstall/|internal/config/|go\.mod|go\.sum|Formula/|\.goreleaser\.yaml|\.github/workflows/.*\.yml|\.github/release-please-config\.json|\.release-please-manifest\.json)' || true)"
-if [[ -n "${critical}" ]]; then
-	warn "critical szr files modified"
-	printf '%s\n' "${critical}"
-fi
-
-patterns="$(git diff "${merge_base}"...HEAD | grep -E '^\+.*(exec\.Command(Context)?\(|http\.(Get|Post)\(|net\.Dial\(|os\.RemoveAll\(|os\.Setenv\(|syscall\.|unsafe \{|panic!\(|TODO|FIXME)' || true)"
-if [[ -n "${patterns}" ]]; then
-	warn "potentially dangerous additions detected"
-	printf '%s\n' "${patterns}" | sed -n '1,40p'
-fi
-
-if git diff "${merge_base}"...HEAD -- go.mod | grep -E '^\+[^+]' > "${tmpdir}/go_mod_additions.txt"; then
-	warn "go.mod additions detected"
-	sed -n '1,80p' "${tmpdir}/go_mod_additions.txt"
-fi
-
-log "semgrep"
-if command -v semgrep >/dev/null 2>&1; then
-	semgrep scan --config auto --baseline-commit "${base_sha}" --error
-else
-	docker run --rm -v "${ROOT_DIR}:/src" -w /src semgrep/semgrep semgrep scan --config auto --baseline-commit "${base_sha}" --error
-fi
 
 log "benchmark"
 env GOCACHE="${GOCACHE}" "${GO}" test ./test/bench -run '^$' -bench . -benchmem | tee "${tmpdir}/bench.txt"

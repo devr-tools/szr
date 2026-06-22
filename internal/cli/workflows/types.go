@@ -6,19 +6,23 @@ import (
 )
 
 type HotspotStat struct {
-	Fingerprint   string  `json:"fingerprint"`
-	Command       string  `json:"command"`
-	Profile       string  `json:"profile"`
-	Samples       int     `json:"samples"`
-	AveragePct    float64 `json:"average_pct"`
-	Failures      int     `json:"failures"`
-	FailureRate   float64 `json:"failure_rate"`
-	Fallbacks     int     `json:"fallbacks"`
-	FallbackRate  float64 `json:"fallback_rate"`
-	TeeCount      int     `json:"tee_count"`
-	TeeRate       float64 `json:"tee_rate"`
-	DurationP50MS int64   `json:"duration_p50_ms"`
-	DurationP95MS int64   `json:"duration_p95_ms"`
+	Fingerprint    string   `json:"fingerprint"`
+	Command        string   `json:"command"`
+	Profile        string   `json:"profile"`
+	Samples        int      `json:"samples"`
+	RawTokens      int      `json:"raw_tokens"`
+	FilteredTokens int      `json:"filtered_tokens"`
+	AveragePct     float64  `json:"average_pct"`
+	Failures       int      `json:"failures"`
+	FailureRate    float64  `json:"failure_rate"`
+	Fallbacks      int      `json:"fallbacks"`
+	FallbackRate   float64  `json:"fallback_rate"`
+	TeeCount       int      `json:"tee_count"`
+	TeeRate        float64  `json:"tee_rate"`
+	DurationP50MS  int64    `json:"duration_p50_ms"`
+	DurationP95MS  int64    `json:"duration_p95_ms"`
+	Signals        []string `json:"signals,omitempty"`
+	CoverageScore  int      `json:"coverage_score,omitempty"`
 }
 
 type Recommendation struct {

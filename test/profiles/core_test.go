@@ -13,8 +13,8 @@ import (
 
 func TestBuiltInProfileCount(t *testing.T) {
 	list := profiles.Builtins(3)
-	if len(list) != 50 {
-		t.Fatalf("expected 50 profiles, got %d", len(list))
+	if len(list) != 55 {
+		t.Fatalf("expected 55 profiles, got %d", len(list))
 	}
 }
 
@@ -40,6 +40,9 @@ func TestCoreFilesystemProfiles(t *testing.T) {
 	}
 	if got := catRead.Render(engine.Invocation{Command: []string{"cat", "README.md"}}, engine.Execution{Stdout: "# Title\n\nBody\n"}); got == "" {
 		t.Fatal("expected cat-read render output")
+	}
+	if got := catRead.Render(engine.Invocation{Command: []string{"cat", "main.go"}}, engine.Execution{Stdout: "package main\n\nfunc main() {\n\tprintln(\"x\")\n}\n"}); !strings.Contains(got, "1  package main") || !strings.Contains(got, "3  func main() { ... }") || strings.Contains(got, "println(\"x\")") {
+		t.Fatalf("expected cat-read to keep signatures and drop body lines, got %q", got)
 	}
 
 	gitLsFiles := testutil.FindProfile(t, list, "git-ls-files")
