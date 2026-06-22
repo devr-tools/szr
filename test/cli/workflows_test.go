@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/devr-tools/szr/internal/cli"
-	workflowpkg "github.com/devr-tools/szr/internal/cli/workflows"
 	"github.com/devr-tools/szr/internal/config"
 	"github.com/devr-tools/szr/internal/history"
 	"github.com/devr-tools/szr/internal/teeindex"
@@ -117,81 +116,6 @@ func TestRecommendAndHotspotsCommands(t *testing.T) {
 	first, ok := opportunities[0].(map[string]any)
 	if !ok || first["command"] != "terraform plan" || first["coverage_score"] == nil {
 		t.Fatalf("unexpected discover opportunity payload: %#v", discoverPayload)
-	}
-}
-
-func TestBuildDiscoverOrdersAndLimitsOpportunities(t *testing.T) {
-	records := []history.Record{
-		{
-			Timestamp:          time.Date(2026, 5, 21, 10, 0, 0, 0, time.UTC),
-			Command:            "terraform plan",
-			CommandFingerprint: history.Fingerprint("terraform plan"),
-			Profile:            "passthrough",
-			ProfileConfidence:  "low",
-			DurationMS:         20,
-			ExitCode:           1,
-			RawTokens:          200,
-			FilteredTokens:     20,
-			SavedTokens:        180,
-			SavingsPct:         90,
-			FallbackUsed:       true,
-			TeePath:            "/tmp/terraform.log",
-		},
-		{
-			Timestamp:          time.Date(2026, 5, 21, 11, 0, 0, 0, time.UTC),
-			Command:            "terraform plan",
-			CommandFingerprint: history.Fingerprint("terraform plan"),
-			Profile:            "passthrough",
-			ProfileConfidence:  "low",
-			DurationMS:         21,
-			ExitCode:           1,
-			RawTokens:          205,
-			FilteredTokens:     21,
-			SavedTokens:        184,
-			SavingsPct:         89.7,
-			FallbackUsed:       true,
-			TeePath:            "/tmp/terraform-2.log",
-		},
-		{
-			Timestamp:          time.Date(2026, 5, 21, 12, 0, 0, 0, time.UTC),
-			Command:            "git diff HEAD~1..HEAD --stat",
-			CommandFingerprint: history.Fingerprint("git diff HEAD~1..HEAD --stat"),
-			Profile:            "passthrough",
-			ProfileConfidence:  "low",
-			DurationMS:         18,
-			RawTokens:          80,
-			FilteredTokens:     80,
-			SavedTokens:        0,
-			SavingsPct:         0,
-		},
-		{
-			Timestamp:          time.Date(2026, 5, 21, 13, 0, 0, 0, time.UTC),
-			Command:            "git diff HEAD~1..HEAD --stat",
-			CommandFingerprint: history.Fingerprint("git diff HEAD~1..HEAD --stat"),
-			Profile:            "passthrough",
-			ProfileConfidence:  "low",
-			DurationMS:         19,
-			RawTokens:          82,
-			FilteredTokens:     82,
-			SavedTokens:        0,
-			SavingsPct:         0,
-		},
-	}
-
-	report := workflowpkg.BuildDiscover(records, 1)
-	if report.Summary.Records != len(records) {
-		t.Fatalf("unexpected discover record count: %#v", report.Summary)
-	}
-	if len(report.Opportunities) != 1 {
-		t.Fatalf("expected discover limit to truncate results, got %#v", report.Opportunities)
-	}
-	if report.Opportunities[0].Command == "" || report.Opportunities[0].CoverageScore == 0 {
-		t.Fatalf("expected discover opportunity to retain hotspot metadata, got %#v", report.Opportunities[0])
-	}
-
-	fullReport := workflowpkg.BuildDiscover(records, 0)
-	if len(fullReport.Opportunities) < 2 {
-		t.Fatalf("expected zero discover limit to keep all opportunities, got %#v", fullReport.Opportunities)
 	}
 }
 

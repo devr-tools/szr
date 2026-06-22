@@ -6,13 +6,10 @@ TESTPKG := ./test/...
 COVERPKG := ./internal/...
 COVERFILE := .coverage.internal.out
 MIN_INTERNAL_COVERAGE ?= 80.0
-GOVULNCHECK_MODE ?= warn
 SMOKE_HOME := $(CURDIR)/.tmp-home
-GOVULNCHECK_VERSION ?= v1.3.0
-GOCYCLO_VERSION ?= v0.6.0
-SCC_VERSION ?= v3.7.0
 GOLANGCI_LINT_VERSION ?= v2.12.2
-MAX_GO_FILE_CODE_LINES ?= 400
+CODEGUARD_VERSION ?= v0.2.0
+CODEGUARD_CONFIG ?= codeguard.yaml
 BASE_REF ?= $(shell git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')
 DOCKER ?= docker
 CI_DOCKER_IMAGE ?= szr-ci:local
@@ -37,7 +34,7 @@ help:
 		'make spread-history - run the local spread summary with recent history' \
 		'make spread-json - print the local spread summary as JSON' \
 		'make ci         - run the host-mode local reproduction of the GitHub CI pipeline (override BASE_REF=...)' \
-		'make ci-docker  - build and run the pinned Linux CI container with semgrep, govulncheck, and gocyclo preinstalled' \
+		'make ci-docker  - build and run the pinned Linux CI container for the local CI pipeline, including codeguard' \
 		'make commit     - interactively git add ., choose commit type, commit, and push the current branch' \
 		'make prepush    - run the quick local gate: fmt + test + cover + smoke' \
 		'make clean      - remove local build and coverage artifacts'
@@ -95,21 +92,16 @@ ci:
 		GO=$(GO) \
 		GOCACHE=$(GOCACHE) \
 		MIN_INTERNAL_COVERAGE=$(MIN_INTERNAL_COVERAGE) \
-		GOVULNCHECK_MODE=$(GOVULNCHECK_MODE) \
-		GOVULNCHECK_VERSION=$(GOVULNCHECK_VERSION) \
-		GOCYCLO_VERSION=$(GOCYCLO_VERSION) \
-		SCC_VERSION=$(SCC_VERSION) \
 		GOLANGCI_LINT_VERSION=$(GOLANGCI_LINT_VERSION) \
-		MAX_GO_FILE_CODE_LINES=$(MAX_GO_FILE_CODE_LINES) \
+		CODEGUARD_VERSION=$(CODEGUARD_VERSION) \
+		CODEGUARD_CONFIG=$(CODEGUARD_CONFIG) \
 		SMOKE_HOME=$(SMOKE_HOME) \
 		./scripts/ci.sh
 
 ci-docker:
 	$(DOCKER) build \
-		--build-arg GOVULNCHECK_VERSION=$(GOVULNCHECK_VERSION) \
-		--build-arg GOCYCLO_VERSION=$(GOCYCLO_VERSION) \
-		--build-arg SCC_VERSION=$(SCC_VERSION) \
 		--build-arg GOLANGCI_LINT_VERSION=$(GOLANGCI_LINT_VERSION) \
+		--build-arg CODEGUARD_VERSION=$(CODEGUARD_VERSION) \
 		-f Dockerfile.ci \
 		-t $(CI_DOCKER_IMAGE) .
 	$(DOCKER) run --rm -t \
@@ -122,12 +114,9 @@ ci-docker:
 		-e GOCACHE=$(CI_DOCKER_GOCACHE) \
 		-e GOMODCACHE=$(CI_DOCKER_GOMODCACHE) \
 		-e MIN_INTERNAL_COVERAGE=$(MIN_INTERNAL_COVERAGE) \
-		-e GOVULNCHECK_MODE=required \
-		-e GOVULNCHECK_VERSION=$(GOVULNCHECK_VERSION) \
-		-e GOCYCLO_VERSION=$(GOCYCLO_VERSION) \
-		-e SCC_VERSION=$(SCC_VERSION) \
 		-e GOLANGCI_LINT_VERSION=$(GOLANGCI_LINT_VERSION) \
-		-e MAX_GO_FILE_CODE_LINES=$(MAX_GO_FILE_CODE_LINES) \
+		-e CODEGUARD_VERSION=$(CODEGUARD_VERSION) \
+		-e CODEGUARD_CONFIG=$(CODEGUARD_CONFIG) \
 		-e SMOKE_HOME=$(CI_DOCKER_SMOKE_HOME) \
 		$(CI_DOCKER_IMAGE) \
 		./scripts/ci.sh

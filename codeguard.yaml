@@ -1,0 +1,54 @@
+name: szr-codeguard
+profile: startup
+
+targets:
+  - name: repository
+    path: .
+    language: go
+    entrypoints:
+      - cmd/szr
+      - cmd/szr-dev
+
+checks:
+  quality: true
+  design: false
+  security: true
+  prompts: true
+  ci: false
+
+  quality_rules:
+    max_file_lines: 400
+    max_function_lines: 9999
+    max_parameters: 999
+    max_cyclomatic_complexity: 15
+
+  security_rules:
+    govulncheck_mode: auto
+    govulncheck_command: govulncheck
+
+  prompt_rules:
+    file_extensions:
+      - .md
+      - .txt
+      - .tmpl
+      - .yaml
+      - .yml
+      - .json
+    path_contains:
+      - prompt
+      - system
+      - instruction
+      - template
+    forbid_secret_interpolation: true
+    forbid_unsafe_instructions: true
+
+exclude:
+  - vendor/**
+  - '**/testdata/**'
+
+cache:
+  enabled: true
+  path: .codeguard/cache.json
+
+output:
+  format: text

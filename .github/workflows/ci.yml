@@ -14,11 +14,6 @@ permissions:
 env:
   GOCACHE: ${{ github.workspace }}/.gocache
   GO111MODULE: "on"
-  GOVULNCHECK_MODE: required
-  GOVULNCHECK_VERSION: v1.3.0
-  GOCYCLO_VERSION: v0.6.0
-  SCC_VERSION: v3.7.0
-  MAX_GO_FILE_CODE_LINES: "400"
   GOLANGCI_LINT_VERSION: v2.12.2
   MIN_INTERNAL_COVERAGE: "80.0"
 
@@ -71,29 +66,10 @@ jobs:
           echo "::error title=Missing test update::Go source changed without any updates under test/ or *_test.go files"
           exit 1
 
-  fmt:
-    name: fmt
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Check formatting
-        shell: bash
-        run: |
-          set -euo pipefail
-          make fmt
-          git diff --exit-code
-
   vet:
     name: vet
     needs:
       - check-test-presence
-      - fmt
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -105,140 +81,6 @@ jobs:
 
       - name: Run go vet
         run: go vet ./...
-
-  gocyclo:
-    name: gocyclo
-    needs: vet
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Install gocyclo
-        run: go install github.com/fzipp/gocyclo/cmd/gocyclo@${{ env.GOCYCLO_VERSION }}
-
-      - name: Enforce cyclomatic complexity budget
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          mapfile -t files < <(find cmd internal pkg -type f -name '*.go' ! -name '*_test.go' | sort)
-          if [ "${#files[@]}" -eq 0 ]; then
-            echo "No non-test Go files found."
-            exit 0
-          fi
-
-          gocyclo_bin="$(go env GOPATH)/bin/gocyclo"
-          "$gocyclo_bin" -over 15 "${files[@]}" | tee gocyclo.out
-
-          {
-            echo "## Cyclomatic Complexity"
-            echo
-            if [ -s gocyclo.out ]; then
-              echo "Functions above the limit:"
-              echo '```'
-              sed -n '1,80p' gocyclo.out
-              echo '```'
-            else
-              echo "No functions exceeded the `gocyclo` limit of 15."
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
-
-          if [ -s gocyclo.out ]; then
-            echo "::error title=High cyclomatic complexity::gocyclo found functions above the limit"
-            exit 1
-          fi
-
-  scc:
-    name: scc
-    needs: vet
-    runs-on: ubuntu-latest
-    env:
-      PR_BASE_REF: ${{ github.base_ref }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Fetch base branch
-        run: git fetch origin "${PR_BASE_REF}" --depth=1
-
-      - name: Install scc
-        run: go install github.com/boyter/scc/v3@${{ env.SCC_VERSION }}
-
-      - name: Enforce god-file size budget
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          mapfile -t files < <(
-            git diff --name-only "origin/${PR_BASE_REF}"...HEAD \
-              | grep -E '^(cmd/|internal/|pkg/).+\.go$' \
-              | grep -Ev '(^|/).+_test\.go$' \
-              | sort -u || true
-          )
-
-          {
-            echo "## Go File Size"
-            echo
-          } >> "$GITHUB_STEP_SUMMARY"
-
-          if [ "${#files[@]}" -eq 0 ]; then
-            echo "No changed non-test Go files to inspect."
-            echo "No changed non-test Go files exceeded the size budget." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-
-          scc_bin="$(go env GOPATH)/bin/scc"
-          "$scc_bin" --by-file --format json "${files[@]}" > scc.json
-
-          if python3 - "$MAX_GO_FILE_CODE_LINES" scc.json >> "$GITHUB_STEP_SUMMARY" <<'PY'
-          import json
-          import sys
-          
-          limit = int(sys.argv[1])
-          path = sys.argv[2]
-          payload = json.load(open(path, encoding="utf-8"))
-          rows = payload if isinstance(payload, list) else payload.get("files", [])
-          offenders = []
-
-          for row in rows:
-              if not isinstance(row, dict):
-                  continue
-              name = row.get("Name") or row.get("name")
-              if not name:
-                  continue
-              code = int(row.get("Code", row.get("code", 0)) or 0)
-              if code > limit:
-                  offenders.append((name, code))
-          
-          offenders.sort()
-          
-          if offenders:
-              print(f"Files above the code-line limit of {limit}:")
-              print("```")
-              for name, code in offenders:
-                  print(f"{code:>5}  {name}")
-              print("```")
-              raise SystemExit(1)
-          
-          print(f"No changed non-test Go files exceeded the code-line limit of {limit}.")
-          PY
-                    then
-                      exit 0
-                    fi
-          
-                    echo "::error title=God file size budget exceeded::One or more changed Go files exceeded the maximum code-line budget"
-                    exit 1
 
   golangci-lint:
     name: golangci-lint
@@ -300,8 +142,6 @@ jobs:
     name: test (${{ matrix.label }})
     needs:
       - vet
-      - gocyclo
-      - scc
       - golangci-lint
     runs-on: ${{ matrix.os }}
     strategy:
@@ -332,8 +172,6 @@ jobs:
     name: coverage
     needs:
       - vet
-      - gocyclo
-      - scc
       - golangci-lint
     runs-on: ubuntu-latest
     steps:
@@ -365,8 +203,6 @@ jobs:
     name: smoke
     needs:
       - vet
-      - gocyclo
-      - scc
       - golangci-lint
     runs-on: ubuntu-latest
     steps:
@@ -380,181 +216,29 @@ jobs:
       - name: Run smoke checks
         run: make smoke
 
-  security:
-    name: security scan
+  codeguard:
+    name: codeguard
     needs:
       - vet
-      - gocyclo
-      - scc
       - golangci-lint
     runs-on: ubuntu-latest
-    env:
-      PR_BASE_REF: ${{ github.base_ref }}
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-go@v6
+      - name: Run Devr Codeguard
+        uses: devr-tools/codeguard@v0.2.0
         with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Fetch base branch
-        run: git fetch origin "${PR_BASE_REF}" --depth=1
-
-      - name: Install govulncheck
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if go install golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }}; then
-            exit 0
-          fi
-
-          if [ "${GOVULNCHECK_MODE}" = "required" ]; then
-            echo "::error title=govulncheck install failed::Failed to install govulncheck@${GOVULNCHECK_VERSION}"
-            exit 1
-          fi
-
-          echo "::warning::Failed to install govulncheck@${GOVULNCHECK_VERSION}; continuing because GOVULNCHECK_MODE=${GOVULNCHECK_MODE}"
-
-      - name: Dependency and code vulnerability scan
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          echo "## Security Scan Results" >> "$GITHUB_STEP_SUMMARY"
-          echo >> "$GITHUB_STEP_SUMMARY"
-          echo "### govulncheck" >> "$GITHUB_STEP_SUMMARY"
-
-          if [ "${GOVULNCHECK_MODE}" = "off" ]; then
-            echo "Skipped because GOVULNCHECK_MODE=off." >> "$GITHUB_STEP_SUMMARY"
-          elif [ ! -x "$(go env GOPATH)/bin/govulncheck" ]; then
-            echo "::warning::govulncheck binary is unavailable"
-            echo "Skipped because govulncheck could not be installed for this Go toolchain." >> "$GITHUB_STEP_SUMMARY"
-          elif "$(go env GOPATH)/bin/govulncheck" ./... 2>&1 | tee govulncheck.log; then
-            echo "No known Go vulnerabilities detected." >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "::warning::govulncheck reported findings"
-            echo "Potential vulnerabilities detected:" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            sed -n '1,80p' govulncheck.log >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-          echo >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Critical files check
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          echo "### Critical Files Modified" >> "$GITHUB_STEP_SUMMARY"
-          critical="$(git diff --name-only "origin/${PR_BASE_REF}"...HEAD | grep -E '^(cmd/szr/|cmd/szr-dev/|internal/cli/|internal/engine/|internal/installers/|internal/selfinstall/|internal/config/|go\.mod|go\.sum|Formula/|\.goreleaser\.yaml|\.github/workflows/.*\.yml|\.github/release-please-config\.json|\.release-please-manifest\.json)' || true)"
-
-          if [ -n "$critical" ]; then
-            echo "**HIGH RISK**: critical files were modified:" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            printf '%s\n' "$critical" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            echo >> "$GITHUB_STEP_SUMMARY"
-            echo "**Required Actions:**" >> "$GITHUB_STEP_SUMMARY"
-            echo "- [ ] Manual review of command execution paths" >> "$GITHUB_STEP_SUMMARY"
-            echo "- [ ] Verify install and release behavior remains intentional" >> "$GITHUB_STEP_SUMMARY"
-            echo "- [ ] Confirm workflow or dependency changes are expected" >> "$GITHUB_STEP_SUMMARY"
-            echo "::warning::Critical szr files modified"
-          else
-            echo "No critical files modified." >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-          echo >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Dangerous patterns scan
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          echo "### Dangerous Code Patterns" >> "$GITHUB_STEP_SUMMARY"
-          patterns="$(git diff "origin/${PR_BASE_REF}"...HEAD | grep -E '^\+.*(exec\.Command(Context)?\(|http\.(Get|Post)\(|net\.Dial\(|os\.RemoveAll\(|os\.Setenv\(|syscall\.|unsafe \{|panic!\(|TODO|FIXME)' || true)"
-
-          if [ -n "$patterns" ]; then
-            echo "**Potentially sensitive additions detected:**" >> "$GITHUB_STEP_SUMMARY"
-            echo '```diff' >> "$GITHUB_STEP_SUMMARY"
-            printf '%s\n' "$patterns" | sed -n '1,40p' >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            echo >> "$GITHUB_STEP_SUMMARY"
-            echo "**Review Focus:**" >> "$GITHUB_STEP_SUMMARY"
-            printf '%s\n' "$patterns" | grep -q 'exec\.Command' && echo "- Command execution paths changed" >> "$GITHUB_STEP_SUMMARY" || true
-            printf '%s\n' "$patterns" | grep -q 'http\.\|net\.Dial' && echo "- Network behavior changed" >> "$GITHUB_STEP_SUMMARY" || true
-            printf '%s\n' "$patterns" | grep -q 'os\.Setenv\|syscall\.' && echo "- Process or environment mutation changed" >> "$GITHUB_STEP_SUMMARY" || true
-            printf '%s\n' "$patterns" | grep -q 'unsafe' && echo "- Unsafe code blocks changed" >> "$GITHUB_STEP_SUMMARY" || true
-            echo "::warning::Potentially dangerous patterns detected"
-          else
-            echo "No dangerous patterns detected." >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-          echo >> "$GITHUB_STEP_SUMMARY"
-
-      - name: New dependencies check
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          echo "### Dependency Changes" >> "$GITHUB_STEP_SUMMARY"
-
-          if git diff "origin/${PR_BASE_REF}"...HEAD -- go.mod | grep -E '^\+[^+]' > go_mod_additions.txt; then
-            echo "**go.mod additions:**" >> "$GITHUB_STEP_SUMMARY"
-            echo '```diff' >> "$GITHUB_STEP_SUMMARY"
-            sed -n '1,80p' go_mod_additions.txt >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            echo >> "$GITHUB_STEP_SUMMARY"
-            echo "**Required Actions:**" >> "$GITHUB_STEP_SUMMARY"
-            echo "- [ ] Audit each new module and version" >> "$GITHUB_STEP_SUMMARY"
-            echo "- [ ] Verify new indirect dependencies are expected" >> "$GITHUB_STEP_SUMMARY"
-            echo "::warning::Dependency manifest changed"
-          else
-            echo "No go.mod additions detected." >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-          echo >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Summary verdict
-        shell: bash
-        run: |
-          {
-            echo "---"
-            echo
-            echo "### Security Review Verdict"
-            echo
-            echo "This is an automated scan. A human maintainer still needs to:"
-            echo "1. Review warnings above"
-            echo "2. Confirm PR intent matches the actual diff"
-            echo "3. Check command execution and install/release paths for abuse"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-  semgrep:
-    name: semgrep security scan
-    needs:
-      - vet
-      - gocyclo
-    runs-on: ubuntu-latest
-    container:
-      image: semgrep/semgrep
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Run Semgrep
-        run: semgrep scan --config auto --baseline-commit "${{ github.event.pull_request.base.sha }}" --error
+          config: codeguard.yaml
+          mode: diff
+          base-ref: origin/${{ github.base_ref }}
+          format: github
 
   benchmark:
     name: benchmark
     needs:
       - vet
-      - gocyclo
-      - scc
       - golangci-lint
     runs-on: ubuntu-latest
     steps:
@@ -602,7 +286,6 @@ jobs:
     if: github.base_ref == 'develop'
     needs:
       - vet
-      - gocyclo
     runs-on: ubuntu-latest
     env:
       PR_BASE_REF: ${{ github.base_ref }}

@@ -35,10 +35,17 @@ func TestFinalizeRenderedDisplayRespectsCompressionContract(t *testing.T) {
 	rendered := strings.Repeat("token ", 40)
 	budget := OutputBudget{MaxTokens: 16}
 
-	final := finalizeRenderedDisplay(Profile{}, 0, rendered, raw, budget, RecoveryPlan{
-		Kind:    RecoveryKindFullOutput,
-		Summary: "omitted many lines",
-	}, "/tmp/full.log", false, true, true, false, false)
+	final := renderedDisplayFinalizer{
+		profile:             Profile{},
+		exitCode:            0,
+		rendered:            rendered,
+		rawCombined:         raw,
+		budget:              budget,
+		plan:                RecoveryPlan{Kind: RecoveryKindFullOutput, Summary: "omitted many lines"},
+		artifactPath:        "/tmp/full.log",
+		compactArtifactRefs: true,
+		compressionContract: true,
+	}.finalize()
 
 	allowed := compressionContractAllowedTokens(history.EstimateTokens(raw), budget)
 	if got := history.EstimateTokens(final); got > allowed {
@@ -58,10 +65,17 @@ func TestFinalizeRenderedDisplayPreservesFailureAnchorsWhenMakingRoomForSuffix(t
 	}, " ")
 	budget := OutputBudget{MaxTokens: 20}
 
-	final := finalizeRenderedDisplay(Profile{}, 0, rendered, raw, budget, RecoveryPlan{
-		Kind:    RecoveryKindFullOutput,
-		Summary: "compressed failure",
-	}, "/tmp/full.log", false, true, true, false, false)
+	final := renderedDisplayFinalizer{
+		profile:             Profile{},
+		exitCode:            0,
+		rendered:            rendered,
+		rawCombined:         raw,
+		budget:              budget,
+		plan:                RecoveryPlan{Kind: RecoveryKindFullOutput, Summary: "compressed failure"},
+		artifactPath:        "/tmp/full.log",
+		compactArtifactRefs: true,
+		compressionContract: true,
+	}.finalize()
 
 	allowed := compressionContractAllowedTokens(history.EstimateTokens(raw), budget)
 	if got := history.EstimateTokens(final); got > allowed {
