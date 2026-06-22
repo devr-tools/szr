@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.7.0](https://github.com/devr-tools/szr/compare/v0.6.0...v0.7.0) (2026-06-22)
+
+
+### Features
+
+* add token-optimized rendering, git success-path summaries ([87d1242](https://github.com/devr-tools/szr/commit/87d124245d297aa00837e36b396a5a757c6571df))
+* add token-optimized rendering, git success-path summaries, and discovery coverage improvements ([9836e03](https://github.com/devr-tools/szr/commit/9836e0379dd31c9fb89c079f7ee089f18454ce5f))
+* refactor: resolve codeguard quality warnings in git and engine tests ([1aa7877](https://github.com/devr-tools/szr/commit/1aa787738a7a8457d451e426a693eb53f4c6f35f))
+* refactor: split quality hotspots and restore CI coverage ([70f3e26](https://github.com/devr-tools/szr/commit/70f3e2663e9e2b99fc37bd4359ca48ba0d4eee92))
+
 ## [0.6.0](https://github.com/devr-tools/szr/compare/v0.5.0...v0.6.0) (2026-05-27)
 
 
