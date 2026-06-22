@@ -30,7 +30,7 @@ func (e *Engine) ExecuteStreaming(
 	runResult, execResult, fastPath, rawCombined, rawBytesRead, rawTokens, duration, err := e.runStreamingCommand(ctx, inv, command, profile, streamReducer, options)
 	rendered, fallbackUsed, recoveryPlan := renderStreamingOutput(profile, preparedInv, execResult, streamReducer, budget, rawCombined, passthrough, fastPath)
 	teePath := e.ensureStreamingArtifactPath(runResult.teePath, execResult.ExitCode, rawCombined, command, profile, fallbackUsed, recoveryPlan, passthrough)
-	rendered = finalizeRenderedDisplay(rendered, rawCombined, budget, recoveryPlan, teePath, passthrough, preparedInv.Advanced.CompactArtifactRefs, preparedInv.Advanced.CompressionContract, shouldGuardSmallOutput(profile, passthrough))
+	rendered = finalizeRenderedDisplay(profile, execResult.ExitCode, rendered, rawCombined, budget, recoveryPlan, teePath, passthrough, preparedInv.Advanced.CompactArtifactRefs, preparedInv.Advanced.CompressionContract, shouldGuardSmallOutput(profile, passthrough), preparedInv.UltraCompact)
 	bytesParsed := streamingBytesParsed(streamReducer, profile, execResult, rawBytesRead)
 	bytesEmitted := len(rendered)
 	record := buildStreamingHistoryRecord(inv, profile, profileConfidence, duration, execResult.ExitCode, rawBytesRead, bytesParsed, bytesEmitted, rawTokens, fallbackUsed, teePath, rendered)
@@ -145,9 +145,10 @@ func renderStreamingOutput(
 			rendered = escaped
 		}
 	}
+	rendered = applyUltraCompactRender(preparedInv, execResult, rendered, rawCombined)
 	rendered, recoveryPlan, _ = enforceCompressionContract(rendered, rawCombined, budget, recoveryPlan, passthrough, preparedInv.Advanced.CompressionContract)
-	if shouldGuardSmallOutput(profile, passthrough) {
-		rendered = preferRawSmallOutput(rendered, rawCombined)
+	if shouldGuardSmallOutput(profile, passthrough) && !preparedInv.UltraCompact {
+		rendered = preferRawSmallOutputForProfile(profile, rendered, rawCombined, execResult.ExitCode)
 	}
 	return rendered, fallbackUsed, recoveryPlan
 }

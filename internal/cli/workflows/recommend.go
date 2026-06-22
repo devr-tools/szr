@@ -116,7 +116,7 @@ func RunHotspots(rt Runtime, args []string) int {
 	for _, item := range hotspots {
 		fmt.Fprintf(
 			rt.Stdout,
-			"  - %s  profile=%s samples=%d avg=%.1f%% fallback=%.1f%% fail=%.1f%% tee=%.1f%% p50/p95=%d/%dms\n",
+			"  - %s  profile=%s samples=%d avg=%.1f%% fallback=%.1f%% fail=%.1f%% tee=%.1f%% p50/p95=%d/%dms signals=%s score=%d\n",
 			item.Command,
 			item.Profile,
 			item.Samples,
@@ -126,6 +126,8 @@ func RunHotspots(rt Runtime, args []string) int {
 			item.TeeRate,
 			item.DurationP50MS,
 			item.DurationP95MS,
+			hotspotSignalList(item),
+			item.CoverageScore,
 		)
 	}
 	return 0

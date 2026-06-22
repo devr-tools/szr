@@ -76,6 +76,8 @@ func BuildHotspots(records []history.Record, limit int) []HotspotStat {
 			grouped[rec.CommandFingerprint] = item
 		}
 		item.stat.Samples++
+		item.stat.RawTokens += rec.RawTokens
+		item.stat.FilteredTokens += rec.FilteredTokens
 		item.stat.AveragePct += rec.SavingsPct
 		if rec.ExitCode != 0 {
 			item.stat.Failures++
@@ -97,6 +99,7 @@ func BuildHotspots(records []history.Record, limit int) []HotspotStat {
 		item.stat.TeeRate = percent(item.stat.TeeCount, item.stat.Samples)
 		item.stat.DurationP50MS = percentileInt64(item.durations, 50)
 		item.stat.DurationP95MS = percentileInt64(item.durations, 95)
+		annotateHotspotSignals(&item.stat)
 		list = append(list, item.stat)
 	}
 	sort.Slice(list, func(i, j int) bool {
@@ -117,7 +120,7 @@ func BuildHotspots(records []history.Record, limit int) []HotspotStat {
 }
 
 func hotspotSeverity(item HotspotStat) float64 {
-	return (100 - item.AveragePct) + item.FallbackRate + item.FailureRate/2 + item.TeeRate/4 + float64(item.DurationP95MS)/25
+	return (100 - item.AveragePct) + item.FallbackRate + item.FailureRate/2 + item.TeeRate/4 + float64(item.DurationP95MS)/25 + float64(item.CoverageScore*12)
 }
 
 func recommendationPriorityForBudget(item history.BudgetSuggestion) int {

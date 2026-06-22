@@ -8,17 +8,37 @@ import (
 	"strings"
 )
 
+const (
+	JSONModeStructure = "structure"
+	JSONModePreview   = "preview"
+)
+
 type prioritizedJSONKey struct {
 	key      string
 	priority int
 }
 
-func RenderJSONStructure(data []byte) string {
+func RenderJSON(data []byte, mode string, maxLines int) string {
 	var value any
 	if err := json.Unmarshal(data, &value); err != nil {
 		return "invalid json"
 	}
-	return RenderValueStructure(value)
+	return RenderJSONValue(value, mode, maxLines)
+}
+
+func RenderJSONValue(value any, mode string, maxLines int) string {
+	switch mode {
+	case "", JSONModeStructure:
+		return RenderValueStructure(value)
+	case JSONModePreview:
+		return SummarizeJSONValuePreview(value, maxLines)
+	default:
+		return fmt.Sprintf("unsupported json mode: %s", mode)
+	}
+}
+
+func RenderJSONStructure(data []byte) string {
+	return RenderJSON(data, JSONModeStructure, 0)
 }
 
 func RenderValueStructure(value any) string {

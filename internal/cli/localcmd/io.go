@@ -89,17 +89,47 @@ func RunRead(rt Runtime, cfg config.Config, args []string) int {
 }
 
 func RunJSON(rt Runtime, args []string) int {
-	if len(args) != 1 {
+	mode := filters.JSONModeStructure
+	maxLines := 8
+	files := []string{}
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "-m", "--mode":
+			i++
+			if i >= len(args) {
+				fmt.Fprintln(rt.Stderr, "szr: missing value for --mode")
+				return 2
+			}
+			mode = args[i]
+		case "--max-lines":
+			i++
+			if i >= len(args) {
+				fmt.Fprintln(rt.Stderr, "szr: missing value for --max-lines")
+				return 2
+			}
+			fmt.Sscanf(args[i], "%d", &maxLines)
+		default:
+			files = append(files, args[i])
+		}
+	}
+
+	if mode != filters.JSONModeStructure && mode != filters.JSONModePreview {
+		fmt.Fprintf(rt.Stderr, "szr: unsupported json mode %q\n", mode)
+		return 2
+	}
+
+	if len(files) != 1 {
 		fmt.Fprintln(rt.Stderr, "szr: json requires a file")
 		return 2
 	}
 
-	data, err := os.ReadFile(args[0])
+	data, err := os.ReadFile(files[0])
 	if err != nil {
 		fmt.Fprintf(rt.Stderr, "szr: %v\n", err)
 		return 1
 	}
-	fmt.Fprintln(rt.Stdout, filters.RenderJSONStructure(data))
+	fmt.Fprintln(rt.Stdout, filters.RenderJSON(data, mode, maxLines))
 	return 0
 }
 

@@ -75,7 +75,7 @@ func directoryListingProfile(maxLines int) engine.Profile {
 func catReadProfile(maxLines int) engine.Profile {
 	return engine.Profile{
 		Name:             "cat-read",
-		Description:      "Turns single-file cat output into a structural preview.",
+		Description:      "Turns single-file cat output into a signature-first structural preview.",
 		Confidence:       engine.ConfidenceMedium,
 		StreamPreference: engine.StreamStdoutOnly,
 		Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 12)),
@@ -97,7 +97,7 @@ func catReadProfile(maxLines int) engine.Profile {
 		ParseBytes: profilekit.ParseStdout,
 		Explain: []string{
 			"Matches simple single-file `cat` usage without flags.",
-			"Prefers headings, declarations, and anchored lines over replaying the whole file verbatim.",
+			"For code files, keeps imports, declarations, exported symbols, and TODO/FIXME while collapsing most bodies and comments.",
 		},
 	}
 }

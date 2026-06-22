@@ -27,18 +27,7 @@ func InterestingErrorLines(input string, maxLines int) string {
 }
 
 func DedupeLines(input string, maxLines int) string {
-	folded := FoldConsecutiveSimilarLines(nonEmptyLines(input))
-	var out []string
-	for _, line := range folded {
-		out = append(out, line)
-		if len(out) >= maxLines {
-			break
-		}
-	}
-	if len(folded) > maxLines {
-		out = append(out, fmt.Sprintf("... +%d more folded lines", len(folded)-maxLines))
-	}
-	return strings.Join(out, "\n")
+	return strings.Join(ReduceLogLines(nonEmptyLines(StripANSI(input)), maxLines), "\n")
 }
 
 func ScannerDedupe(data []byte) string {

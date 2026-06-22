@@ -155,6 +155,7 @@ func (a *App) runBuiltInCommand(ctx context.Context, flags globalFlags, rest []s
 		"clear-spread":  func() int { return a.runClearSpread(rest[1:]) },
 		"reset-history": func() int { return a.runResetHistory(rest[1:]) },
 		"gain":          func() int { return a.runSpread(rest[1:]) },
+		"discover":      func() int { return a.runDiscover(rest[1:]) },
 		"recommend":     func() int { return a.runRecommend(rest[1:]) },
 		"hotspots":      func() int { return a.runHotspots(rest[1:]) },
 		"profiles":      func() int { return a.runProfiles() },

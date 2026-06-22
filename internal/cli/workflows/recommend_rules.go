@@ -64,12 +64,12 @@ func customProfileRecommendation(hotspot HotspotStat) Recommendation {
 	}
 	return Recommendation{
 		Kind:        "custom-profile",
-		Priority:    70,
+		Priority:    70 + hotspotPriorityBoost(hotspot, 12),
 		Command:     hotspot.Command,
 		Profile:     hotspot.Profile,
 		Samples:     hotspot.Samples,
 		Confidence:  "medium",
-		Reason:      fmt.Sprintf("%s still routes through %s after %d runs", hotspot.Command, hotspot.Profile, hotspot.Samples),
+		Reason:      fmt.Sprintf("%s still relies on %s with %s", hotspot.Command, hotspot.Profile, hotspotSignalsSummary(hotspot)),
 		Action:      "add a project-local profile or builtin reducer so this command stops relying on the generic path",
 		Fingerprint: hotspot.Fingerprint,
 	}
@@ -85,12 +85,12 @@ func structuredRewriteRecommendation(hotspot HotspotStat) (Recommendation, bool)
 	}
 	return Recommendation{
 		Kind:        "structured-rewrite",
-		Priority:    65,
+		Priority:    65 + hotspotPriorityBoost(hotspot, 8),
 		Command:     hotspot.Command,
 		Profile:     hotspot.Profile,
 		Samples:     hotspot.Samples,
 		Confidence:  "medium",
-		Reason:      "this command family usually benefits from a deterministic machine-readable mode",
+		Reason:      fmt.Sprintf("history shows %s and this command family usually benefits from a deterministic machine-readable mode", hotspotSignalsSummary(hotspot)),
 		Action:      hint,
 		Fingerprint: hotspot.Fingerprint,
 	}, true
@@ -106,12 +106,12 @@ func directRoutingRecommendation(hotspot HotspotStat) (Recommendation, bool) {
 	}
 	return Recommendation{
 		Kind:        "routing-coverage",
-		Priority:    68,
+		Priority:    68 + hotspotPriorityBoost(hotspot, 10),
 		Command:     hotspot.Command,
 		Profile:     hotspot.Profile,
 		Samples:     hotspot.Samples,
 		Confidence:  "high",
-		Reason:      "this command family is already safe to rewrite, but history shows it still bypasses szr",
+		Reason:      fmt.Sprintf("this command family is already safe to rewrite, but history still shows %s", hotspotSignalsSummary(hotspot)),
 		Action:      fmt.Sprintf("route this family through szr by default; e.g. `%s`", decision.Rewrite),
 		Fingerprint: hotspot.Fingerprint,
 	}, true
@@ -123,12 +123,12 @@ func teeReviewRecommendation(hotspot HotspotStat) (Recommendation, bool) {
 	}
 	return Recommendation{
 		Kind:        "tee-review",
-		Priority:    50,
+		Priority:    50 + hotspotPriorityBoost(hotspot, 6),
 		Command:     hotspot.Command,
 		Profile:     hotspot.Profile,
 		Samples:     hotspot.Samples,
 		Confidence:  "low",
-		Reason:      "failing runs are frequently preserving full artifacts",
+		Reason:      fmt.Sprintf("history shows %s, so preserved artifacts are masking reducer gaps", hotspotSignalsSummary(hotspot)),
 		Action:      fmt.Sprintf("inspect preserved failures with `szr tee find %q` before adding another reducer", firstWordOrCommand(hotspot.Command)),
 		Fingerprint: hotspot.Fingerprint,
 	}, true
@@ -147,12 +147,12 @@ func wrapperGuidanceRecommendation(hotspot HotspotStat) (Recommendation, bool) {
 	}
 	return Recommendation{
 		Kind:        "wrapper-guidance",
-		Priority:    60,
+		Priority:    60 + hotspotPriorityBoost(hotspot, 8),
 		Command:     hotspot.Command,
 		Profile:     hotspot.Profile,
 		Samples:     hotspot.Samples,
 		Confidence:  "medium",
-		Reason:      "this command family is noisy, but auto-rewriting it would risk changing shell semantics",
+		Reason:      fmt.Sprintf("history shows %s, but auto-rewriting this command would risk changing shell semantics", hotspotSignalsSummary(hotspot)),
 		Action:      decision.Hint,
 		Fingerprint: hotspot.Fingerprint,
 	}, true
@@ -204,12 +204,12 @@ func routingExpansionRecommendations(hotspots []HotspotStat) []Recommendation {
 		}
 		items = append(items, Recommendation{
 			Kind:        "routing-expansion",
-			Priority:    72,
+			Priority:    72 + hotspotPriorityBoost(acc.rep, 10),
 			Command:     family,
 			Profile:     acc.rep.Profile,
 			Samples:     acc.samples,
 			Confidence:  "high",
-			Reason:      "multiple history hotspots show this family repeatedly bypassing szr despite a safe rewrite path",
+			Reason:      fmt.Sprintf("multiple history hotspots show %s for this family despite a safe rewrite path", hotspotSignalsSummary(acc.rep)),
 			Action:      fmt.Sprintf("expand default routing for this family; representative rewrite: `%s`", decision.Rewrite),
 			Fingerprint: "family:" + family,
 		})

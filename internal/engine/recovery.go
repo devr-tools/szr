@@ -53,51 +53,57 @@ func appendRecoveryHint(rendered string, plan RecoveryPlan, artifactPath string,
 	return strings.TrimRight(rendered, "\n") + "\n" + line
 }
 
-func finalizeRenderedDisplay(rendered string, rawCombined string, budget OutputBudget, plan RecoveryPlan, artifactPath string, passthrough bool, compactArtifactRefs bool, compressionContract bool, guardSmallOutput bool) string {
+func finalizeRenderedDisplay(profile Profile, exitCode int, rendered string, rawCombined string, budget OutputBudget, plan RecoveryPlan, artifactPath string, passthrough bool, compactArtifactRefs bool, compressionContract bool, guardSmallOutput bool, ultraCompact bool) string {
 	if passthrough {
-		if guardSmallOutput {
-			return preferRawSmallOutput(rendered, rawCombined)
-		}
-		return rendered
+		return finalizeSmallOutputPreference(profile, exitCode, rendered, rawCombined, guardSmallOutput, ultraCompact)
 	}
 	suffixes := displayArtifactSuffixes(plan, artifactPath, compactArtifactRefs)
 	if len(suffixes) == 0 {
-		if guardSmallOutput {
-			return preferRawSmallOutput(rendered, rawCombined)
-		}
-		return rendered
+		return finalizeSmallOutputPreference(profile, exitCode, rendered, rawCombined, guardSmallOutput, ultraCompact)
 	}
 	rawTokens := history.EstimateTokens(rawCombined)
 	if !compressionContract || rawTokens < compressionContractMinRawTokens {
 		final := appendDisplaySuffix(rendered, suffixes[0])
-		if guardSmallOutput {
-			return preferRawSmallOutput(final, rawCombined)
-		}
-		return final
+		return finalizeSmallOutputPreference(profile, exitCode, final, rawCombined, guardSmallOutput, ultraCompact)
 	}
-	allowedTokens := compressionContractAllowedTokens(rawTokens, budget)
+	if final, ok := fitRenderedDisplaySuffix(rendered, suffixes, compressionContractAllowedTokens(rawTokens, budget)); ok {
+		return finalizeSmallOutputPreference(profile, exitCode, final, rawCombined, guardSmallOutput, ultraCompact)
+	}
+	return finalizeSmallOutputPreference(profile, exitCode, suffixes[len(suffixes)-1], rawCombined, guardSmallOutput, ultraCompact)
+}
+
+func finalizeSmallOutputPreference(profile Profile, exitCode int, rendered string, rawCombined string, guardSmallOutput bool, ultraCompact bool) string {
+	if !guardSmallOutput || ultraCompact {
+		return rendered
+	}
+	return preferRawSmallOutputForProfile(profile, rendered, rawCombined, exitCode)
+}
+
+func fitRenderedDisplaySuffix(rendered string, suffixes []string, allowedTokens int) (string, bool) {
 	for _, suffix := range suffixes {
-		suffixTokens := history.EstimateTokens(suffix)
-		if suffixTokens >= allowedTokens {
-			continue
-		}
-		remaining := allowedTokens - suffixTokens
-		shrunk := rendered
-		if history.EstimateTokens(rendered) > remaining {
-			shrunk = hardCapTokens(rendered, remaining)
-		}
-		final := appendDisplaySuffix(shrunk, suffix)
-		if history.EstimateTokens(final) <= allowedTokens {
-			if guardSmallOutput {
-				return preferRawSmallOutput(final, rawCombined)
-			}
-			return final
+		final, ok := buildRenderedDisplayWithSuffix(rendered, suffix, allowedTokens)
+		if ok {
+			return final, true
 		}
 	}
-	if guardSmallOutput {
-		return preferRawSmallOutput(suffixes[len(suffixes)-1], rawCombined)
+	return "", false
+}
+
+func buildRenderedDisplayWithSuffix(rendered string, suffix string, allowedTokens int) (string, bool) {
+	suffixTokens := history.EstimateTokens(suffix)
+	if suffixTokens >= allowedTokens {
+		return "", false
 	}
-	return suffixes[len(suffixes)-1]
+	remaining := allowedTokens - suffixTokens
+	shrunk := rendered
+	if history.EstimateTokens(rendered) > remaining {
+		shrunk = hardCapTokens(rendered, remaining)
+	}
+	final := appendDisplaySuffix(shrunk, suffix)
+	if history.EstimateTokens(final) > allowedTokens {
+		return "", false
+	}
+	return final, true
 }
 
 func displayArtifactSuffixes(plan RecoveryPlan, artifactPath string, compactArtifactRefs bool) []string {

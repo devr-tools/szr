@@ -13,6 +13,42 @@ func TestGitProfilesPrepare(t *testing.T) {
 	list := profiles.Builtins(6)
 	advanced := config.Default().Advanced
 
+	gitAdd := testutil.FindProfile(t, list, "git-add")
+	if !gitAdd.Match(engine.Classify(engine.Invocation{Display: []string{"git", "add", "README.md"}})) {
+		t.Fatal("expected git add to match")
+	}
+	if !gitAdd.Match(engine.Classify(engine.Invocation{Display: []string{"git", "-C", "/tmp/worktree", "add", "."}})) {
+		t.Fatal("expected git -C add to match")
+	}
+
+	gitCommit := testutil.FindProfile(t, list, "git-commit")
+	if !gitCommit.Match(engine.Classify(engine.Invocation{Display: []string{"git", "commit", "-m", "msg"}})) {
+		t.Fatal("expected git commit to match")
+	}
+
+	gitPush := testutil.FindProfile(t, list, "git-push")
+	if !gitPush.Match(engine.Classify(engine.Invocation{Display: []string{"git", "push", "origin", "main"}})) {
+		t.Fatal("expected git push to match")
+	}
+
+	gitPull := testutil.FindProfile(t, list, "git-pull")
+	if !gitPull.Match(engine.Classify(engine.Invocation{Display: []string{"git", "pull", "--rebase"}})) {
+		t.Fatal("expected git pull to match")
+	}
+
+	gitShow := testutil.FindProfile(t, list, "git-show")
+	if !gitShow.Match(engine.Classify(engine.Invocation{Display: []string{"git", "show", "--stat", "HEAD"}})) {
+		t.Fatal("expected git show --stat to match")
+	}
+	if !gitShow.Match(engine.Classify(engine.Invocation{Display: []string{"git", "-C", "/tmp/worktree", "show", "HEAD:internal/profiles/git/profile.go"}})) {
+		t.Fatal("expected git -C show blob read to match")
+	}
+	assertPreparedLengthAndArgs(t, "git show stat", gitShow.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "show", "--stat", "HEAD"}})), 8, []string{"--no-color", "--no-ext-diff", "--no-patch", "--format=oneline"})
+	assertPreparedLengthAndArgs(t, "git show name-only", gitShow.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "show", "--name-only", "HEAD"}})), 8, []string{"--no-color", "--no-ext-diff", "--no-patch", "--format=oneline"})
+	assertPreparedLengthAndArgs(t, "git show blob", gitShow.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "show", "HEAD:internal/profiles/git/profile.go"}})), 5, []string{"--no-color", "--no-ext-diff"})
+	assertPreparedLengthAndArgs(t, "git show explicit pretty", gitShow.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "show", "--stat", "--pretty=oneline", "HEAD"}})), 8, []string{"--no-color", "--no-ext-diff", "--no-patch"})
+	assertPreparedLengthAndArgs(t, "git show path separator", gitShow.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "show", "--", "--stat"}})), 6, []string{"--no-color", "--no-ext-diff"})
+
 	gitStatus := testutil.FindProfile(t, list, "git-status")
 	if !gitStatus.Match(engine.Classify(engine.Invocation{Display: []string{"git", "status"}})) {
 		t.Fatal("expected git status to match")

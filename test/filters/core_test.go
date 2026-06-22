@@ -29,8 +29,29 @@ func TestLineHelpers(t *testing.T) {
 	}
 
 	deduped := filters.DedupeLines("a\na\nb\nc\nc\n", 2)
-	if deduped != "a (x2)\nb\n... +1 more folded lines" {
+	if deduped != "a (x2)\nb\n... +2 more log lines" {
 		t.Fatalf("unexpected dedupe: %q", deduped)
+	}
+
+	nonConsecutive := filters.DedupeLines(strings.Join([]string{
+		"2026-06-21T08:00:00Z downloading cache",
+		"worker ready",
+		"2026-06-21T08:00:01Z downloading cache",
+		"error: build failed",
+	}, "\n"), 3)
+	if nonConsecutive != "2026-06-21T08:00:00Z downloading cache (x2)\nworker ready\nerror: build failed" {
+		t.Fatalf("unexpected non-consecutive dedupe: %q", nonConsecutive)
+	}
+
+	anchored := filters.DedupeLines(strings.Join([]string{
+		"info: booting service",
+		"info: warming cache",
+		"worker ready",
+		"error: build failed",
+		"/Users/alex/Documents/GitHub/szr/internal/filters/lines.go:20:4 undefined: reducer",
+	}, "\n"), 2)
+	if anchored != "error: build failed\n/Users/alex/Documents/GitHub/szr/internal/filters/lines.go:20:4 undefined: reducer\n... +3 more log lines" {
+		t.Fatalf("unexpected anchored reduction: %q", anchored)
 	}
 
 	folded := filters.FoldConsecutiveLines([]string{"warn", "warn", "error", "error", "error", "hint"})

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/devr-tools/szr/internal/cli"
+	workflowpkg "github.com/devr-tools/szr/internal/cli/workflows"
 	"github.com/devr-tools/szr/internal/config"
 	"github.com/devr-tools/szr/internal/history"
 	"github.com/devr-tools/szr/internal/teeindex"
@@ -49,6 +50,21 @@ func TestRecommendAndHotspotsCommands(t *testing.T) {
 			t.Fatalf("expected recommend output %q in %q", want, stdout)
 		}
 	}
+	for _, want := range []string{"repeated passthrough", "fallback-heavy runs", "tee-heavy failures"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("expected recommend explanation %q in %q", want, stdout)
+		}
+	}
+
+	code, stdout, stderr = testutil.RunApp(t, app, "hotspots")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected hotspots stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	for _, want := range []string{"signals=repeated-passthrough,fallback-heavy,tee-heavy", "score="} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("expected hotspot output %q in %q", want, stdout)
+		}
+	}
 
 	code, stdout, stderr = testutil.RunApp(t, app, "hotspots", "--json")
 	if code != 0 || stderr != "" {
@@ -60,6 +76,122 @@ func TestRecommendAndHotspotsCommands(t *testing.T) {
 	}
 	if len(payload) != 1 || payload[0]["command"] != "terraform plan" {
 		t.Fatalf("unexpected hotspots payload: %#v", payload)
+	}
+	signals, ok := payload[0]["signals"].([]any)
+	if !ok || len(signals) != 3 || signals[0] != "repeated-passthrough" || payload[0]["coverage_score"] == nil {
+		t.Fatalf("expected hotspot signals in payload, got %#v", payload)
+	}
+
+	code, stdout, stderr = testutil.RunApp(t, app, "discover")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected discover stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	for _, want := range []string{
+		"discover: top",
+		"[budget] terraform plan",
+		"do: adjust the active budget to lines=",
+		"signals=repeated-passthrough,fallback-heavy,tee-heavy",
+		"score=",
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("expected discover output %q in %q", want, stdout)
+		}
+	}
+
+	code, stdout, stderr = testutil.RunApp(t, app, "discover", "--json")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected discover json stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	var discoverPayload map[string]any
+	if err := json.Unmarshal([]byte(stdout), &discoverPayload); err != nil {
+		t.Fatalf("decode discover json: %v", err)
+	}
+	summary, ok := discoverPayload["summary"].(map[string]any)
+	if !ok || summary["recommendation_count"] == nil || summary["hotspot_count"] == nil {
+		t.Fatalf("expected discover summary in payload, got %#v", discoverPayload)
+	}
+	opportunities, ok := discoverPayload["opportunities"].([]any)
+	if !ok || len(opportunities) == 0 {
+		t.Fatalf("expected discover opportunities in payload, got %#v", discoverPayload)
+	}
+	first, ok := opportunities[0].(map[string]any)
+	if !ok || first["command"] != "terraform plan" || first["coverage_score"] == nil {
+		t.Fatalf("unexpected discover opportunity payload: %#v", discoverPayload)
+	}
+}
+
+func TestBuildDiscoverOrdersAndLimitsOpportunities(t *testing.T) {
+	records := []history.Record{
+		{
+			Timestamp:          time.Date(2026, 5, 21, 10, 0, 0, 0, time.UTC),
+			Command:            "terraform plan",
+			CommandFingerprint: history.Fingerprint("terraform plan"),
+			Profile:            "passthrough",
+			ProfileConfidence:  "low",
+			DurationMS:         20,
+			ExitCode:           1,
+			RawTokens:          200,
+			FilteredTokens:     20,
+			SavedTokens:        180,
+			SavingsPct:         90,
+			FallbackUsed:       true,
+			TeePath:            "/tmp/terraform.log",
+		},
+		{
+			Timestamp:          time.Date(2026, 5, 21, 11, 0, 0, 0, time.UTC),
+			Command:            "terraform plan",
+			CommandFingerprint: history.Fingerprint("terraform plan"),
+			Profile:            "passthrough",
+			ProfileConfidence:  "low",
+			DurationMS:         21,
+			ExitCode:           1,
+			RawTokens:          205,
+			FilteredTokens:     21,
+			SavedTokens:        184,
+			SavingsPct:         89.7,
+			FallbackUsed:       true,
+			TeePath:            "/tmp/terraform-2.log",
+		},
+		{
+			Timestamp:          time.Date(2026, 5, 21, 12, 0, 0, 0, time.UTC),
+			Command:            "git diff HEAD~1..HEAD --stat",
+			CommandFingerprint: history.Fingerprint("git diff HEAD~1..HEAD --stat"),
+			Profile:            "passthrough",
+			ProfileConfidence:  "low",
+			DurationMS:         18,
+			RawTokens:          80,
+			FilteredTokens:     80,
+			SavedTokens:        0,
+			SavingsPct:         0,
+		},
+		{
+			Timestamp:          time.Date(2026, 5, 21, 13, 0, 0, 0, time.UTC),
+			Command:            "git diff HEAD~1..HEAD --stat",
+			CommandFingerprint: history.Fingerprint("git diff HEAD~1..HEAD --stat"),
+			Profile:            "passthrough",
+			ProfileConfidence:  "low",
+			DurationMS:         19,
+			RawTokens:          82,
+			FilteredTokens:     82,
+			SavedTokens:        0,
+			SavingsPct:         0,
+		},
+	}
+
+	report := workflowpkg.BuildDiscover(records, 1)
+	if report.Summary.Records != len(records) {
+		t.Fatalf("unexpected discover record count: %#v", report.Summary)
+	}
+	if len(report.Opportunities) != 1 {
+		t.Fatalf("expected discover limit to truncate results, got %#v", report.Opportunities)
+	}
+	if report.Opportunities[0].Command == "" || report.Opportunities[0].CoverageScore == 0 {
+		t.Fatalf("expected discover opportunity to retain hotspot metadata, got %#v", report.Opportunities[0])
+	}
+
+	fullReport := workflowpkg.BuildDiscover(records, 0)
+	if len(fullReport.Opportunities) < 2 {
+		t.Fatalf("expected zero discover limit to keep all opportunities, got %#v", fullReport.Opportunities)
 	}
 }
 
@@ -131,14 +263,115 @@ func TestRecommendRoutingCoverageForFindAndGrep(t *testing.T) {
 	for _, want := range []string{
 		"[custom-profile] /usr/bin/find /repo -name \"users.py\"",
 		"[routing-coverage] /usr/bin/find /repo -name \"users.py\"",
+		"low savings",
 		"route this family through szr by default; e.g. `szr find /repo --name users.py`",
 		"[custom-profile] /usr/bin/grep -rn links_service /repo",
 		"[routing-coverage] /usr/bin/grep -rn links_service /repo",
+		"fallback-heavy runs across 2 runs",
 		"route this family through szr by default; e.g. `szr grep links_service /repo`",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("expected wrapper recommend output %q in %q", want, stdout)
 		}
+	}
+}
+
+func TestHotspotsPrioritizeExplicitCoverageSignals(t *testing.T) {
+	paths := testutil.Paths(t.TempDir())
+	testutil.EnsurePaths(t, paths)
+	store := history.New(paths.HistoryFile)
+	records := []history.Record{
+		{
+			Timestamp:          time.Date(2026, 5, 21, 10, 0, 0, 0, time.UTC),
+			Command:            "terraform plan",
+			CommandFingerprint: history.Fingerprint("terraform plan"),
+			Profile:            "passthrough",
+			ProfileConfidence:  "low",
+			DurationMS:         18,
+			ExitCode:           1,
+			RawTokens:          200,
+			FilteredTokens:     14,
+			SavedTokens:        186,
+			SavingsPct:         93,
+			FallbackUsed:       true,
+			TeePath:            "/tmp/terraform-1.log",
+		},
+		{
+			Timestamp:          time.Date(2026, 5, 21, 11, 0, 0, 0, time.UTC),
+			Command:            "terraform plan",
+			CommandFingerprint: history.Fingerprint("terraform plan"),
+			Profile:            "passthrough",
+			ProfileConfidence:  "low",
+			DurationMS:         19,
+			ExitCode:           1,
+			RawTokens:          210,
+			FilteredTokens:     12,
+			SavedTokens:        198,
+			SavingsPct:         94,
+			FallbackUsed:       true,
+			TeePath:            "/tmp/terraform-2.log",
+		},
+		{
+			Timestamp:          time.Date(2026, 5, 21, 12, 0, 0, 0, time.UTC),
+			Command:            "git diff HEAD~1..HEAD --stat",
+			CommandFingerprint: history.Fingerprint("git diff HEAD~1..HEAD --stat"),
+			Profile:            "passthrough",
+			ProfileConfidence:  "low",
+			DurationMS:         22,
+			RawTokens:          90,
+			FilteredTokens:     90,
+			SavedTokens:        0,
+			SavingsPct:         0,
+		},
+		{
+			Timestamp:          time.Date(2026, 5, 21, 13, 0, 0, 0, time.UTC),
+			Command:            "git diff HEAD~1..HEAD --stat",
+			CommandFingerprint: history.Fingerprint("git diff HEAD~1..HEAD --stat"),
+			Profile:            "passthrough",
+			ProfileConfidence:  "low",
+			DurationMS:         24,
+			RawTokens:          92,
+			FilteredTokens:     92,
+			SavedTokens:        0,
+			SavingsPct:         0,
+		},
+		{
+			Timestamp:          time.Date(2026, 5, 21, 14, 0, 0, 0, time.UTC),
+			Command:            "git diff HEAD~1..HEAD --stat",
+			CommandFingerprint: history.Fingerprint("git diff HEAD~1..HEAD --stat"),
+			Profile:            "passthrough",
+			ProfileConfidence:  "low",
+			DurationMS:         23,
+			RawTokens:          88,
+			FilteredTokens:     88,
+			SavedTokens:        0,
+			SavingsPct:         0,
+		},
+	}
+	for _, rec := range records {
+		if err := store.Append(rec); err != nil {
+			t.Fatalf("append hotspot history: %v", err)
+		}
+	}
+
+	app := cli.NewWithDependencies("test", config.Default(), paths, store, testutil.AppEngine(t, paths))
+	code, stdout, stderr := testutil.RunApp(t, app, "hotspots", "--json")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected hotspots json stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+
+	var payload []map[string]any
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("decode hotspots json: %v", err)
+	}
+	if len(payload) < 2 {
+		t.Fatalf("expected at least two hotspots, got %#v", payload)
+	}
+	if payload[0]["command"] != "git diff HEAD~1..HEAD --stat" {
+		t.Fatalf("expected low-savings passthrough hotspot first, got %#v", payload)
+	}
+	if payload[0]["coverage_score"].(float64) <= payload[1]["coverage_score"].(float64) {
+		t.Fatalf("expected first hotspot to have stronger explicit coverage score, got %#v", payload)
 	}
 }
 
@@ -209,7 +442,7 @@ func TestRecommendRoutingExpansionForSafeGitFamilies(t *testing.T) {
 	}
 	for _, want := range []string{
 		"[routing-expansion] git diff",
-		"representative rewrite: `szr proxy git diff HEAD~1..HEAD --stat | tail -30`",
+		"representative rewrite: `szr git diff HEAD~1..HEAD --stat`",
 		"[routing-coverage] git diff HEAD~1..HEAD --stat",
 		"`szr git diff HEAD~1..HEAD --stat`",
 	} {

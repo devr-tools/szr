@@ -46,6 +46,20 @@ func TestSummarizeReadFile(t *testing.T) {
 		}
 	}
 
+	nonSignatureCode := fsfilter.SummarizeReadFile("script.py", []byte("value = 1\nprint(value)\n# tail\n"), 3)
+	for _, want := range []string{"1  value = 1", "2  print(value)"} {
+		if !strings.Contains(nonSignatureCode, want) {
+			t.Fatalf("expected %q in non-signature code preview %q", want, nonSignatureCode)
+		}
+	}
+
+	collapsedPreview := fsfilter.SummarizeReadFile("settings.conf", []byte("route = { keep = 1, drop = 2 }\nplain = 1\n"), 3)
+	for _, want := range []string{"1  route = { ... }", "2  plain = 1"} {
+		if !strings.Contains(collapsedPreview, want) {
+			t.Fatalf("expected %q in collapsed non-signature preview %q", want, collapsedPreview)
+		}
+	}
+
 	jsonPreview := fsfilter.SummarizeReadFile("cfg.json", []byte(`{"name":"x","items":[{"id":1}]}`), 8)
 	if !strings.Contains(jsonPreview, "name: string") || !strings.Contains(jsonPreview, "id: number") {
 		t.Fatalf("expected json structure preview, got %q", jsonPreview)
@@ -57,6 +71,86 @@ func TestSummarizeReadFile(t *testing.T) {
 
 	if kind, summary, requireRawCapture := fsfilter.ReadFileRecoveryInfo("cfg.json", []byte(`{"name":"x","items":[{"id":1},{"id":2},{"id":3}],"meta":{"env":"dev","owner":"team","service":"api"},"flags":{"a":true,"b":false},"nested":{"child":{"leaf":"x"}}}`), 2); kind != filters.RecoveryKindFullOutput || summary == "" || !requireRawCapture {
 		t.Fatalf("expected json read preview recovery info, got kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+}
+
+func TestSummarizeReadFileCodeSignatureMode(t *testing.T) {
+	code := fsfilter.SummarizeReadFile("sample.go", []byte(strings.Join([]string{
+		"package sample",
+		"",
+		"import (",
+		"\t\"context\"",
+		"\t\"fmt\"",
+		")",
+		"// TODO: keep exported surface small",
+		"const (",
+		"\tExportedThing = \"x\"",
+		"\tinternalThing = \"y\"",
+		")",
+		"func Run(",
+		"\tctx context.Context,",
+		"\tvalue string,",
+		") error {",
+		"\tfmt.Println(value)",
+		"\treturn nil",
+		"}",
+		"type service struct {",
+		"\tname string",
+		"}",
+	}, "\n")), 12)
+
+	for _, want := range []string{
+		"1  package sample",
+		"3  import (",
+		"4  \"context\"",
+		"5  \"fmt\"",
+		"7  TODO: keep exported surface small",
+		"8  const ( ... )",
+		"9  ExportedThing",
+		"12  func Run( ctx context.Context, value string, ) error { ... }",
+		"19  type service struct { ... }",
+	} {
+		if !strings.Contains(code, want) {
+			t.Fatalf("expected %q in signature preview %q", want, code)
+		}
+	}
+
+	for _, unwanted := range []string{"fmt.Println(value)", "internalThing", "name string"} {
+		if strings.Contains(code, unwanted) {
+			t.Fatalf("did not expect %q in signature preview %q", unwanted, code)
+		}
+	}
+
+	fallback := fsfilter.SummarizeReadFile("boring.go", []byte(strings.Join([]string{
+		"value := 1",
+		"println(value)",
+	}, "\n")), 2)
+	if !strings.Contains(fallback, "value := 1") || !strings.Contains(fallback, "println(value)") {
+		t.Fatalf("expected fallback signature preview to preserve aggressive lines, got %q", fallback)
+	}
+
+	script := fsfilter.SummarizeReadFile("script.sh", []byte(strings.Join([]string{
+		"#!/usr/bin/env bash",
+		"# TODO: keep startup cheap",
+		"source ./common.sh",
+		"export NAME=value",
+		"type (",
+		"\tExportedThing string",
+		"\t// TODO: leave a breadcrumb",
+		"\tinternalThing string",
+		")",
+	}, "\n")), 12)
+	for _, want := range []string{
+		"1  #!/usr/bin/env bash",
+		"2  TODO: keep startup cheap",
+		"4  export NAME=value",
+		"5  type ( ... )",
+		"6  ExportedThing",
+		"7  TODO: leave a breadcrumb",
+	} {
+		if !strings.Contains(script, want) {
+			t.Fatalf("expected %q in script signature preview %q", want, script)
+		}
 	}
 }
 
