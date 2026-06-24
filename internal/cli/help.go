@@ -195,6 +195,7 @@ func (a *App) printMenuHeader(ui spreadUI, label, subtitle string) {
 		a.printCenteredLine(subtitle, ui.color, false, true)
 	}
 	fmt.Println()
+	a.printWhatsNew(ui)
 }
 
 func formatMenuVersion(version string) string {
