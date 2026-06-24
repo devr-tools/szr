@@ -36,27 +36,45 @@ func whatsNewLines(rel *whatsNewRelease) []string {
 	}
 
 	title := "What's New in " + formatMenuVersion(rel.version)
-	bullets := make([]string, 0, len(rel.bullets))
-	for _, bullet := range rel.bullets {
-		bullets = append(bullets, "• "+bullet)
-	}
+	bullets := whatsNewBullets(rel.bullets)
+	return whatsNewBoxLines(title, bullets)
+}
 
+func whatsNewBullets(bullets []string) []string {
+	lines := make([]string, 0, len(bullets))
+	for _, bullet := range bullets {
+		lines = append(lines, "• "+bullet)
+	}
+	return lines
+}
+
+func whatsNewBoxLines(title string, bullets []string) []string {
+	inner := whatsNewInnerWidth(title, bullets)
+	lines := make([]string, 0, len(bullets)+4)
+	border := strings.Repeat("─", inner+2)
+
+	lines = append(lines, "┌"+border+"┐")
+	lines = append(lines, whatsNewContentLine(title, inner))
+	lines = append(lines, "├"+border+"┤")
+	for _, bullet := range bullets {
+		lines = append(lines, whatsNewContentLine(bullet, inner))
+	}
+	lines = append(lines, "└"+border+"┘")
+	return lines
+}
+
+func whatsNewInnerWidth(title string, bullets []string) int {
 	inner := utf8.RuneCountInString(title)
 	for _, bullet := range bullets {
 		if width := utf8.RuneCountInString(bullet); width > inner {
 			inner = width
 		}
 	}
+	return inner
+}
 
-	lines := make([]string, 0, len(bullets)+4)
-	lines = append(lines, "┌"+strings.Repeat("─", inner+2)+"┐")
-	lines = append(lines, "│ "+padRight(title, inner)+" │")
-	lines = append(lines, "├"+strings.Repeat("─", inner+2)+"┤")
-	for _, bullet := range bullets {
-		lines = append(lines, "│ "+padRight(bullet, inner)+" │")
-	}
-	lines = append(lines, "└"+strings.Repeat("─", inner+2)+"┘")
-	return lines
+func whatsNewContentLine(value string, width int) string {
+	return "│ " + padRight(value, width) + " │"
 }
 
 func (a *App) printWhatsNew(ui spreadUI) {
