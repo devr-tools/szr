@@ -6,15 +6,12 @@ import (
 	"unicode/utf8"
 )
 
-// whatsNewRelease holds the highlight bullets surfaced in the "What's New"
-// menu banner for a single release.
 type whatsNewRelease struct {
 	version string
 	bullets []string
 }
 
-// whatsNewReleases lists release highlights, newest first. Add a new entry at
-// the top whenever a release ships so the menu banner reflects it.
+// whatsNewReleases is newest-first; add an entry at the top for each release.
 var whatsNewReleases = []whatsNewRelease{
 	{
 		version: "0.7.0",
@@ -26,8 +23,6 @@ var whatsNewReleases = []whatsNewRelease{
 	},
 }
 
-// latestWhatsNew returns the most recent release highlights, or nil when none
-// are defined.
 func latestWhatsNew() *whatsNewRelease {
 	if len(whatsNewReleases) == 0 {
 		return nil
@@ -35,8 +30,6 @@ func latestWhatsNew() *whatsNewRelease {
 	return &whatsNewReleases[0]
 }
 
-// whatsNewLines renders the boxed "What's New" banner as plain (uncolored)
-// lines. Returns nil when there is nothing to show.
 func whatsNewLines(rel *whatsNewRelease) []string {
 	if rel == nil || len(rel.bullets) == 0 {
 		return nil
@@ -66,8 +59,6 @@ func whatsNewLines(rel *whatsNewRelease) []string {
 	return lines
 }
 
-// printWhatsNew prints the boxed "What's New" banner centered under the menu
-// header. It is a no-op when no release highlights are defined.
 func (a *App) printWhatsNew(ui spreadUI) {
 	lines := whatsNewLines(latestWhatsNew())
 	if len(lines) == 0 {

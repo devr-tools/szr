@@ -32,15 +32,13 @@ func TestWhatsNewLinesStructureAndAlignment(t *testing.T) {
 	}
 	lines := whatsNewLines(rel)
 
-	// border + title + separator + 2 bullets + bottom border
-	if len(lines) != 5+1 {
+	if len(lines) != 6 {
 		t.Fatalf("expected 6 lines, got %d: %v", len(lines), lines)
 	}
 	if !strings.Contains(lines[1], "What's New in v0.7.0") {
 		t.Fatalf("title line missing version: %q", lines[1])
 	}
 
-	// All lines must be the same display width so the box stays aligned.
 	width := utf8.RuneCountInString(lines[0])
 	for i, line := range lines {
 		if got := utf8.RuneCountInString(line); got != width {
