@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.8.0](https://github.com/devr-tools/szr/compare/v0.7.0...v0.8.0) (2026-06-24)
+
+
+### Features
+
+* add "What's New" banner to menu header ([f5708e4](https://github.com/devr-tools/szr/commit/f5708e4ccf1f0817ed238d5f37432323a764a27c))
+* add "What's New" banner to menu header ([fbd56cc](https://github.com/devr-tools/szr/commit/fbd56ccf78ffc3c63ff2ecaf123bdb3b1cbfb080))
+* add new feature banner ([c803aba](https://github.com/devr-tools/szr/commit/c803abaa100dd75681ed995dc8c055293c91a10e))
+
 ## [0.7.0](https://github.com/devr-tools/szr/compare/v0.6.0...v0.7.0) (2026-06-22)
 
 
