@@ -29,7 +29,7 @@ jobs:
     name: test presence
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 50
 
@@ -73,7 +73,7 @@ jobs:
       - check-test-presence
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v6
         with:
@@ -90,7 +90,7 @@ jobs:
     env:
       PR_BASE_REF: ${{ github.base_ref }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -159,7 +159,7 @@ jobs:
             label: windows-latest smoke
             test_command: go test ./test/config ./test/filters/... ./test/installers ./test/profiles/... ./test/rules ./test/teeindex
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v6
         with:
@@ -176,7 +176,7 @@ jobs:
       - golangci-lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v6
         with:
@@ -207,7 +207,7 @@ jobs:
       - golangci-lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v6
         with:
@@ -224,12 +224,12 @@ jobs:
       - golangci-lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Run Devr Codeguard
-        uses: devr-tools/codeguard@v0.2.0
+        uses: devr-tools/codeguard@v0.5.0
         with:
           config: codeguard.yaml
           mode: diff
@@ -244,7 +244,7 @@ jobs:
       - golangci-lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v6
         with:
@@ -292,7 +292,7 @@ jobs:
     env:
       PR_BASE_REF: ${{ github.base_ref }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -343,7 +343,7 @@ jobs:
     if: github.base_ref == 'develop'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
