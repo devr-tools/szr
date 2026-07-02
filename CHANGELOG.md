@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.11.0](https://github.com/devr-tools/szr/compare/v0.10.0...v0.11.0) (2026-07-02)
+
+
+### Features
+
+* **history:** tag proxied runs and exclude them from savings analysis ([cc0870c](https://github.com/devr-tools/szr/commit/cc0870c47cec3abb164fdc0368cf0f6ddb7b22f3))
+* **profiles:** summarize gh pr checks tables and fold watch repaints ([ae3d240](https://github.com/devr-tools/szr/commit/ae3d24062970759f7907336551cbfb3bec3f931b))
+
+
+### Bug Fixes
+
+* correct compression-contract budgeting and clean up spread analytics ([491ba85](https://github.com/devr-tools/szr/commit/491ba8509622b66df3322ade7d2b53f49e570819))
+* **engine:** budget the compression contract against true raw token count ([6451378](https://github.com/devr-tools/szr/commit/6451378c8838652d316cdf867922a74a2e3d7fd1))
+* **profiles:** route pattern-only grep through the grep profile ([107553a](https://github.com/devr-tools/szr/commit/107553ae51c30092076d78fc88d3c287c7a03d06))
+
 ## [0.10.0](https://github.com/devr-tools/szr/compare/v0.9.0...v0.10.0) (2026-07-02)
 
 
