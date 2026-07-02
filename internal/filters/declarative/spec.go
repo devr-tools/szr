@@ -2,16 +2,26 @@ package declarative
 
 import "strconv"
 
+// Spec describes a declarative line reducer. Stages run in a fixed order:
+// drop_empty, keep/strip patterns, dedup/fold, max_line_width clipping, then
+// head/tail truncation with omission markers. Setting both head and tail
+// keeps the first head and last tail lines with a "... +N more lines" marker
+// in between. dedup_consecutive folds runs of identical lines into
+// "line (xN)"; fold_similar additionally folds consecutive lines that match
+// after normalizing timestamp prefixes and trailing counters. Folding drops
+// empty lines and trims surrounding whitespace.
 type Spec struct {
-	Name          string   `json:"name"`
-	Description   string   `json:"description,omitempty"`
-	KeepPatterns  []string `json:"keep_patterns,omitempty"`
-	StripPatterns []string `json:"strip_patterns,omitempty"`
-	Head          int      `json:"head,omitempty"`
-	Tail          int      `json:"tail,omitempty"`
-	MaxLineWidth  int      `json:"max_line_width,omitempty"`
-	DropEmpty     bool     `json:"drop_empty,omitempty"`
-	EmptyMessage  string   `json:"empty_message,omitempty"`
+	Name             string   `json:"name"`
+	Description      string   `json:"description,omitempty"`
+	KeepPatterns     []string `json:"keep_patterns,omitempty"`
+	StripPatterns    []string `json:"strip_patterns,omitempty"`
+	Head             int      `json:"head,omitempty"`
+	Tail             int      `json:"tail,omitempty"`
+	MaxLineWidth     int      `json:"max_line_width,omitempty"`
+	DropEmpty        bool     `json:"drop_empty,omitempty"`
+	DedupConsecutive bool     `json:"dedup_consecutive,omitempty"`
+	FoldSimilar      bool     `json:"fold_similar,omitempty"`
+	EmptyMessage     string   `json:"empty_message,omitempty"`
 }
 
 type Options struct {
