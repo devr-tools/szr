@@ -34,50 +34,80 @@ var (
 )
 
 func parseLatestWhatsNew(changelog string) *whatsNewRelease {
-	version := ""
-	section := ""
-	var features, fixes, others []string
-	for _, line := range strings.Split(changelog, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if match := whatsNewVersionPattern.FindStringSubmatch(trimmed); match != nil {
-			if version != "" {
-				break
-			}
-			version = match[1]
-			continue
-		}
-		if version == "" {
-			continue
-		}
-		if after, ok := strings.CutPrefix(trimmed, "### "); ok {
-			section = strings.TrimSpace(after)
-			continue
-		}
-		bulletText, ok := strings.CutPrefix(trimmed, "* ")
-		if !ok {
-			continue
-		}
-		bullet := cleanWhatsNewBullet(bulletText)
-		if bullet == "" {
-			continue
-		}
-		switch section {
-		case "Features":
-			features = append(features, bullet)
-		case "Bug Fixes":
-			fixes = append(fixes, bullet)
-		default:
-			others = append(others, bullet)
-		}
-	}
+	version, lines := latestChangelogSection(changelog)
 	if version == "" {
 		return nil
 	}
-	bullets := dedupeWhatsNewBullets(append(append(features, fixes...), others...), whatsNewMaxBullets)
+	var collector whatsNewBulletCollector
+	for _, line := range lines {
+		collector.addLine(line)
+	}
+	bullets := dedupeWhatsNewBullets(collector.ordered(), whatsNewMaxBullets)
 	if len(bullets) == 0 {
 		return nil
 	}
 	return &whatsNewRelease{version: version, bullets: bullets}
+}
+
+// latestChangelogSection returns the newest release version and the trimmed
+// body lines between its heading and the next release heading.
+func latestChangelogSection(changelog string) (string, []string) {
+	version := ""
+	var lines []string
+	for _, line := range strings.Split(changelog, "\n") {
+		trimmed := strings.TrimSpace(line)
+		match := whatsNewVersionPattern.FindStringSubmatch(trimmed)
+		if match == nil {
+			if version != "" {
+				lines = append(lines, trimmed)
+			}
+			continue
+		}
+		if version != "" {
+			break
+		}
+		version = match[1]
+	}
+	return version, lines
+}
+
+// whatsNewBulletCollector groups a release section's bullets so features
+// lead the banner, then fixes, then anything else.
+type whatsNewBulletCollector struct {
+	section  string
+	features []string
+	fixes    []string
+	others   []string
+}
+
+func (c *whatsNewBulletCollector) addLine(line string) {
+	if after, ok := strings.CutPrefix(line, "### "); ok {
+		c.section = strings.TrimSpace(after)
+		return
+	}
+	text, ok := strings.CutPrefix(line, "* ")
+	if !ok {
+		return
+	}
+	bullet := cleanWhatsNewBullet(text)
+	if bullet == "" {
+		return
+	}
+	switch c.section {
+	case "Features":
+		c.features = append(c.features, bullet)
+	case "Bug Fixes":
+		c.fixes = append(c.fixes, bullet)
+	default:
+		c.others = append(c.others, bullet)
+	}
+}
+
+func (c *whatsNewBulletCollector) ordered() []string {
+	ordered := make([]string, 0, len(c.features)+len(c.fixes)+len(c.others))
+	ordered = append(ordered, c.features...)
+	ordered = append(ordered, c.fixes...)
+	return append(ordered, c.others...)
 }
 
 func cleanWhatsNewBullet(text string) string {
