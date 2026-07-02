@@ -76,6 +76,7 @@ func renderProfile(profile Profile, inv Invocation, exec Execution, fallbackLine
 
 func RenderExecution(profile Profile, inv Invocation, exec Execution, fallbackLines int, passthrough bool) RenderedExecution {
 	rawCombined := combineStreams(exec.Stdout, exec.Stderr)
+	rawTokens := history.EstimateTokens(rawCombined)
 	budget := ResolveBudget(profile, inv, fallbackLines)
 	rendered := renderProfile(profile, inv, exec, fallbackLines, passthrough)
 	text := rendered.text
@@ -86,7 +87,7 @@ func RenderExecution(profile Profile, inv Invocation, exec Execution, fallbackLi
 		}
 	}
 	text = applyUltraCompactRender(inv, exec, text, rawCombined)
-	text, _, _ = enforceCompressionContract(text, rawCombined, budget, rendered.recoveryPlan, passthrough, inv.Advanced.CompressionContract)
+	text, _, _ = enforceCompressionContract(text, rawCombined, rawTokens, budget, rendered.recoveryPlan, passthrough, inv.Advanced.CompressionContract)
 	if shouldGuardSmallOutput(profile, passthrough) && !inv.UltraCompact {
 		text = preferRawSmallOutputForProfile(profile, text, rawCombined, exec.ExitCode)
 	}
@@ -95,7 +96,7 @@ func RenderExecution(profile Profile, inv Invocation, exec Execution, fallbackLi
 		RawCombined:    rawCombined,
 		BytesParsed:    rendered.bytesParsed,
 		BytesEmitted:   len(text),
-		RawTokens:      history.EstimateTokens(rawCombined),
+		RawTokens:      rawTokens,
 		FilteredTokens: history.EstimateTokens(text),
 		FallbackUsed:   rendered.fallbackUsed,
 	}

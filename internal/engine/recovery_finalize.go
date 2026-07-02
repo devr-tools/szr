@@ -1,12 +1,11 @@
 package engine
 
-import "github.com/devr-tools/szr/internal/history"
-
 type renderedDisplayFinalizer struct {
 	profile             Profile
 	exitCode            int
 	rendered            string
 	rawCombined         string
+	rawTokens           int
 	budget              OutputBudget
 	plan                RecoveryPlan
 	artifactPath        string
@@ -29,7 +28,7 @@ func (f renderedDisplayFinalizer) finalize() string {
 	if len(suffixes) == 0 {
 		return f.rendered
 	}
-	rawTokens := history.EstimateTokens(f.rawCombined)
+	rawTokens := trueRawTokenCount(f.rawTokens, f.rawCombined)
 	if !f.compressionContract || rawTokens < compressionContractMinRawTokens {
 		return appendDisplaySuffix(f.rendered, suffixes[0])
 	}

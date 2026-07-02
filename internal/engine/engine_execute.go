@@ -28,13 +28,14 @@ func (e *Engine) ExecuteStreaming(
 
 	preparedInv, profile, command, budget, streamReducer, options, profileConfidence := e.prepareStreamingExecution(inv, passthrough, onPartial)
 	runResult, execResult, fastPath, rawCombined, rawBytesRead, rawTokens, duration, err := e.runStreamingCommand(ctx, inv, command, profile, streamReducer, options)
-	rendered, fallbackUsed, recoveryPlan := renderStreamingOutput(profile, preparedInv, execResult, streamReducer, budget, rawCombined, passthrough, fastPath, rawBytesRead, runResult.captureTruncated)
+	rendered, fallbackUsed, recoveryPlan := renderStreamingOutput(profile, preparedInv, execResult, streamReducer, budget, rawCombined, rawTokens, passthrough, fastPath, rawBytesRead, runResult.captureTruncated)
 	teePath := e.ensureStreamingArtifactPath(runResult.teePath, execResult.ExitCode, rawCombined, command, profile, fallbackUsed, recoveryPlan, passthrough)
 	rendered = renderedDisplayFinalizer{
 		profile:             profile,
 		exitCode:            execResult.ExitCode,
 		rendered:            rendered,
 		rawCombined:         rawCombined,
+		rawTokens:           rawTokens,
 		budget:              budget,
 		plan:                recoveryPlan,
 		artifactPath:        teePath,
@@ -46,7 +47,7 @@ func (e *Engine) ExecuteStreaming(
 	}.finalize()
 	bytesParsed := streamingBytesParsed(streamReducer, profile, execResult, rawBytesRead)
 	bytesEmitted := len(rendered)
-	record := buildStreamingHistoryRecord(inv, profile, profileConfidence, duration, execResult.ExitCode, rawBytesRead, bytesParsed, bytesEmitted, rawTokens, fallbackUsed, teePath, rendered)
+	record := buildStreamingHistoryRecord(inv, profile, profileConfidence, duration, execResult.ExitCode, rawBytesRead, bytesParsed, bytesEmitted, rawTokens, fallbackUsed, passthrough, teePath, rendered)
 	e.appendStreamingHistory(record)
 	result := buildStreamingResult(profile, profileConfidence, rendered, rawCombined, execResult.ExitCode, teePath, duration, fallbackUsed, fastPath, rawBytesRead, bytesParsed, bytesEmitted)
 	publishFinalPartial(onPartial, result)
@@ -140,6 +141,7 @@ func renderStreamingOutput(
 	streamReducer StreamReducer,
 	budget OutputBudget,
 	rawCombined string,
+	rawTokens int,
 	passthrough bool,
 	fastPath FastPathDecision,
 	rawBytesRead int,
@@ -161,7 +163,7 @@ func renderStreamingOutput(
 		}
 	}
 	rendered = applyUltraCompactRender(preparedInv, execResult, rendered, rawCombined)
-	rendered, recoveryPlan, _ = enforceCompressionContract(rendered, rawCombined, budget, recoveryPlan, passthrough, preparedInv.Advanced.CompressionContract)
+	rendered, recoveryPlan, _ = enforceCompressionContract(rendered, rawCombined, rawTokens, budget, recoveryPlan, passthrough, preparedInv.Advanced.CompressionContract)
 	if shouldGuardSmallOutput(profile, passthrough) && !preparedInv.UltraCompact {
 		rendered = preferRawSmallOutputForProfile(profile, rendered, rawCombined, execResult.ExitCode)
 	}
@@ -321,6 +323,7 @@ func buildStreamingHistoryRecord(
 	bytesEmitted int,
 	rawTokens int,
 	fallbackUsed bool,
+	passthrough bool,
 	teePath string,
 	rendered string,
 ) history.Record {
@@ -342,6 +345,7 @@ func buildStreamingHistoryRecord(
 		RawTokens:          rawTokens,
 		FilteredTokens:     history.EstimateTokens(rendered),
 		FallbackUsed:       fallbackUsed,
+		Passthrough:        passthrough,
 		TeePath:            teePath,
 	}
 	record.SavedTokens = record.RawTokens - record.FilteredTokens
