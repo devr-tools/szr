@@ -2,8 +2,18 @@ package cli
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
+	"sync"
+	"unicode"
 	"unicode/utf8"
+
+	szrroot "github.com/devr-tools/szr"
+)
+
+const (
+	whatsNewMaxBullets     = 3
+	whatsNewMaxBulletWidth = 60
 )
 
 type whatsNewRelease struct {
@@ -11,23 +21,132 @@ type whatsNewRelease struct {
 	bullets []string
 }
 
-// whatsNewReleases is newest-first; add an entry at the top for each release.
-var whatsNewReleases = []whatsNewRelease{
-	{
-		version: "0.7.0",
-		bullets: []string{
-			"Token-optimized rendering across command output",
-			"Git success-path summaries for quieter status and diff",
-			"Broader discovery coverage and tuning recommendations",
-		},
-	},
-}
+// latestWhatsNew parses the newest release section out of the embedded
+// changelog, which release-please rewrites on every release.
+var latestWhatsNew = sync.OnceValue(func() *whatsNewRelease {
+	return parseLatestWhatsNew(szrroot.Changelog)
+})
 
-func latestWhatsNew() *whatsNewRelease {
-	if len(whatsNewReleases) == 0 {
+var (
+	whatsNewVersionPattern  = regexp.MustCompile(`^##\s+\[?v?(\d+\.\d+\.\d+)`)
+	whatsNewMarkdownLink    = regexp.MustCompile(`\[([^\]]*)\]\([^)]*\)`)
+	whatsNewTrailingCommits = regexp.MustCompile(`(?:\s*\((?:[0-9a-f]{7,40}|#\d+)(?:,\s*(?:[0-9a-f]{7,40}|#\d+))*\)|,?\s*closes\s+#\d+(?:,\s*#\d+)*)\s*$`)
+)
+
+func parseLatestWhatsNew(changelog string) *whatsNewRelease {
+	version, lines := latestChangelogSection(changelog)
+	if version == "" {
 		return nil
 	}
-	return &whatsNewReleases[0]
+	var collector whatsNewBulletCollector
+	for _, line := range lines {
+		collector.addLine(line)
+	}
+	bullets := dedupeWhatsNewBullets(collector.ordered(), whatsNewMaxBullets)
+	if len(bullets) == 0 {
+		return nil
+	}
+	return &whatsNewRelease{version: version, bullets: bullets}
+}
+
+// latestChangelogSection returns the newest release version and the trimmed
+// body lines between its heading and the next release heading.
+func latestChangelogSection(changelog string) (string, []string) {
+	version := ""
+	var lines []string
+	for _, line := range strings.Split(changelog, "\n") {
+		trimmed := strings.TrimSpace(line)
+		match := whatsNewVersionPattern.FindStringSubmatch(trimmed)
+		if match == nil {
+			if version != "" {
+				lines = append(lines, trimmed)
+			}
+			continue
+		}
+		if version != "" {
+			break
+		}
+		version = match[1]
+	}
+	return version, lines
+}
+
+// whatsNewBulletCollector groups a release section's bullets so features
+// lead the banner, then fixes, then anything else.
+type whatsNewBulletCollector struct {
+	section  string
+	features []string
+	fixes    []string
+	others   []string
+}
+
+func (c *whatsNewBulletCollector) addLine(line string) {
+	if after, ok := strings.CutPrefix(line, "### "); ok {
+		c.section = strings.TrimSpace(after)
+		return
+	}
+	text, ok := strings.CutPrefix(line, "* ")
+	if !ok {
+		return
+	}
+	bullet := cleanWhatsNewBullet(text)
+	if bullet == "" {
+		return
+	}
+	switch c.section {
+	case "Features":
+		c.features = append(c.features, bullet)
+	case "Bug Fixes":
+		c.fixes = append(c.fixes, bullet)
+	default:
+		c.others = append(c.others, bullet)
+	}
+}
+
+func (c *whatsNewBulletCollector) ordered() []string {
+	ordered := make([]string, 0, len(c.features)+len(c.fixes)+len(c.others))
+	ordered = append(ordered, c.features...)
+	ordered = append(ordered, c.fixes...)
+	return append(ordered, c.others...)
+}
+
+func cleanWhatsNewBullet(text string) string {
+	text = whatsNewMarkdownLink.ReplaceAllString(text, "$1")
+	for {
+		stripped := whatsNewTrailingCommits.ReplaceAllString(text, "")
+		if stripped == text {
+			break
+		}
+		text = stripped
+	}
+	text = strings.ReplaceAll(text, "**", "")
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ""
+	}
+	first, size := utf8.DecodeRuneInString(text)
+	text = string(unicode.ToUpper(first)) + text[size:]
+	if utf8.RuneCountInString(text) > whatsNewMaxBulletWidth {
+		text = string([]rune(text)[:whatsNewMaxBulletWidth-1]) + "…"
+	}
+	return text
+}
+
+func dedupeWhatsNewBullets(bullets []string, limit int) []string {
+	seen := make(map[string]bool, len(bullets))
+	kept := make([]string, 0, limit)
+	for _, bullet := range bullets {
+		key := strings.ToLower(bullet)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		kept = append(kept, bullet)
+		if len(kept) == limit {
+			break
+		}
+	}
+	return kept
 }
 
 func whatsNewLines(rel *whatsNewRelease) []string {
