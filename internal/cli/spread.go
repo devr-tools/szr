@@ -36,7 +36,7 @@ func (a *App) runSpread(args []string) int {
 	}
 
 	ui := spreadUI{color: shouldColorizeStdout()}
-	totalSavingsPct := percentSaved(summary.SavedTokens, summary.RawTokens)
+	savedDisplay := spreadSavedTokensDisplay(summary)
 	failureRate := fmt.Sprintf("%.1f%% (%d/%d)", summary.FailureRate, summary.Failures, summary.Commands)
 	fallbackRate := fmt.Sprintf("%.1f%% (%d/%d)", summary.FallbackRate, summary.Fallbacks, summary.Commands)
 	teeRate := fmt.Sprintf("%.1f%% (%d/%d)", summary.TeeRate, summary.TeeCount, summary.Commands)
@@ -46,7 +46,7 @@ func (a *App) runSpread(args []string) int {
 		{"Total commands", fmt.Sprintf("%d", summary.Commands)},
 		{"Input tokens", formatCompactCount(summary.RawTokens)},
 		{"Output tokens", formatCompactCount(summary.FilteredTokens)},
-		{"Tokens saved", withBar(totalSavingsPct, fmt.Sprintf("%s (%.1f%%)", formatCompactCount(summary.SavedTokens), totalSavingsPct), ui.color, true)},
+		{"Tokens saved", withBar(summary.FilteredSavingsPct, savedDisplay, ui.color, true)},
 		{"Total exec time", formatDurationSummary(summary.TotalDurationMS, summary.Commands)},
 	})
 	ui.metric("p95 duration", fmt.Sprintf("%dms", summary.DurationP95MS), "")
@@ -101,6 +101,19 @@ func isSpreadExcludedCommand(command string) bool {
 		fields = fields[1:]
 	}
 	return fields[0] == "uninstall"
+}
+
+func spreadSavedTokensDisplay(summary history.Summary) string {
+	if summary.PassthroughCommands == 0 {
+		return fmt.Sprintf("%s (%.1f%%)", formatCompactCount(summary.SavedTokens), summary.FilteredSavingsPct)
+	}
+	overallPct := percentSaved(summary.SavedTokens, summary.RawTokens)
+	return fmt.Sprintf(
+		"%s (%.1f%% of filtered; %.1f%% overall)",
+		formatCompactCount(summary.SavedTokens),
+		summary.FilteredSavingsPct,
+		overallPct,
+	)
 }
 
 func renderSpreadPassthrough(ui spreadUI, summary history.Summary) {

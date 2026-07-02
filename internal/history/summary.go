@@ -51,13 +51,18 @@ func Summarize(records []Record, limit int) Summary {
 		}
 		updateSummaryCommand(commands, rec)
 		updateSummaryProfile(profileStats, rec)
-		updateSummaryCommandHotspot(commandHotspots, rec)
-		updateSummaryFingerprint(fingerprintStats, rec)
+		if rec.RawTokens > 0 {
+			// Zero-output runs carry no savings signal; keep them out of
+			// improvement hotspots so recommendations target real volume.
+			updateSummaryCommandHotspot(commandHotspots, rec)
+			updateSummaryFingerprint(fingerprintStats, rec)
+		}
 	}
 
 	if savingsSamples := summary.Commands - summary.PassthroughCommands; savingsSamples > 0 {
 		summary.AveragePct /= float64(savingsSamples)
 	}
+	summary.FilteredSavingsPct = percent(summary.SavedTokens, summary.RawTokens-summary.PassthroughTokens)
 	summary.FailureRate = percent(summary.Failures, summary.Commands)
 	summary.FallbackRate = percent(summary.Fallbacks, summary.Commands)
 	summary.TeeRate = percent(summary.TeeCount, summary.Commands)
