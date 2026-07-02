@@ -1,6 +1,7 @@
 package filters
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -81,10 +82,13 @@ type declarativeCompactLinesReducer struct {
 }
 
 type declarativeCompactLinesState struct {
-	scanner    lineScanner
-	lines      []string
-	totalLines int
-	closed     bool
+	scanner      lineScanner
+	lines        []string
+	totalLines   int
+	pendingLine  string
+	pendingKey   string
+	pendingCount int
+	closed       bool
 }
 
 func newDeclarativeCompactLinesReducer(noun string, maxLines int, stdoutEnabled bool, stderrEnabled bool) *declarativeCompactLinesReducer {
@@ -106,43 +110,18 @@ func newDeclarativeCompactLinesReducer(noun string, maxLines int, stdoutEnabled 
 }
 
 func renderDeclarativeCompactLines(input string, maxLines int) string {
-	if maxLines <= 0 {
-		maxLines = 12
-	}
-	lines := make([]string, 0, maxLines)
-	total := 0
-	scanStringLines(StripANSI(input), func(line string) {
-		if line == "" {
-			return
-		}
-		total++
-		if len(lines) < maxLines {
-			lines = append(lines, line)
-		}
-	})
-	return formatCompactLinesResult(lines, total)
+	return CompactLines(input, maxLines)
 }
 
 func declarativeCompactLinesRecoveryInfo(noun string, input string, maxLines int) (string, string, bool) {
-	if maxLines <= 0 {
-		maxLines = 12
+	result, err := declarative.ApplyBuiltin("compact_lines", StripANSI(input), declarative.Options{LineLimit: maxLines})
+	if err == nil {
+		return DeclarativeFullOutputRecovery(result, noun)
 	}
-	visible := 0
-	total := 0
-	scanStringLines(StripANSI(input), func(line string) {
-		if line == "" {
-			return
-		}
-		total++
-		if visible < maxLines {
-			visible++
-		}
-	})
-	omitted := total - visible
-	if omitted <= 0 {
-		return NoRecovery()
-	}
-	return FullOutputRecovery(omittedSummary(omitted, noun))
+	reducer := NewCompactLineReducer(maxLines, 0)
+	reducer.ConsumeStdout([]byte(input))
+	_ = reducer.Result()
+	return reducer.RecoveryInfo()
 }
 
 func (r *declarativeCompactLinesReducer) ConsumeStdout(chunk []byte) {
@@ -187,10 +166,7 @@ func (r *declarativeCompactLinesReducer) RecoveryInfo() (string, string, bool) {
 
 func (s *declarativeCompactLinesState) consume(chunk []byte, maxLines int) {
 	s.scanner.Consume(chunk, func(line string) {
-		s.totalLines++
-		if len(s.lines) < maxLines {
-			s.lines = append(s.lines, line)
-		}
+		s.ingest(line, maxLines)
 	})
 }
 
@@ -200,11 +176,44 @@ func (s *declarativeCompactLinesState) finish(maxLines int) {
 	}
 	s.closed = true
 	s.scanner.Finish(func(line string) {
-		s.totalLines++
-		if len(s.lines) < maxLines {
-			s.lines = append(s.lines, line)
-		}
+		s.ingest(line, maxLines)
 	})
+	s.flushPending(maxLines)
+}
+
+// ingest folds consecutive similar lines incrementally so streamed output
+// matches the batch compact_lines builtin (dedup_consecutive + fold_similar).
+func (s *declarativeCompactLinesState) ingest(line string, maxLines int) {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return
+	}
+	key := declarative.SimilarLineKey(trimmed)
+	if s.pendingCount > 0 && key == s.pendingKey {
+		s.pendingCount++
+		return
+	}
+	s.flushPending(maxLines)
+	s.pendingLine = trimmed
+	s.pendingKey = key
+	s.pendingCount = 1
+}
+
+func (s *declarativeCompactLinesState) flushPending(maxLines int) {
+	if s.pendingCount == 0 {
+		return
+	}
+	line := s.pendingLine
+	if s.pendingCount > 1 {
+		line = fmt.Sprintf("%s (x%d)", line, s.pendingCount)
+	}
+	s.totalLines++
+	if len(s.lines) < maxLines {
+		s.lines = append(s.lines, line)
+	}
+	s.pendingLine = ""
+	s.pendingKey = ""
+	s.pendingCount = 0
 }
 
 func (r *declarativeCompactLinesReducer) totalLines() int {
@@ -221,31 +230,6 @@ func (r *declarativeCompactLinesReducer) visibleCount() int {
 		return r.maxLines
 	}
 	return count
-}
-
-func formatCompactLinesResult(lines []string, total int) string {
-	omitted := total - len(lines)
-	if omitted < 0 {
-		omitted = 0
-	}
-	if len(lines) == 0 {
-		if omitted > 0 {
-			return overflowLine(omitted)
-		}
-		return ""
-	}
-	var builder strings.Builder
-	for i, line := range lines {
-		if i > 0 {
-			builder.WriteByte('\n')
-		}
-		builder.WriteString(line)
-	}
-	if omitted > 0 {
-		builder.WriteByte('\n')
-		builder.WriteString(overflowLine(omitted))
-	}
-	return builder.String()
 }
 
 func (r *declarativeCompactLinesReducer) formatResult() string {
@@ -321,24 +305,4 @@ func singularNoun(noun string) string {
 
 func itoa(value int) string {
 	return strconv.Itoa(value)
-}
-
-func scanStringLines(input string, emit func(string)) {
-	start := 0
-	for i := 0; i < len(input); i++ {
-		switch input[i] {
-		case '\n':
-			emit(strings.TrimRight(input[start:i], " \t"))
-			start = i + 1
-		case '\r':
-			emit(strings.TrimRight(input[start:i], " \t"))
-			if i+1 < len(input) && input[i+1] == '\n' {
-				i++
-			}
-			start = i + 1
-		}
-	}
-	if start < len(input) {
-		emit(strings.TrimRight(input[start:], " \t"))
-	}
 }

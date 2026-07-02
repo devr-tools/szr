@@ -32,13 +32,14 @@ type runOptions struct {
 }
 
 type runResult struct {
-	stdout      string
-	stderr      string
-	stdoutBytes int
-	stderrBytes int
-	rawTokens   int
-	exitCode    int
-	teePath     string
+	stdout           string
+	stderr           string
+	stdoutBytes      int
+	stderrBytes      int
+	rawTokens        int
+	exitCode         int
+	teePath          string
+	captureTruncated bool
 }
 
 type outputCollector struct {
@@ -242,13 +243,14 @@ func runCommand(ctx context.Context, args []string, cwd string, options runOptio
 	teePath := finalizeTeeCapture(tee, exitCode)
 
 	result := runResult{
-		stdout:      stdout.String(),
-		stderr:      stderr.String(),
-		stdoutBytes: stdout.bytes,
-		stderrBytes: stderr.bytes,
-		rawTokens:   stdout.TokenCount() + stderr.TokenCount(),
-		exitCode:    exitCode,
-		teePath:     teePath,
+		stdout:           stdout.String(),
+		stderr:           stderr.String(),
+		stdoutBytes:      stdout.bytes,
+		stderrBytes:      stderr.bytes,
+		rawTokens:        stdout.TokenCount() + stderr.TokenCount(),
+		exitCode:         exitCode,
+		teePath:          teePath,
+		captureTruncated: stdout.truncated || stderr.truncated,
 	}
 	return finalizeRunCommandResult(result, streamErr, waitErr)
 }

@@ -16,6 +16,8 @@ func coreProfiles(maxLines int) []engine.Profile {
 		catReadProfile(maxLines),
 		goTestJSONProfile(maxLines),
 		goBuildProfile(maxLines),
+		goLintProfile(maxLines),
+		goModProfile(maxLines),
 		genericTestProfile(maxLines),
 		genericSummaryProfile(maxLines),
 	}
@@ -171,6 +173,54 @@ func goBuildProfile(maxLines int) engine.Profile {
 			"Surfaces error-bearing lines first and trims boilerplate.",
 		},
 	}
+}
+
+func goLintProfile(maxLines int) engine.Profile {
+	return engine.Profile{
+		Name:             "go-lint",
+		Description:      "Focuses golangci-lint and staticcheck output on lint findings.",
+		Confidence:       engine.ConfidenceHigh,
+		StreamPreference: engine.StreamStdoutFirst,
+		Budget:           goLintBudget(maxLines),
+		LatencyBudget:    profilekit.LatencyBudget(25),
+		Match:            matchGoLint,
+		Render: func(_ engine.Invocation, exec engine.Execution) string {
+			return filters.SummarizeGenericFailure(exec.Stdout+"\n"+exec.Stderr, maxLines)
+		},
+		StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
+			return genericFailureStreamReducer(budget)
+		},
+		ParseBytes: profilekit.ParseCombined,
+		Explain: []string{
+			"Matches golangci-lint (any subcommand) and staticcheck invocations.",
+			"Treats stdout as the primary issue stream and keeps file:line:col findings as anchors while trimming runner boilerplate.",
+		},
+	}
+}
+
+func goLintBudget(maxLines int) engine.OutputBudget {
+	lines := profilekit.AtLeast(maxLines, 10)
+	return engine.OutputBudget{MaxLines: lines, MaxBytes: lines * 160, MaxTokens: lines * 32, MinFailures: 1, MinAnchors: 1, MinHints: 1}
+}
+
+func matchGoLint(inv engine.Invocation) bool {
+	return isGoLintCommand(inv.Command) || isGoLintCommand(inv.Display)
+}
+
+func isGoLintCommand(args []string) bool {
+	return len(args) > 0 && (args[0] == "golangci-lint" || args[0] == "staticcheck")
+}
+
+func genericFailureStreamReducer(budget engine.OutputBudget) engine.StreamReducer {
+	return filters.NewGenericFailureReducerWithOptions(filters.GenericFailureReducerOptions{
+		MaxLines:           budget.MaxLines,
+		MaxBytes:           budget.MaxBytes,
+		MinFailures:        budget.MinFailures,
+		MinAnchors:         budget.MinAnchors,
+		MinHints:           budget.MinHints,
+		NoisePrefiltering:  budget.NoisePrefiltering,
+		SemanticCompaction: budget.SemanticCompaction,
+	})
 }
 
 func genericTestProfile(maxLines int) engine.Profile {

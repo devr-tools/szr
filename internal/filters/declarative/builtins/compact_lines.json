@@ -1,6 +1,8 @@
 {
   "name": "compact_lines",
-  "description": "Drop empty lines, keep the first N lines, and append an overflow summary.",
+  "description": "Drop empty lines, fold consecutive duplicate or similar lines into 'line (xN)', keep the first N lines, and append an overflow summary.",
   "drop_empty": true,
+  "dedup_consecutive": true,
+  "fold_similar": true,
   "head": 12
 }

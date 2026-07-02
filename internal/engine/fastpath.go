@@ -176,7 +176,7 @@ func DecideFastPath(profile Profile, inv Invocation, rawBytes, rawTokens int, du
 	if profile.LatencyBudget > 0 && duration > profile.LatencyBudget {
 		decision.WarnLatency = true
 	}
-	if exitCode != 0 {
+	if isFailureExit(profile, exitCode) {
 		return decision
 	}
 	if profile.StreamPreference == StreamStderrOnly && rawBytes == 0 {

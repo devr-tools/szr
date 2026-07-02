@@ -645,7 +645,9 @@ func TestExecuteUsesFailureEscapeForLowConfidenceFallback(t *testing.T) {
 	t.Parallel()
 
 	binDir := t.TempDir()
-	lowConfPath := testutil.WriteExecutable(t, binDir, "lowconf", "#!/bin/sh\nprintf 'line1\\nline2\\nline3\\nline4\\nline5\\nline6\\n' >&2\nexit 9\n")
+	// Emit enough failure output to stay above the never-worse-than-raw
+	// guard ceiling so the compacted failure escape remains in effect.
+	lowConfPath := testutil.WriteExecutable(t, binDir, "lowconf", "#!/bin/sh\ni=1\nwhile [ $i -le 60 ]; do\n  echo \"line$i\" >&2\n  i=$((i+1))\ndone\nexit 9\n")
 
 	root := t.TempDir()
 	paths := testutil.Paths(root)
@@ -672,10 +674,10 @@ func TestExecuteUsesFailureEscapeForLowConfidenceFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute low-confidence fallback: %v", err)
 	}
-	if !strings.Contains(result.Display, "line1") || !strings.Contains(result.Display, "... +1 more lines") {
+	if !strings.Contains(result.Display, "line1") || !strings.Contains(result.Display, "more lines") {
 		t.Fatalf("expected compacted failure escape output, got %#v", result)
 	}
-	if strings.Contains(result.Display, "line6") {
+	if strings.Contains(result.Display, "line60") {
 		t.Fatalf("did not expect full raw output after failure escape, got %#v", result)
 	}
 }

@@ -83,7 +83,7 @@ func bytesForFastPath(profile Profile, result runResult) int {
 }
 
 func shouldUseFailureEscape(profile Profile, exitCode int, passthrough bool, fallbackUsed bool) bool {
-	if passthrough || exitCode == 0 || !fallbackUsed {
+	if passthrough || !isFailureExit(profile, exitCode) || !fallbackUsed {
 		return false
 	}
 	return profile.Capabilities.AllowFailureEscape

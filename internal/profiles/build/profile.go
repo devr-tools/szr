@@ -44,6 +44,7 @@ func Profiles(maxLines int) []engine.Profile {
 			Explain: []string{
 				"Matches common build-system entrypoints such as `make`, `just`, `task`, `bazel`, `ninja`, and `cmake`.",
 				"Keeps failing targets, build-system error lines, and source file anchors instead of raw parallel build chatter.",
+				"Recognizes terraform/tofu plan and apply output, keeping the `Plan:`/`Apply complete!` summary, error and warning blocks, and resource headers while dropping attribute-level diff noise.",
 			},
 		},
 	}

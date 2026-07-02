@@ -116,7 +116,7 @@ func TestExecutePassthroughMode(t *testing.T) {
 		Display: []string{"succeed"},
 		Cwd:     root,
 	}, true)
-	if err != nil || result.Display != "stdout" {
+	if err != nil || result.Display != "stdout alpha beta gamma" {
 		t.Fatalf("expected passthrough result, got %#v err=%v", result, err)
 	}
 }
@@ -176,7 +176,10 @@ func TestExecuteExecError(t *testing.T) {
 func newExecuteTestEngine(t *testing.T) (*engine.Engine, string, config.Paths, string, string, string) {
 	t.Helper()
 	binDir := t.TempDir()
-	succeedPath := testutil.WriteExecutable(t, binDir, "succeed", "#!/bin/sh\necho stdout\n")
+	// The success fixture emits more than a couple of words so the profile's
+	// "rendered" summary stays strictly cheaper than raw and survives the
+	// universal never-worse-than-raw small-output guard.
+	succeedPath := testutil.WriteExecutable(t, binDir, "succeed", "#!/bin/sh\necho stdout alpha beta gamma\n")
 	failPath := testutil.WriteExecutable(t, binDir, "failcmd", "#!/bin/sh\necho stderr >&2\nexit 3\n")
 	blankOutPath := testutil.WriteExecutable(t, binDir, "blankout", "#!/bin/sh\necho raw-only\n")
 

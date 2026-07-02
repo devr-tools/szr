@@ -56,11 +56,14 @@ func Default() Config {
 		Advanced: Advanced{
 			AggressivePrepareRewrites: true,
 			NoisePrefiltering:         true,
-			AdaptiveBudgets:           false,
-			EarlyCaptureStop:          true,
-			SemanticCompaction:        true,
-			CompressionContract:       true,
-			CompactArtifactRefs:       true,
+			// Safe to enable by default: history compaction keeps the
+			// per-command suggestion lookup cheap, and adaptations are
+			// conservatively capped by the history budget adapter.
+			AdaptiveBudgets:     true,
+			EarlyCaptureStop:    true,
+			SemanticCompaction:  true,
+			CompressionContract: true,
+			CompactArtifactRefs: true,
 		},
 		UpdateCheck: UpdateCheck{
 			Enabled:       false,

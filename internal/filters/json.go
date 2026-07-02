@@ -29,7 +29,7 @@ func RenderJSON(data []byte, mode string, maxLines int) string {
 func RenderJSONValue(value any, mode string, maxLines int) string {
 	switch mode {
 	case "", JSONModeStructure:
-		return RenderValueStructure(value)
+		return renderValueStructureLimited(value, maxLines)
 	case JSONModePreview:
 		return SummarizeJSONValuePreview(value, maxLines)
 	default:
@@ -41,32 +41,105 @@ func RenderJSONStructure(data []byte) string {
 	return RenderJSON(data, JSONModeStructure, 0)
 }
 
+const (
+	// structureDefaultMaxLines bounds structure output when callers pass no
+	// explicit budget; engine budgets clamp MaxLines to [3,40] so 40 is the
+	// largest useful default.
+	structureDefaultMaxLines = 40
+	// structureMaxDepth bounds recursion; deeper nodes are summarized as
+	// "{... N keys}" / "[N items]".
+	structureMaxDepth = 4
+)
+
 func RenderValueStructure(value any) string {
-	return renderNode(value, 0)
+	return renderValueStructureLimited(value, 0)
 }
 
-func renderNode(value any, depth int) string {
-	indent := strings.Repeat("  ", depth)
+func renderValueStructureLimited(value any, maxLines int) string {
+	if maxLines <= 0 {
+		maxLines = structureDefaultMaxLines
+	}
+	r := &structureRenderer{maxLines: maxLines}
+	r.render("", value, 0)
+	if r.omitted > 0 {
+		r.lines = append(r.lines, fmt.Sprintf("... +%d more lines", r.omitted))
+	}
+	return strings.Join(r.lines, "\n")
+}
+
+type structureRenderer struct {
+	lines    []string
+	maxLines int
+	omitted  int
+}
+
+func (r *structureRenderer) full() bool {
+	return len(r.lines) >= r.maxLines
+}
+
+func (r *structureRenderer) emit(line string) {
+	if r.full() {
+		r.omitted++
+		return
+	}
+	r.lines = append(r.lines, line)
+}
+
+// render emits the structure of value, prefixing its first line with prefix
+// (which carries the parent indentation and "key: " label, if any).
+func (r *structureRenderer) render(prefix string, value any, depth int) {
+	if r.full() {
+		r.omitted += countStructureLines(value, depth)
+		return
+	}
 	switch node := value.(type) {
 	case map[string]any:
-		keys := make([]string, 0, len(node))
-		for key := range node {
-			keys = append(keys, key)
-		}
-		sort.Strings(keys)
-
-		var lines []string
-		lines = append(lines, indent+"{")
-		for _, key := range keys {
-			lines = append(lines, fmt.Sprintf("%s  %s: %s", indent, key, renderNode(node[key], depth+1)))
-		}
-		lines = append(lines, indent+"}")
-		return strings.Join(lines, "\n")
+		r.renderMap(prefix, node, depth)
 	case []any:
-		if len(node) == 0 {
-			return "[]"
-		}
-		return "[\n" + renderNode(node[0], depth+1) + "\n" + indent + "]"
+		r.renderArray(prefix, node, depth)
+	default:
+		r.emit(prefix + structureScalarLabel(node))
+	}
+}
+
+func (r *structureRenderer) renderMap(prefix string, node map[string]any, depth int) {
+	if len(node) == 0 {
+		r.emit(prefix + "{}")
+		return
+	}
+	if depth >= structureMaxDepth {
+		r.emit(prefix + fmt.Sprintf("{... %d keys}", len(node)))
+		return
+	}
+	indent := strings.Repeat("  ", depth)
+	r.emit(prefix + "{")
+	for _, entry := range sortedJSONKeys(node) {
+		r.render(indent+"  "+entry.key+": ", node[entry.key], depth+1)
+	}
+	r.emit(indent + "}")
+}
+
+func (r *structureRenderer) renderArray(prefix string, node []any, depth int) {
+	if len(node) == 0 {
+		r.emit(prefix + "[]")
+		return
+	}
+	if depth >= structureMaxDepth {
+		r.emit(prefix + fmt.Sprintf("[%d items]", len(node)))
+		return
+	}
+	indent := strings.Repeat("  ", depth)
+	r.emit(prefix + "[")
+	r.render(indent+"  ", node[0], depth+1)
+	if len(node) > 1 {
+		r.emit(fmt.Sprintf("%s  ... +%d more items", indent, len(node)-1))
+	}
+	r.emit(indent + "]")
+}
+
+// structureScalarLabel names a scalar JSON value's type for structure output.
+func structureScalarLabel(value any) string {
+	switch value.(type) {
 	case string:
 		return "string"
 	case float64:
@@ -76,7 +149,51 @@ func renderNode(value any, depth int) string {
 	case nil:
 		return "null"
 	default:
-		return fmt.Sprintf("%T", node)
+		return fmt.Sprintf("%T", value)
+	}
+}
+
+// sortedJSONKeys returns node's keys ordered by jsonKeyPriority, then
+// alphabetically within the same priority.
+func sortedJSONKeys(node map[string]any) []prioritizedJSONKey {
+	keys := make([]prioritizedJSONKey, 0, len(node))
+	for key := range node {
+		keys = append(keys, prioritizedJSONKey{key: key, priority: jsonKeyPriority(key)})
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].priority != keys[j].priority {
+			return keys[i].priority < keys[j].priority
+		}
+		return keys[i].key < keys[j].key
+	})
+	return keys
+}
+
+// countStructureLines returns the number of lines render would emit for
+// value at depth, without formatting them. Used to size the overflow marker
+// once the line cap is reached.
+func countStructureLines(value any, depth int) int {
+	switch node := value.(type) {
+	case map[string]any:
+		if len(node) == 0 || depth >= structureMaxDepth {
+			return 1
+		}
+		total := 2 // "{" and "}"
+		for _, child := range node {
+			total += countStructureLines(child, depth+1)
+		}
+		return total
+	case []any:
+		if len(node) == 0 || depth >= structureMaxDepth {
+			return 1
+		}
+		total := 2 + countStructureLines(node[0], depth+1)
+		if len(node) > 1 {
+			total++ // "... +N more items"
+		}
+		return total
+	default:
+		return 1
 	}
 }
 
@@ -100,7 +217,7 @@ func SummarizeJSONValuePreview(value any, maxLines int) string {
 	lines := []string{}
 	appendJSONPreview(&lines, "root", value, 0, maxLines)
 	if len(lines) == 0 {
-		return RenderValueStructure(value)
+		return renderValueStructureLimited(value, maxLines)
 	}
 	return JoinLimitedLines(lines, maxLines)
 }
@@ -112,16 +229,7 @@ func appendJSONPreview(lines *[]string, path string, value any, depth int, maxLi
 
 	switch node := value.(type) {
 	case map[string]any:
-		keys := make([]prioritizedJSONKey, 0, len(node))
-		for key := range node {
-			keys = append(keys, prioritizedJSONKey{key: key, priority: jsonKeyPriority(key)})
-		}
-		sort.Slice(keys, func(i, j int) bool {
-			if keys[i].priority != keys[j].priority {
-				return keys[i].priority < keys[j].priority
-			}
-			return keys[i].key < keys[j].key
-		})
+		keys := sortedJSONKeys(node)
 		*lines = append(*lines, fmt.Sprintf("%s: object keys=%d", formatJSONPath(path), len(keys)))
 		for _, entry := range keys {
 			if len(*lines) >= maxLines {
@@ -173,16 +281,7 @@ func summarizeJSONArraySample(items []any) string {
 func previewArrayElement(value any) string {
 	switch node := value.(type) {
 	case map[string]any:
-		keys := make([]prioritizedJSONKey, 0, len(node))
-		for key := range node {
-			keys = append(keys, prioritizedJSONKey{key: key, priority: jsonKeyPriority(key)})
-		}
-		sort.Slice(keys, func(i, j int) bool {
-			if keys[i].priority != keys[j].priority {
-				return keys[i].priority < keys[j].priority
-			}
-			return keys[i].key < keys[j].key
-		})
+		keys := sortedJSONKeys(node)
 		if len(keys) > 3 {
 			keys = keys[:3]
 		}

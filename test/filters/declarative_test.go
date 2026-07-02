@@ -62,11 +62,107 @@ func TestDeclarativeValidation(t *testing.T) {
 
 	_, err := declarative.Apply(declarative.Spec{
 		Name: "invalid",
-		Head: 1,
-		Tail: 1,
+		Head: -1,
 	}, "line", declarative.Options{})
-	if err == nil || !strings.Contains(err.Error(), "head and tail cannot both be set") {
-		t.Fatalf("expected head/tail validation error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "head must be >= 0") {
+		t.Fatalf("expected head validation error, got %v", err)
+	}
+}
+
+func TestDeclarativeHeadTailCombined(t *testing.T) {
+	t.Parallel()
+
+	result, err := declarative.Apply(declarative.Spec{
+		Name: "head_tail",
+		Head: 2,
+		Tail: 1,
+	}, "one\ntwo\nthree\nfour\nfive\nsix\n", declarative.Options{})
+	if err != nil {
+		t.Fatalf("run head+tail reducer: %v", err)
+	}
+	if result.Text != "one\ntwo\n... +3 more lines\nsix" {
+		t.Fatalf("unexpected head+tail output: %q", result.Text)
+	}
+	if result.TotalLines != 6 || result.VisibleLines != 3 || result.OmittedBefore != 0 || result.OmittedAfter != 3 {
+		t.Fatalf("unexpected head+tail metadata: %#v", result)
+	}
+	if result.RecoverySummary("lines") != "omitted 3 additional lines" {
+		t.Fatalf("unexpected head+tail recovery summary: %q", result.RecoverySummary("lines"))
+	}
+
+	short, err := declarative.Apply(declarative.Spec{
+		Name: "head_tail_short",
+		Head: 2,
+		Tail: 2,
+	}, "one\ntwo\nthree\n", declarative.Options{})
+	if err != nil {
+		t.Fatalf("run short head+tail reducer: %v", err)
+	}
+	if short.Text != "one\ntwo\nthree" || short.OmittedCount() != 0 {
+		t.Fatalf("expected short input to pass through, got %#v", short)
+	}
+}
+
+func TestDeclarativeDedupAndFold(t *testing.T) {
+	t.Parallel()
+
+	deduped, err := declarative.Apply(declarative.Spec{
+		Name:             "dedup",
+		DropEmpty:        true,
+		DedupConsecutive: true,
+	}, "warn\nwarn\nwarn\nready\n", declarative.Options{})
+	if err != nil {
+		t.Fatalf("run dedup reducer: %v", err)
+	}
+	if deduped.Text != "warn (x3)\nready" {
+		t.Fatalf("unexpected dedup output: %q", deduped.Text)
+	}
+	if deduped.TotalLines != 2 || deduped.VisibleLines != 2 || deduped.OmittedCount() != 0 {
+		t.Fatalf("unexpected dedup metadata: %#v", deduped)
+	}
+
+	folded, err := declarative.Apply(declarative.Spec{
+		Name:        "fold",
+		DropEmpty:   true,
+		FoldSimilar: true,
+	}, strings.Join([]string{
+		"2026-06-21T08:00:00Z downloading cache",
+		"2026-06-21T08:00:01Z downloading cache",
+		"2026-06-21T08:00:02Z downloading cache",
+		"retry attempt 1",
+		"retry attempt 2",
+		"error: build failed",
+	}, "\n"), declarative.Options{})
+	if err != nil {
+		t.Fatalf("run fold reducer: %v", err)
+	}
+	if folded.Text != "2026-06-21T08:00:00Z downloading cache (x3)\nretry attempt 1 (x2)\nerror: build failed" {
+		t.Fatalf("unexpected fold output: %q", folded.Text)
+	}
+
+	foldedHead, err := declarative.Apply(declarative.Spec{
+		Name:             "fold_head",
+		DropEmpty:        true,
+		DedupConsecutive: true,
+		Head:             1,
+	}, "same\nsame\nother\nlast\n", declarative.Options{})
+	if err != nil {
+		t.Fatalf("run fold+head reducer: %v", err)
+	}
+	if foldedHead.Text != "same (x2)\n... +2 more lines" {
+		t.Fatalf("unexpected fold+head output: %q", foldedHead.Text)
+	}
+	if foldedHead.TotalLines != 3 || foldedHead.VisibleLines != 1 || foldedHead.OmittedAfter != 2 {
+		t.Fatalf("unexpected fold+head metadata: %#v", foldedHead)
+	}
+}
+
+func TestCompactLinesFoldsRepeats(t *testing.T) {
+	t.Parallel()
+
+	input := strings.Repeat("connection refused; retrying\n", 40) + "fatal: giving up\n"
+	if got := filters.CompactLines(input, 12); got != "connection refused; retrying (x40)\nfatal: giving up" {
+		t.Fatalf("unexpected folded compact lines: %q", got)
 	}
 }
 
@@ -101,13 +197,39 @@ func TestDeclarativeCompactLinesStreamSemantics(t *testing.T) {
 
 	reducer := filters.NewDeclarativeBuiltinReducer("compact_lines", "lines", 3, true, true)
 	reducer.ConsumeStdout([]byte("dup\ndup\n"))
-	reducer.ConsumeStderr([]byte("err-1\nerr-2\n"))
+	reducer.ConsumeStderr([]byte("err: one\nerr: two\nerr: three\nerr: four\n"))
 
-	if got := reducer.Result(); got != "dup\ndup\nerr-1\n... +1 more lines" {
+	if got := reducer.Result(); got != "dup (x2)\nerr: one\nerr: two\n... +2 more lines" {
 		t.Fatalf("unexpected compact lines stream output: %q", got)
 	}
-	if kind, summary, requireRawCapture := reducer.RecoveryInfo(); kind != filters.RecoveryKindFullOutput || summary != "omitted 1 additional line" || !requireRawCapture {
+	if kind, summary, requireRawCapture := reducer.RecoveryInfo(); kind != filters.RecoveryKindFullOutput || summary != "omitted 2 additional lines" || !requireRawCapture {
 		t.Fatalf("unexpected compact lines stream recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+}
+
+func TestDeclarativeCompactLinesStreamFoldsAcrossChunks(t *testing.T) {
+	t.Parallel()
+
+	reducer := filters.NewDeclarativeBuiltinReducer("compact_lines", "lines", 12, true, false)
+	reducer.ConsumeStdout([]byte("2026-06-21T08:00:00Z downloading cache\n2026-06-21T08:0"))
+	reducer.ConsumeStdout([]byte("0:01Z downloading cache\nworker ready\nworker ready\ndone\n"))
+
+	if got := reducer.Result(); got != "2026-06-21T08:00:00Z downloading cache (x2)\nworker ready (x2)\ndone" {
+		t.Fatalf("unexpected folded stream output: %q", got)
+	}
+	if kind, summary, requireRawCapture := reducer.RecoveryInfo(); kind != "" || summary != "" || requireRawCapture {
+		t.Fatalf("expected no recovery for fully visible fold, got kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+
+	batch := filters.RenderDeclarativeBuiltin("compact_lines", strings.Join([]string{
+		"2026-06-21T08:00:00Z downloading cache",
+		"2026-06-21T08:00:01Z downloading cache",
+		"worker ready",
+		"worker ready",
+		"done",
+	}, "\n"), 12)
+	if batch != "2026-06-21T08:00:00Z downloading cache (x2)\nworker ready (x2)\ndone" {
+		t.Fatalf("expected batch output to match streamed output, got %q", batch)
 	}
 }
 
