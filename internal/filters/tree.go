@@ -7,18 +7,20 @@ import (
 	"strings"
 )
 
+// maxTreeLines caps BuildTree output so huge directory walks stay bounded.
+const maxTreeLines = 100
+
 func BuildTree(paths []string, root string) string {
 	type node struct {
 		Name     string
 		Children map[string]*node
-		Files    int
 	}
 
 	rootNode := &node{Name: filepath.Base(root), Children: map[string]*node{}}
 	for _, path := range paths {
 		parts := splitTreeParts(root, path, filepath.Rel)
 		current := rootNode
-		for i, part := range parts {
+		for _, part := range parts {
 			if shouldSkipTreePart(part) {
 				continue
 			}
@@ -28,34 +30,50 @@ func BuildTree(paths []string, root string) string {
 				current.Children[part] = child
 			}
 			current = child
-			if i == len(parts)-1 {
-				current.Files++
-			}
 		}
 	}
 
 	var render func(n *node, depth int) []string
 	render = func(n *node, depth int) []string {
+		label := n.Name
+		// Collapse single-child directory chains (a/b/c/d/) into one line.
+		if depth > 0 {
+			collapsed := false
+			for len(n.Children) == 1 {
+				var only *node
+				for _, child := range n.Children {
+					only = child
+				}
+				if len(only.Children) == 0 {
+					break
+				}
+				label += "/" + only.Name
+				n = only
+				collapsed = true
+			}
+			if collapsed {
+				label += "/"
+			}
+		}
 		indent := strings.Repeat("  ", depth)
-		lines := []string{indent + n.Name}
+		lines := []string{indent + label}
 		keys := make([]string, 0, len(n.Children))
 		for key := range n.Children {
 			keys = append(keys, key)
 		}
 		sort.Strings(keys)
 		for _, key := range keys {
-			child := n.Children[key]
-			label := child.Name
-			if child.Files > 0 && len(child.Children) == 0 {
-				label = fmt.Sprintf("%s", label)
-			}
-			child.Name = label
-			lines = append(lines, render(child, depth+1)...)
+			lines = append(lines, render(n.Children[key], depth+1)...)
 		}
 		return lines
 	}
 
-	return strings.Join(render(rootNode, 0), "\n")
+	lines := render(rootNode, 0)
+	if len(lines) > maxTreeLines {
+		omitted := len(lines) - maxTreeLines
+		lines = append(lines[:maxTreeLines], fmt.Sprintf("... +%d more", omitted))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func splitTreeParts(root, path string, relFn func(string, string) (string, error)) []string {

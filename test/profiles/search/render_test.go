@@ -20,7 +20,7 @@ func TestRipgrepProfileRender(t *testing.T) {
 			"two.go:9:two",
 		}, "\n"),
 	})
-	for _, want := range []string{"one.go (2 matches)", "two.go (1 matches)"} {
+	for _, want := range []string{"one.go:1: first (2 matches)", "two.go:9: two (1 matches)"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected %q in ripgrep render output:\n%s", want, rendered)
 		}
@@ -30,7 +30,7 @@ func TestRipgrepProfileRender(t *testing.T) {
 	streamed.ConsumeStdout([]byte("a.go:1:hit\n"))
 	streamed.ConsumeStdout([]byte("a.go:2:second\n"))
 	streamed.ConsumeStdout([]byte("node_modules/pkg/a.go:4:ignored\n"))
-	if got := streamed.Result(); !strings.Contains(got, "a.go (2 matches)") {
+	if got := streamed.Result(); !strings.Contains(got, "a.go:1: hit (2 matches)") {
 		t.Fatalf("unexpected ripgrep stream output: %q", got)
 	}
 	if got := streamed.Result(); !strings.Contains(got, "suppressed noisy paths") {

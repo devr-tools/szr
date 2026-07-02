@@ -37,8 +37,13 @@ type RipgrepReducer struct {
 	suppressed    map[string]int
 }
 
+// ripgrepMatchTextLimit clips the representative match text kept per file.
+const ripgrepMatchTextLimit = 120
+
 type ripgrepGroup struct {
-	count int
+	count       int
+	firstLineNo int
+	firstText   string
 }
 
 func NewRipgrepReducer(maxGroups, maxLines int) *RipgrepReducer {
@@ -124,13 +129,11 @@ func (r *RipgrepReducer) ingestLine(line string) {
 			r.extraFiles++
 			return
 		}
-		group = &ripgrepGroup{}
+		group = &ripgrepGroup{firstLineNo: lineNo, firstText: Clip(text, ripgrepMatchTextLimit)}
 		r.groups[file] = group
 		r.order = append(r.order, file)
 	}
 	group.count++
-	_ = lineNo
-	_ = text
 }
 
 func (r *RipgrepReducer) render(preview bool) string {
@@ -150,13 +153,20 @@ func (r *RipgrepReducer) render(preview bool) string {
 		if len(out)+1+r.footerLines() > r.maxLines {
 			break
 		}
-		out = append(out, fmt.Sprintf("%s (%d matches)", file, group.count))
+		out = append(out, formatRipgrepGroup(file, group))
 	}
 	out = r.appendFooter(out)
 	if preview && len(out) > r.maxLines {
 		out = out[:r.maxLines]
 	}
 	return strings.Join(out, "\n")
+}
+
+func formatRipgrepGroup(file string, group *ripgrepGroup) string {
+	if group.firstText == "" {
+		return fmt.Sprintf("%s:%d (%d matches)", file, group.firstLineNo, group.count)
+	}
+	return fmt.Sprintf("%s:%d: %s (%d matches)", file, group.firstLineNo, group.firstText, group.count)
 }
 
 func (r *RipgrepReducer) footerLines() int {
