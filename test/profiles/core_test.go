@@ -13,8 +13,8 @@ import (
 
 func TestBuiltInProfileCount(t *testing.T) {
 	list := profiles.Builtins(3)
-	if len(list) != 70 {
-		t.Fatalf("expected 70 profiles, got %d", len(list))
+	if len(list) != 71 {
+		t.Fatalf("expected 71 profiles, got %d", len(list))
 	}
 }
 
@@ -120,6 +120,10 @@ func TestGoProfiles(t *testing.T) {
 		goBuild := testutil.FindProfile(t, list, "go-build")
 		assertGoBuildProfile(t, goBuild)
 	})
+	t.Run("go-lint", func(t *testing.T) {
+		goLint := testutil.FindProfile(t, list, "go-lint")
+		assertGoLintProfile(t, goLint)
+	})
 }
 
 func assertGoTestProfile(t *testing.T, goTest engine.Profile) {
@@ -178,6 +182,40 @@ func assertGoBuildProfile(t *testing.T, goBuild engine.Profile) {
 	stream.ConsumeStdout([]byte("noise\n"))
 	if got := stream.Result(); got != "error: bad" {
 		t.Fatalf("unexpected go-build stream output: %q", got)
+	}
+}
+
+func assertGoLintProfile(t *testing.T, goLint engine.Profile) {
+	t.Helper()
+
+	if !goLint.Match(engine.Invocation{Display: []string{"golangci-lint", "run", "./..."}}) || !goLint.Match(engine.Invocation{Command: []string{"golangci-lint", "run", "--fix"}}) {
+		t.Fatal("go-lint should match golangci-lint with any subcommand")
+	}
+	if !goLint.Match(engine.Invocation{Display: []string{"staticcheck", "./..."}}) {
+		t.Fatal("go-lint should match staticcheck")
+	}
+	if goLint.Match(engine.Invocation{Display: []string{"go", "vet", "./..."}}) {
+		t.Fatal("go-lint should leave go vet to go-build")
+	}
+	if goLint.StreamPreference != engine.StreamStdoutFirst || goLint.StreamRender == nil {
+		t.Fatalf("unexpected go-lint stream metadata: %#v", goLint)
+	}
+
+	issues := "internal/engine/run.go:42:2: ineffectual assignment to err (ineffassign)\n" +
+		"internal/cli/app.go:118:1: cognitive complexity 31 of func `run` is high (> 15) (gocognit)\n"
+	rendered := goLint.Render(engine.Invocation{}, engine.Execution{
+		Stdout: issues,
+		Stderr: "level=warning msg=\"[config] deprecated option\"\n",
+	})
+	if !strings.Contains(rendered, "run.go:42:2: ineffectual assignment") {
+		t.Fatalf("expected go-lint render to keep failed-lint anchors, got %q", rendered)
+	}
+
+	stream := goLint.StreamRender(engine.Invocation{}, goLint.Budget)
+	stream.ConsumeStdout([]byte(issues))
+	stream.ConsumeStderr([]byte("2 issues:\n* ineffassign: 1\n* gocognit: 1\n"))
+	if got := stream.Result(); !strings.Contains(got, "run.go:42:2") || !strings.Contains(got, "app.go:118:1") {
+		t.Fatalf("expected go-lint stream output to keep lint anchors, got %q", got)
 	}
 }
 
