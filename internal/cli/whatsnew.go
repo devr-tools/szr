@@ -2,8 +2,18 @@ package cli
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
+	"sync"
+	"unicode"
 	"unicode/utf8"
+
+	szrroot "github.com/devr-tools/szr"
+)
+
+const (
+	whatsNewMaxBullets     = 3
+	whatsNewMaxBulletWidth = 60
 )
 
 type whatsNewRelease struct {
@@ -11,23 +21,102 @@ type whatsNewRelease struct {
 	bullets []string
 }
 
-// whatsNewReleases is newest-first; add an entry at the top for each release.
-var whatsNewReleases = []whatsNewRelease{
-	{
-		version: "0.7.0",
-		bullets: []string{
-			"Token-optimized rendering across command output",
-			"Git success-path summaries for quieter status and diff",
-			"Broader discovery coverage and tuning recommendations",
-		},
-	},
-}
+// latestWhatsNew parses the newest release section out of the embedded
+// changelog, which release-please rewrites on every release.
+var latestWhatsNew = sync.OnceValue(func() *whatsNewRelease {
+	return parseLatestWhatsNew(szrroot.Changelog)
+})
 
-func latestWhatsNew() *whatsNewRelease {
-	if len(whatsNewReleases) == 0 {
+var (
+	whatsNewVersionPattern  = regexp.MustCompile(`^##\s+\[?v?(\d+\.\d+\.\d+)`)
+	whatsNewMarkdownLink    = regexp.MustCompile(`\[([^\]]*)\]\([^)]*\)`)
+	whatsNewTrailingCommits = regexp.MustCompile(`(?:\s*\((?:[0-9a-f]{7,40}|#\d+)(?:,\s*(?:[0-9a-f]{7,40}|#\d+))*\)|,?\s*closes\s+#\d+(?:,\s*#\d+)*)\s*$`)
+)
+
+func parseLatestWhatsNew(changelog string) *whatsNewRelease {
+	version := ""
+	section := ""
+	var features, fixes, others []string
+	for _, line := range strings.Split(changelog, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if match := whatsNewVersionPattern.FindStringSubmatch(trimmed); match != nil {
+			if version != "" {
+				break
+			}
+			version = match[1]
+			continue
+		}
+		if version == "" {
+			continue
+		}
+		if after, ok := strings.CutPrefix(trimmed, "### "); ok {
+			section = strings.TrimSpace(after)
+			continue
+		}
+		bulletText, ok := strings.CutPrefix(trimmed, "* ")
+		if !ok {
+			continue
+		}
+		bullet := cleanWhatsNewBullet(bulletText)
+		if bullet == "" {
+			continue
+		}
+		switch section {
+		case "Features":
+			features = append(features, bullet)
+		case "Bug Fixes":
+			fixes = append(fixes, bullet)
+		default:
+			others = append(others, bullet)
+		}
+	}
+	if version == "" {
 		return nil
 	}
-	return &whatsNewReleases[0]
+	bullets := dedupeWhatsNewBullets(append(append(features, fixes...), others...), whatsNewMaxBullets)
+	if len(bullets) == 0 {
+		return nil
+	}
+	return &whatsNewRelease{version: version, bullets: bullets}
+}
+
+func cleanWhatsNewBullet(text string) string {
+	text = whatsNewMarkdownLink.ReplaceAllString(text, "$1")
+	for {
+		stripped := whatsNewTrailingCommits.ReplaceAllString(text, "")
+		if stripped == text {
+			break
+		}
+		text = stripped
+	}
+	text = strings.ReplaceAll(text, "**", "")
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ""
+	}
+	first, size := utf8.DecodeRuneInString(text)
+	text = string(unicode.ToUpper(first)) + text[size:]
+	if utf8.RuneCountInString(text) > whatsNewMaxBulletWidth {
+		text = string([]rune(text)[:whatsNewMaxBulletWidth-1]) + "…"
+	}
+	return text
+}
+
+func dedupeWhatsNewBullets(bullets []string, limit int) []string {
+	seen := make(map[string]bool, len(bullets))
+	kept := make([]string, 0, limit)
+	for _, bullet := range bullets {
+		key := strings.ToLower(bullet)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		kept = append(kept, bullet)
+		if len(kept) == limit {
+			break
+		}
+	}
+	return kept
 }
 
 func whatsNewLines(rel *whatsNewRelease) []string {

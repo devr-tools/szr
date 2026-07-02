@@ -57,13 +57,13 @@ func TestRunRoutes(t *testing.T) {
 		wantStderr []string
 		stdin      string
 	}{
-		{"help empty", nil, 0, []string{"vtest", `szr or "sizer" is a token-aware CLI proxy built in Go`, "Setup:"}, nil, ""},
+		{"help empty", nil, 0, []string{"test", `szr or "sizer" is a token-aware CLI proxy built in Go`, "Setup:"}, nil, ""},
 		{"help flag", []string{"--help"}, 0, []string{"Setup:", "Insight:", "Discover:", "szr commands", "--reasoning-budget <standard|agent>", "szr uninstall", "szr uninstall codex|claude-code|cursor|..."}, nil, ""},
 		{"help ultra", []string{"-u", "help"}, 0, []string{"Setup:"}, nil, ""},
 		{"help verbose long", []string{"--verbose", "help"}, 0, []string{"Setup:"}, nil, ""},
 		{"help verbose exact", []string{"-vv", "help"}, 0, []string{"Setup:"}, nil, ""},
 		{"help verbose counted", []string{"-vvvv", "help"}, 0, []string{"Setup:"}, nil, ""},
-		{"commands", []string{"commands"}, 0, []string{"commands", "vtest", "Execution:", "Local Tools:", "Install:", "szr rg <pattern> [path]", "szr uninstall codex", "szr discover [--json]"}, nil, ""},
+		{"commands", []string{"commands"}, 0, []string{"commands", "test", "Execution:", "Local Tools:", "Install:", "szr rg <pattern> [path]", "szr uninstall codex", "szr discover [--json]"}, nil, ""},
 		{"commands rewrite", []string{"commands"}, 0, []string{"Integrations:", "szr rewrite --json --command '<cmd>'"}, nil, ""},
 		{"version", []string{"--version"}, 0, []string{"szr test"}, nil, ""},
 		{"profiles", []string{"profiles"}, 0, []string{"git-status", "generic-summary"}, nil, ""},

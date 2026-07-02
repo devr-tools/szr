@@ -42,6 +42,7 @@ func (a *App) runSpread(args []string) int {
 	teeRate := fmt.Sprintf("%.1f%% (%d/%d)", summary.TeeRate, summary.TeeCount, summary.Commands)
 	ui.header("Spread Summary")
 	ui.alignedMetrics([][2]string{
+		{"szr version", formatMenuVersion(a.version)},
 		{"Total commands", fmt.Sprintf("%d", summary.Commands)},
 		{"Input tokens", formatCompactCount(summary.RawTokens)},
 		{"Output tokens", formatCompactCount(summary.FilteredTokens)},
