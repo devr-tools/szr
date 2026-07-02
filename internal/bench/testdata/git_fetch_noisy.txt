@@ -1,0 +1,123 @@
+remote: Enumerating objects: 5210, done.
+remote: Counting objects:   1% (52/5210)
+remote: Counting objects:   4% (208/5210)
+remote: Counting objects:   7% (364/5210)
+remote: Counting objects:  10% (521/5210)
+remote: Counting objects:  13% (677/5210)
+remote: Counting objects:  16% (833/5210)
+remote: Counting objects:  19% (989/5210)
+remote: Counting objects:  22% (1146/5210)
+remote: Counting objects:  25% (1302/5210)
+remote: Counting objects:  28% (1458/5210)
+remote: Counting objects:  31% (1615/5210)
+remote: Counting objects:  34% (1771/5210)
+remote: Counting objects:  37% (1927/5210)
+remote: Counting objects:  40% (2084/5210)
+remote: Counting objects:  43% (2240/5210)
+remote: Counting objects:  46% (2396/5210)
+remote: Counting objects:  49% (2552/5210)
+remote: Counting objects:  52% (2709/5210)
+remote: Counting objects:  55% (2865/5210)
+remote: Counting objects:  58% (3021/5210)
+remote: Counting objects:  61% (3178/5210)
+remote: Counting objects:  64% (3334/5210)
+remote: Counting objects:  67% (3490/5210)
+remote: Counting objects:  70% (3647/5210)
+remote: Counting objects:  73% (3803/5210)
+remote: Counting objects:  76% (3959/5210)
+remote: Counting objects:  79% (4115/5210)
+remote: Counting objects:  82% (4272/5210)
+remote: Counting objects:  85% (4428/5210)
+remote: Counting objects:  88% (4584/5210)
+remote: Counting objects:  91% (4741/5210)
+remote: Counting objects:  94% (4897/5210)
+remote: Counting objects:  97% (5053/5210)
+remote: Counting objects: 100% (5210/5210)
+remote: Counting objects: 100% (5210/5210), done.
+remote: Compressing objects:   1% (18/1843)
+remote: Compressing objects:   5% (92/1843)
+remote: Compressing objects:   9% (165/1843)
+remote: Compressing objects:  13% (239/1843)
+remote: Compressing objects:  17% (313/1843)
+remote: Compressing objects:  21% (387/1843)
+remote: Compressing objects:  25% (460/1843)
+remote: Compressing objects:  29% (534/1843)
+remote: Compressing objects:  33% (608/1843)
+remote: Compressing objects:  37% (681/1843)
+remote: Compressing objects:  41% (755/1843)
+remote: Compressing objects:  45% (829/1843)
+remote: Compressing objects:  49% (903/1843)
+remote: Compressing objects:  53% (976/1843)
+remote: Compressing objects:  57% (1050/1843)
+remote: Compressing objects:  61% (1124/1843)
+remote: Compressing objects:  65% (1197/1843)
+remote: Compressing objects:  69% (1271/1843)
+remote: Compressing objects:  73% (1345/1843)
+remote: Compressing objects:  77% (1419/1843)
+remote: Compressing objects:  81% (1492/1843)
+remote: Compressing objects:  85% (1566/1843)
+remote: Compressing objects:  89% (1640/1843)
+remote: Compressing objects:  93% (1713/1843)
+remote: Compressing objects:  97% (1787/1843)
+remote: Compressing objects: 100% (1843/1843), done.
+remote: Total 5210 (delta 3054), reused 4988 (delta 2913), pack-reused 0
+Receiving objects:   1% (52/5210), 0.05 MiB | 10.51 MiB/s
+Receiving objects:   5% (260/5210), 0.24 MiB | 10.51 MiB/s
+Receiving objects:   9% (468/5210), 0.43 MiB | 10.51 MiB/s
+Receiving objects:  13% (677/5210), 0.63 MiB | 10.51 MiB/s
+Receiving objects:  17% (885/5210), 0.82 MiB | 10.51 MiB/s
+Receiving objects:  21% (1094/5210), 1.01 MiB | 10.51 MiB/s
+Receiving objects:  25% (1302/5210), 1.21 MiB | 10.51 MiB/s
+Receiving objects:  29% (1510/5210), 1.40 MiB | 10.51 MiB/s
+Receiving objects:  33% (1719/5210), 1.59 MiB | 10.51 MiB/s
+Receiving objects:  37% (1927/5210), 1.78 MiB | 10.51 MiB/s
+Receiving objects:  41% (2136/5210), 1.98 MiB | 10.51 MiB/s
+Receiving objects:  45% (2344/5210), 2.17 MiB | 10.51 MiB/s
+Receiving objects:  49% (2552/5210), 2.36 MiB | 10.51 MiB/s
+Receiving objects:  53% (2761/5210), 2.55 MiB | 10.51 MiB/s
+Receiving objects:  57% (2969/5210), 2.75 MiB | 10.51 MiB/s
+Receiving objects:  61% (3178/5210), 2.94 MiB | 10.51 MiB/s
+Receiving objects:  65% (3386/5210), 3.13 MiB | 10.51 MiB/s
+Receiving objects:  69% (3594/5210), 3.33 MiB | 10.51 MiB/s
+Receiving objects:  73% (3803/5210), 3.52 MiB | 10.51 MiB/s
+Receiving objects:  77% (4011/5210), 3.71 MiB | 10.51 MiB/s
+Receiving objects:  81% (4220/5210), 3.90 MiB | 10.51 MiB/s
+Receiving objects:  85% (4428/5210), 4.10 MiB | 10.51 MiB/s
+Receiving objects:  89% (4636/5210), 4.29 MiB | 10.51 MiB/s
+Receiving objects:  93% (4845/5210), 4.48 MiB | 10.51 MiB/s
+Receiving objects:  97% (5053/5210), 4.68 MiB | 10.51 MiB/s
+Receiving objects: 100% (5210/5210), 4.82 MiB | 10.51 MiB/s, done.
+Resolving deltas:   1% (30/3054)
+Resolving deltas:   5% (152/3054)
+Resolving deltas:   9% (274/3054)
+Resolving deltas:  13% (397/3054)
+Resolving deltas:  17% (519/3054)
+Resolving deltas:  21% (641/3054)
+Resolving deltas:  25% (763/3054)
+Resolving deltas:  29% (885/3054)
+Resolving deltas:  33% (1007/3054)
+Resolving deltas:  37% (1129/3054)
+Resolving deltas:  41% (1252/3054)
+Resolving deltas:  45% (1374/3054)
+Resolving deltas:  49% (1496/3054)
+Resolving deltas:  53% (1618/3054)
+Resolving deltas:  57% (1740/3054)
+Resolving deltas:  61% (1862/3054)
+Resolving deltas:  65% (1985/3054)
+Resolving deltas:  69% (2107/3054)
+Resolving deltas:  73% (2229/3054)
+Resolving deltas:  77% (2351/3054)
+Resolving deltas:  81% (2473/3054)
+Resolving deltas:  85% (2595/3054)
+Resolving deltas:  89% (2718/3054)
+Resolving deltas:  93% (2840/3054)
+Resolving deltas:  97% (2962/3054)
+Resolving deltas: 100% (3054/3054), done.
+From github.com:devr-tools/szr
+   dae313d..8f21c04  main                    -> origin/main
+   882784c..1a9dd3e  improvments             -> origin/improvments
+ * [new branch]      feat/adaptive-budgets   -> origin/feat/adaptive-budgets
+ * [new branch]      fix/ansi-osc-strip      -> origin/fix/ansi-osc-strip
+   f5708e4..77b0c12  release/0.8             -> origin/release/0.8
+ * [new tag]         v0.8.0                  -> v0.8.0
+ * [new tag]         v0.8.1-rc.1             -> v0.8.1-rc.1
