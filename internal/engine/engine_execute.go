@@ -250,7 +250,7 @@ func (e *Engine) ensureStreamingArtifactPath(
 		if shouldPersistRecoveryArtifact(recoveryPlan, rawCombined, passthrough) {
 			return teePath
 		}
-		if exitCode != 0 && e.config.TeeOnFailure && shouldPersistFailureArtifact(profile, fallbackUsed, passthrough) {
+		if isFailureExit(profile, exitCode) && e.config.TeeOnFailure && shouldPersistFailureArtifact(profile, fallbackUsed, passthrough) {
 			return teePath
 		}
 		_ = os.Remove(teePath)
@@ -266,7 +266,7 @@ func (e *Engine) ensureStreamingArtifactPath(
 		}
 		return path
 	}
-	if exitCode == 0 {
+	if !isFailureExit(profile, exitCode) {
 		return ""
 	}
 	if !e.config.TeeOnFailure || !shouldPersistFailureArtifact(profile, fallbackUsed, passthrough) {

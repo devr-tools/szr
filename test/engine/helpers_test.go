@@ -136,4 +136,14 @@ func TestDecideFastPath(t *testing.T) {
 	if fast.BypassCompression {
 		t.Fatalf("did not expect failure bypass, got %#v", fast)
 	}
+
+	benign := engine.Profile{Capabilities: engine.ProfileCapabilities{BenignExitCodes: []int{1}}}
+	fast = engine.DecideFastPath(benign, engine.Invocation{Command: []string{"rg", "needle"}}, 64, 12, 2*time.Millisecond, 1)
+	if !fast.BypassCompression {
+		t.Fatalf("expected benign exit to keep tiny-output bypass, got %#v", fast)
+	}
+	fast = engine.DecideFastPath(benign, engine.Invocation{Command: []string{"rg", "needle"}}, 64, 12, 2*time.Millisecond, 2)
+	if fast.BypassCompression {
+		t.Fatalf("did not expect bypass for non-benign exit, got %#v", fast)
+	}
 }
