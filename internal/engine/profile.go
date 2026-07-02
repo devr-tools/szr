@@ -75,6 +75,12 @@ type ProfileCapabilities struct {
 	FastPathBypass            string
 	AllowFailureEscape        bool
 	RequireFullCapture        bool
+	// BenignExitCodes lists nonzero exit codes that do not signal a
+	// failure for this tool (for example grep/rg exit 1 meaning "no
+	// matches"). Benign exits keep fast-path bypass eligibility and skip
+	// failure escape and tee-on-failure persistence, while the recorded
+	// exit code stays untouched.
+	BenignExitCodes []int
 }
 
 type PartialResult struct {

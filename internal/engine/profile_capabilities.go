@@ -44,6 +44,22 @@ func normalizeProfileCapabilities(profile Profile) ProfileCapabilities {
 	return caps
 }
 
+func isBenignExit(profile Profile, exitCode int) bool {
+	if exitCode == 0 {
+		return false
+	}
+	for _, code := range profile.Capabilities.BenignExitCodes {
+		if code == exitCode {
+			return true
+		}
+	}
+	return false
+}
+
+func isFailureExit(profile Profile, exitCode int) bool {
+	return exitCode != 0 && !isBenignExit(profile, exitCode)
+}
+
 func shouldBypassForDecisionMode(mode string, decision FastPathDecision) bool {
 	switch mode {
 	case FastPathBypassSmallOutput:

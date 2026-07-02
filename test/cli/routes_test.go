@@ -57,13 +57,13 @@ func TestRunRoutes(t *testing.T) {
 		wantStderr []string
 		stdin      string
 	}{
-		{"help empty", nil, 0, []string{"vtest", `szr or "sizer" is a token-aware CLI proxy built in Go`, "Setup:"}, nil, ""},
+		{"help empty", nil, 0, []string{"test", `szr or "sizer" is a token-aware CLI proxy built in Go`, "Setup:"}, nil, ""},
 		{"help flag", []string{"--help"}, 0, []string{"Setup:", "Insight:", "Discover:", "szr commands", "--reasoning-budget <standard|agent>", "szr uninstall", "szr uninstall codex|claude-code|cursor|..."}, nil, ""},
 		{"help ultra", []string{"-u", "help"}, 0, []string{"Setup:"}, nil, ""},
 		{"help verbose long", []string{"--verbose", "help"}, 0, []string{"Setup:"}, nil, ""},
 		{"help verbose exact", []string{"-vv", "help"}, 0, []string{"Setup:"}, nil, ""},
 		{"help verbose counted", []string{"-vvvv", "help"}, 0, []string{"Setup:"}, nil, ""},
-		{"commands", []string{"commands"}, 0, []string{"commands", "vtest", "Execution:", "Local Tools:", "Install:", "szr rg <pattern> [path]", "szr uninstall codex", "szr discover [--json]"}, nil, ""},
+		{"commands", []string{"commands"}, 0, []string{"commands", "test", "Execution:", "Local Tools:", "Install:", "szr rg <pattern> [path]", "szr uninstall codex", "szr discover [--json]"}, nil, ""},
 		{"commands rewrite", []string{"commands"}, 0, []string{"Integrations:", "szr rewrite --json --command '<cmd>'"}, nil, ""},
 		{"version", []string{"--version"}, 0, []string{"szr test"}, nil, ""},
 		{"profiles", []string{"profiles"}, 0, []string{"git-status", "generic-summary"}, nil, ""},
@@ -98,8 +98,8 @@ func TestRunRoutes(t *testing.T) {
 		{"find max depth", []string{"find", root, "--type", "d", "--max-depth", "1"}, 0, []string{"1 matches", "examples: dir"}, nil, ""},
 		{"read single", []string{"read", fileA}, 0, []string{"one", "// c"}, nil, ""},
 		{"read multi aggressive", []string{"read", "-l", "aggressive", "-n", "--max-lines", "1", fileA, fileB}, 0, []string{"== " + fileA + " ==", "== " + fileB + " ==", "func x() { ... }"}, nil, ""},
-		{"grep", []string{"grep", "match", "."}, 0, []string{"file.go (2 matches)"}, nil, ""},
-		{"grep default path", []string{"grep", "match"}, 0, []string{"file.go (2 matches)"}, nil, ""},
+		{"grep", []string{"grep", "match", "."}, 0, []string{"file.go:12: match one (2 matches)"}, nil, ""},
+		{"grep default path", []string{"grep", "match"}, 0, []string{"file.go:12: match one (2 matches)"}, nil, ""},
 		{"rg external", []string{"rg", "match", "."}, 0, []string{"file.go:12:match one", "file.go:20:match two"}, nil, ""},
 		{"json", []string{"json", jsonFile}, 0, []string{"a: string", "c: number"}, nil, ""},
 		{"json explicit structure", []string{"json", "--mode", "structure", jsonFile}, 0, []string{"a: string", "c: number"}, nil, ""},

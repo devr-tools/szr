@@ -203,7 +203,8 @@ func formatMenuVersion(version string) string {
 	if version == "" {
 		return ""
 	}
-	if strings.HasPrefix(version, "v") {
+	first, _ := utf8.DecodeRuneInString(version)
+	if strings.HasPrefix(version, "v") || !unicode.IsDigit(first) {
 		return version
 	}
 	return "v" + version

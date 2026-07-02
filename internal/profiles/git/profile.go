@@ -23,7 +23,7 @@ func Profiles(maxLines int) []engine.Profile {
 		return gitfilter.NewGitLogReducer(budget.MaxLines, budget.MaxBytes)
 	})
 
-	return []engine.Profile{
+	list := []engine.Profile{
 		gitShowProfile(maxLines),
 		gitAddProfile(maxLines),
 		gitCommitProfile(maxLines),
@@ -152,6 +152,7 @@ func Profiles(maxLines int) []engine.Profile {
 			},
 		},
 	}
+	return append(list, opsProfiles(maxLines)...)
 }
 
 //nolint:maintidx // Profile constructors are declarative and intentionally keep match/render behavior together.

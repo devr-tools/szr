@@ -7,11 +7,32 @@ import (
 )
 
 type compiledSpec struct {
-	spec    Spec
-	keep    []lineMatcher
-	strip   []lineMatcher
-	limit   int
-	useTail bool
+	spec  Spec
+	keep  []lineMatcher
+	strip []lineMatcher
+	head  int
+	tail  int
+}
+
+// applyLineLimit overrides the compiled head/tail budget with a caller
+// supplied total line limit while preserving the spec's truncation shape.
+func (c *compiledSpec) applyLineLimit(limit int) {
+	if limit <= 0 {
+		return
+	}
+	switch {
+	case c.tail > 0 && c.head == 0:
+		c.tail = limit
+	case c.tail > 0 && c.head > 0:
+		if c.tail >= limit {
+			c.head = 1
+			c.tail = limit - 1
+		} else {
+			c.head = limit - c.tail
+		}
+	default:
+		c.head = limit
+	}
 }
 
 type matcherKind uint8
@@ -48,12 +69,24 @@ func applyCompiled(compiled compiledSpec, input string) Result {
 		if matchesAny(compiled.strip, line) {
 			continue
 		}
-		if compiled.spec.MaxLineWidth > 0 {
-			line = clipRunes(line, compiled.spec.MaxLineWidth)
-		}
 		filtered = append(filtered, line)
 	}
 
+	switch {
+	case compiled.spec.FoldSimilar:
+		filtered = FoldConsecutiveSimilar(filtered)
+	case compiled.spec.DedupConsecutive:
+		filtered = FoldConsecutive(filtered)
+	}
+
+	if compiled.spec.MaxLineWidth > 0 {
+		for i, line := range filtered {
+			filtered[i] = clipRunes(line, compiled.spec.MaxLineWidth)
+		}
+	}
+
+	// Folded runs count as a single line: TotalLines and the omission
+	// counters describe the folded view, so RecoverySummary stays truthful.
 	result := Result{TotalLines: len(filtered)}
 	if len(filtered) == 0 {
 		result.Empty = true
@@ -61,24 +94,32 @@ func applyCompiled(compiled compiledSpec, input string) Result {
 		return result
 	}
 
-	selected := filtered
-	if compiled.limit > 0 && len(filtered) > compiled.limit {
-		if compiled.useTail {
-			result.OmittedBefore = len(filtered) - compiled.limit
-			selected = filtered[len(filtered)-compiled.limit:]
-		} else {
-			result.OmittedAfter = len(filtered) - compiled.limit
-			selected = filtered[:compiled.limit]
-		}
-	}
-
-	out := append([]string{}, selected...)
-	result.VisibleLines = len(out)
-	if result.OmittedBefore > 0 {
-		out = append([]string{fmt.Sprintf("... +%d earlier lines", result.OmittedBefore)}, out...)
-	}
-	if result.OmittedAfter > 0 {
+	head, tail := compiled.head, compiled.tail
+	var out []string
+	switch {
+	case head > 0 && tail > 0 && len(filtered) > head+tail:
+		middle := len(filtered) - head - tail
+		result.OmittedAfter = middle
+		result.VisibleLines = head + tail
+		out = make([]string, 0, head+tail+1)
+		out = append(out, filtered[:head]...)
+		out = append(out, fmt.Sprintf("... +%d more lines", middle))
+		out = append(out, filtered[len(filtered)-tail:]...)
+	case head == 0 && tail > 0 && len(filtered) > tail:
+		result.OmittedBefore = len(filtered) - tail
+		result.VisibleLines = tail
+		out = make([]string, 0, tail+1)
+		out = append(out, fmt.Sprintf("... +%d earlier lines", result.OmittedBefore))
+		out = append(out, filtered[len(filtered)-tail:]...)
+	case head > 0 && tail == 0 && len(filtered) > head:
+		result.OmittedAfter = len(filtered) - head
+		result.VisibleLines = head
+		out = make([]string, 0, head+1)
+		out = append(out, filtered[:head]...)
 		out = append(out, fmt.Sprintf("... +%d more lines", result.OmittedAfter))
+	default:
+		result.VisibleLines = len(filtered)
+		out = filtered
 	}
 	result.Text = strings.Join(out, "\n")
 	return result
@@ -89,9 +130,7 @@ func ApplyBuiltin(name string, input string, opts Options) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	if opts.LineLimit > 0 && opts.LineLimit != compiled.limit {
-		compiled.limit = opts.LineLimit
-	}
+	compiled.applyLineLimit(opts.LineLimit)
 	return applyCompiled(compiled, input), nil
 }
 
@@ -104,16 +143,11 @@ func compileSpec(spec Spec, opts Options) (compiledSpec, error) {
 
 func compileValidatedSpec(spec Spec, opts Options) (compiledSpec, error) {
 	compiled := compiledSpec{
-		spec:    spec,
-		limit:   spec.Head,
-		useTail: spec.Tail > 0,
+		spec: spec,
+		head: spec.Head,
+		tail: spec.Tail,
 	}
-	if compiled.useTail {
-		compiled.limit = spec.Tail
-	}
-	if opts.LineLimit > 0 {
-		compiled.limit = opts.LineLimit
-	}
+	compiled.applyLineLimit(opts.LineLimit)
 	var err error
 	if compiled.keep, err = compilePatterns(spec.KeepPatterns); err != nil {
 		return compiledSpec{}, err

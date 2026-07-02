@@ -1,0 +1,104 @@
+1.42.0: Pulling from platform/api
+3f4ca61aafcd: Pulling fs layer
+b49348fecea0: Already exists
+97d3f6a6a2f0: Pulling fs layer
+f1d4ea3f0410: Pulling fs layer
+8a2e6dd764f4: Pulling fs layer
+0c4b2ff9e6d3: Already exists
+5e7b1cf42a90: Pulling fs layer
+d81c9a5cb7e2: Pulling fs layer
+aa64faad0172: Already exists
+76c8e7d3b421: Pulling fs layer
+e9f0553a4c11: Pulling fs layer
+1.42.0: Waiting
+3f4ca61aafcd: Downloading [>                         ]  0.12MB/4.0MB
+3f4ca61aafcd: Downloading [=====>                    ]  0.84MB/4.0MB
+3f4ca61aafcd: Downloading [===========>              ]  1.88MB/4.0MB
+3f4ca61aafcd: Downloading [=================>        ]  2.72MB/4.0MB
+3f4ca61aafcd: Downloading [======================>   ]  3.56MB/4.0MB
+3f4ca61aafcd: Verifying Checksum
+3f4ca61aafcd: Download complete
+3f4ca61aafcd: Extracting [====>                     ]  0.64MB/4.0MB
+3f4ca61aafcd: Extracting [==============>           ]  2.36MB/4.0MB
+3f4ca61aafcd: Extracting [=======================>  ]  3.76MB/4.0MB
+3f4ca61aafcd: Pull complete
+97d3f6a6a2f0: Downloading [>                         ]  0.54MB/18.0MB
+97d3f6a6a2f0: Downloading [=====>                    ]  3.78MB/18.0MB
+97d3f6a6a2f0: Downloading [===========>              ]  8.46MB/18.0MB
+97d3f6a6a2f0: Downloading [=================>        ]  12.24MB/18.0MB
+97d3f6a6a2f0: Downloading [======================>   ]  16.02MB/18.0MB
+97d3f6a6a2f0: Verifying Checksum
+97d3f6a6a2f0: Download complete
+97d3f6a6a2f0: Extracting [====>                     ]  2.88MB/18.0MB
+97d3f6a6a2f0: Extracting [==============>           ]  10.62MB/18.0MB
+97d3f6a6a2f0: Extracting [=======================>  ]  16.92MB/18.0MB
+97d3f6a6a2f0: Pull complete
+f1d4ea3f0410: Downloading [>                         ]  0.75MB/25.0MB
+f1d4ea3f0410: Downloading [=====>                    ]  5.25MB/25.0MB
+f1d4ea3f0410: Downloading [===========>              ]  11.75MB/25.0MB
+f1d4ea3f0410: Downloading [=================>        ]  17.00MB/25.0MB
+f1d4ea3f0410: Downloading [======================>   ]  22.25MB/25.0MB
+f1d4ea3f0410: Verifying Checksum
+f1d4ea3f0410: Download complete
+f1d4ea3f0410: Extracting [====>                     ]  4.00MB/25.0MB
+f1d4ea3f0410: Extracting [==============>           ]  14.75MB/25.0MB
+f1d4ea3f0410: Extracting [=======================>  ]  23.50MB/25.0MB
+f1d4ea3f0410: Pull complete
+8a2e6dd764f4: Downloading [>                         ]  0.96MB/32.0MB
+8a2e6dd764f4: Downloading [=====>                    ]  6.72MB/32.0MB
+8a2e6dd764f4: Downloading [===========>              ]  15.04MB/32.0MB
+8a2e6dd764f4: Downloading [=================>        ]  21.76MB/32.0MB
+8a2e6dd764f4: Downloading [======================>   ]  28.48MB/32.0MB
+8a2e6dd764f4: Verifying Checksum
+8a2e6dd764f4: Download complete
+8a2e6dd764f4: Extracting [====>                     ]  5.12MB/32.0MB
+8a2e6dd764f4: Extracting [==============>           ]  18.88MB/32.0MB
+8a2e6dd764f4: Extracting [=======================>  ]  30.08MB/32.0MB
+8a2e6dd764f4: Pull complete
+5e7b1cf42a90: Downloading [>                         ]  1.38MB/46.0MB
+5e7b1cf42a90: Downloading [=====>                    ]  9.66MB/46.0MB
+5e7b1cf42a90: Downloading [===========>              ]  21.62MB/46.0MB
+5e7b1cf42a90: Downloading [=================>        ]  31.28MB/46.0MB
+5e7b1cf42a90: Downloading [======================>   ]  40.94MB/46.0MB
+5e7b1cf42a90: Verifying Checksum
+5e7b1cf42a90: Download complete
+5e7b1cf42a90: Extracting [====>                     ]  7.36MB/46.0MB
+5e7b1cf42a90: Extracting [==============>           ]  27.14MB/46.0MB
+5e7b1cf42a90: Extracting [=======================>  ]  43.24MB/46.0MB
+5e7b1cf42a90: Pull complete
+d81c9a5cb7e2: Downloading [>                         ]  1.59MB/53.0MB
+d81c9a5cb7e2: Downloading [=====>                    ]  11.13MB/53.0MB
+d81c9a5cb7e2: Downloading [===========>              ]  24.91MB/53.0MB
+d81c9a5cb7e2: Downloading [=================>        ]  36.04MB/53.0MB
+d81c9a5cb7e2: Downloading [======================>   ]  47.17MB/53.0MB
+d81c9a5cb7e2: Verifying Checksum
+d81c9a5cb7e2: Download complete
+d81c9a5cb7e2: Extracting [====>                     ]  8.48MB/53.0MB
+d81c9a5cb7e2: Extracting [==============>           ]  31.27MB/53.0MB
+d81c9a5cb7e2: Extracting [=======================>  ]  49.82MB/53.0MB
+d81c9a5cb7e2: Pull complete
+76c8e7d3b421: Downloading [>                         ]  0.36MB/12.0MB
+76c8e7d3b421: Downloading [=====>                    ]  2.52MB/12.0MB
+76c8e7d3b421: Downloading [===========>              ]  5.64MB/12.0MB
+76c8e7d3b421: Downloading [=================>        ]  8.16MB/12.0MB
+76c8e7d3b421: Downloading [======================>   ]  10.68MB/12.0MB
+76c8e7d3b421: Verifying Checksum
+76c8e7d3b421: Download complete
+76c8e7d3b421: Extracting [====>                     ]  1.92MB/12.0MB
+76c8e7d3b421: Extracting [==============>           ]  7.08MB/12.0MB
+76c8e7d3b421: Extracting [=======================>  ]  11.28MB/12.0MB
+76c8e7d3b421: Pull complete
+e9f0553a4c11: Downloading [>                         ]  0.57MB/19.0MB
+e9f0553a4c11: Downloading [=====>                    ]  3.99MB/19.0MB
+e9f0553a4c11: Downloading [===========>              ]  8.93MB/19.0MB
+e9f0553a4c11: Downloading [=================>        ]  12.92MB/19.0MB
+e9f0553a4c11: Downloading [======================>   ]  16.91MB/19.0MB
+e9f0553a4c11: Verifying Checksum
+e9f0553a4c11: Download complete
+e9f0553a4c11: Extracting [====>                     ]  3.04MB/19.0MB
+e9f0553a4c11: Extracting [==============>           ]  11.21MB/19.0MB
+e9f0553a4c11: Extracting [=======================>  ]  17.86MB/19.0MB
+e9f0553a4c11: Pull complete
+Digest: sha256:9b2c8f8e6a1d43f0a7c2b91d4a2f88a3a5f0b9d8c7e6f5a4b3c2d1e0f9a8b7c6
+Status: Downloaded newer image for registry.example.com/platform/api:1.42.0
+registry.example.com/platform/api:1.42.0

@@ -22,21 +22,12 @@ func preferRawSmallOutputForProfile(profile Profile, rendered string, rawCombine
 	return strings.TrimSpace(rawCombined)
 }
 
-func shouldGuardSmallOutput(profile Profile, passthrough bool) bool {
-	if passthrough {
-		return true
-	}
-	switch profile.Name {
-	case "generic-summary",
-		"grep",
-		"path-find",
-		"ripgrep",
-		"ripgrep-files",
-		"ripgrep-files-with-matches":
-		return true
-	default:
-		return false
-	}
+// shouldGuardSmallOutput reports whether the never-worse-than-raw guard
+// applies. When raw output is already tiny, no profile should emit a
+// rendering that costs more tokens than relaying raw, so the guard is
+// universal (passthrough included).
+func shouldGuardSmallOutput(_ Profile, _ bool) bool {
+	return true
 }
 
 func shouldPreferRawSmallOutput(profile Profile, rendered string, rawCombined string, exitCode int) bool {
@@ -59,21 +50,15 @@ func shouldPreferRawSmallOutput(profile Profile, rendered string, rawCombined st
 	return renderedTokens == rawTokens && len(rendered) >= len(rawCombined)
 }
 
-func shouldKeepCanonicalSmallSummary(profile Profile, rendered string, rawCombined string, exitCode int) bool {
+// shouldKeepCanonicalSmallSummary keeps a successful rendering that carries
+// a canonical compact-summary marker (for example "... +N" or "dirs: "): in
+// any profile such a marker signals an intentional compact summary worth
+// keeping even when it is not strictly cheaper than tiny raw output.
+func shouldKeepCanonicalSmallSummary(_ Profile, rendered string, rawCombined string, exitCode int) bool {
 	if exitCode != 0 || rendered == rawCombined {
 		return false
 	}
-	switch profile.Name {
-	case "generic-summary",
-		"grep",
-		"path-find",
-		"ripgrep",
-		"ripgrep-files",
-		"ripgrep-files-with-matches":
-		return hasCanonicalCompactSummaryMarker(rendered)
-	default:
-		return false
-	}
+	return hasCanonicalCompactSummaryMarker(rendered)
 }
 
 func hasCanonicalCompactSummaryMarker(rendered string) bool {

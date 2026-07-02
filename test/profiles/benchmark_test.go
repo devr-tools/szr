@@ -7,6 +7,7 @@ import (
 
 	"github.com/devr-tools/szr/internal/engine"
 	"github.com/devr-tools/szr/internal/filters"
+	"github.com/devr-tools/szr/internal/history"
 	"github.com/devr-tools/szr/internal/profiles"
 )
 
@@ -360,8 +361,8 @@ func feedReducerChunks(reducer streamConsumer, stdout string, stderr string, chu
 }
 
 func reportApproxTokenSavings(b *testing.B, input string, output string) {
-	inputTokens := approxTokenCount(input)
-	outputTokens := approxTokenCount(output)
+	inputTokens := history.EstimateTokens(input)
+	outputTokens := history.EstimateTokens(output)
 	if inputTokens <= 0 {
 		return
 	}
@@ -369,13 +370,6 @@ func reportApproxTokenSavings(b *testing.B, input string, output string) {
 	saved := 100 - retained
 	b.ReportMetric(retained, "tokens_retained_pct")
 	b.ReportMetric(saved, "tokens_saved_pct")
-}
-
-func approxTokenCount(input string) int {
-	if input == "" {
-		return 0
-	}
-	return len(strings.Fields(input))
 }
 
 func buildGHRunListLongInput(rows int) string {

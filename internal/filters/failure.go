@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/devr-tools/szr/internal/filters/declarative"
 )
 
 func SummarizeGenericFailure(input string, maxLines int) string {
@@ -37,6 +39,9 @@ type GenericFailureReducer struct {
 	fallbackUsed       bool
 	pendingLine        string
 	pendingCount       int
+	headPending        string
+	headPendingKey     string
+	headPendingCount   int
 	roots              []failureItem
 	stacks             []failureItem
 	hints              []failureItem
@@ -127,6 +132,7 @@ func (r *GenericFailureReducer) ConsumeStderr(chunk []byte) {
 func (r *GenericFailureReducer) Result() string {
 	r.scanner.Finish(r.ingestLine)
 	r.flushPending()
+	r.flushHeadPending()
 	if len(r.head) == 0 && !r.hasSignal() {
 		return "ok"
 	}
@@ -161,8 +167,12 @@ func (r *GenericFailureReducer) Preview() string {
 	if r.hasSignal() {
 		return strings.Join(r.compose(), "\n")
 	}
-	if len(r.head) > 0 {
-		return strings.Join(r.head, "\n")
+	head := r.head
+	if r.headPendingCount > 0 && len(head) < r.maxLines {
+		head = append(append([]string{}, head...), r.renderHeadPending())
+	}
+	if len(head) > 0 {
+		return strings.Join(head, "\n")
 	}
 	return ""
 }
@@ -170,6 +180,7 @@ func (r *GenericFailureReducer) Preview() string {
 func (r *GenericFailureReducer) RecoveryInfo() (string, string, bool) {
 	r.scanner.Finish(r.ingestLine)
 	r.flushPending()
+	r.flushHeadPending()
 	if summary := r.recoverySummary(); summary != "" {
 		return FullOutputRecovery(summary)
 	}
@@ -200,12 +211,40 @@ func (r *GenericFailureReducer) flushPending() {
 	r.pendingCount = 0
 }
 
-func (r *GenericFailureReducer) recordHead(line string) {
+// recordHead buffers no-signal head lines, folding consecutive runs that
+// share a declarative.SimilarLineKey (timestamped or near-duplicate lines)
+// into a single "line (xN)" entry before the head budget is applied.
+func (r *GenericFailureReducer) recordHead(line string, count int) {
+	key := declarative.SimilarLineKey(line)
+	if r.headPendingCount > 0 && key == r.headPendingKey {
+		r.headPendingCount += count
+		return
+	}
+	r.flushHeadPending()
+	r.headPending = line
+	r.headPendingKey = key
+	r.headPendingCount = count
+}
+
+func (r *GenericFailureReducer) flushHeadPending() {
+	if r.headPendingCount == 0 {
+		return
+	}
 	if len(r.head) < r.maxLines {
-		r.head = append(r.head, line)
+		r.head = append(r.head, r.renderHeadPending())
 	} else {
 		r.extra++
 	}
+	r.headPending = ""
+	r.headPendingKey = ""
+	r.headPendingCount = 0
+}
+
+func (r *GenericFailureReducer) renderHeadPending() string {
+	if r.headPendingCount > 1 {
+		return fmt.Sprintf("%s (x%d)", r.headPending, r.headPendingCount)
+	}
+	return r.headPending
 }
 
 func (r *GenericFailureReducer) classifyLine(raw string, count int) {
@@ -215,11 +254,7 @@ func (r *GenericFailureReducer) classifyLine(raw string, count int) {
 		return
 	}
 	if line.Kind == "" {
-		display := line.Display
-		if count > 1 {
-			display = fmt.Sprintf("%s (x%d)", display, count)
-		}
-		r.recordHead(display)
+		r.recordHead(line.Display, count)
 		return
 	}
 	if count > 1 {
@@ -333,6 +368,9 @@ func (r *GenericFailureReducer) recoverySummary() string {
 
 func (r *GenericFailureReducer) droppedNoiseSummaryParts() []string {
 	parts := []string{}
+	if count := r.droppedNoise["pass"]; count > 0 {
+		parts = append(parts, fmt.Sprintf("%d pass lines", count))
+	}
 	if count := r.droppedNoise["progress"]; count > 0 {
 		parts = append(parts, fmt.Sprintf("%d progress lines", count))
 	}
@@ -484,17 +522,110 @@ func looksLikePassingTestLine(lower string) bool {
 		strings.HasPrefix(lower, "ok "),
 		strings.Contains(lower, " passed"),
 		strings.HasSuffix(lower, " passed"):
-		return true
+		// Mixed lines like "3 tests passed, 2 failed" carry failure signal
+		// and must never be dropped as passing noise.
+		return !containsFailureIndicator(lower)
 	default:
 		return false
 	}
 }
 
+// containsFailureIndicator reports whether a lowercased line contains any of
+// the failure keywords recognized by classifyFailureLine.
+func containsFailureIndicator(lower string) bool {
+	for _, indicator := range []string{
+		"fail", "error", "panic", "fatal", "assert", "exception",
+		"caused by", "undefined reference", "cannot ", "no such file", "does not exist",
+	} {
+		if strings.Contains(lower, indicator) {
+			return true
+		}
+	}
+	return false
+}
+
 func compactFailureDisplay(line string) string {
 	if anchor := failureAnchor(line); anchor != "" {
-		return strings.Replace(line, anchor, shortenFailurePath(anchor), 1)
+		line = strings.Replace(line, anchor, shortenFailurePath(anchor), 1)
+	}
+	return shortenLongPathTokens(line)
+}
+
+// longPathTokenRunes is the length above which absolute-path tokens without a
+// recognized source extension are still shortened to their last 3 segments.
+const longPathTokenRunes = 48
+
+// shortenLongPathTokens applies last-3-segments shortening to any
+// whitespace-delimited token that looks like an absolute path (starts with
+// "/" or a drive letter, or contains "/node_modules/") and exceeds
+// longPathTokenRunes, preserving trailing ":line" / ":line:col" suffixes.
+// Recognized source anchors are already shortened upstream.
+func shortenLongPathTokens(line string) string {
+	if len(line) <= longPathTokenRunes {
+		return line
+	}
+	for _, token := range strings.Fields(line) {
+		trimmed := strings.Trim(token, "\"'()[]{}<>,;")
+		if !looksLikeLongPathToken(trimmed) {
+			continue
+		}
+		if short := shortenLongPathToken(trimmed); short != trimmed {
+			line = strings.Replace(line, trimmed, short, 1)
+		}
 	}
 	return line
+}
+
+func looksLikeLongPathToken(token string) bool {
+	if len([]rune(token)) <= longPathTokenRunes {
+		return false
+	}
+	if strings.Contains(token, "/node_modules/") {
+		return true
+	}
+	if strings.HasPrefix(token, "/") {
+		return true
+	}
+	// Windows drive-letter absolute paths, e.g. C:\... or C:/...
+	if len(token) >= 3 && token[1] == ':' && (token[2] == '\\' || token[2] == '/') {
+		first := token[0]
+		return (first >= 'A' && first <= 'Z') || (first >= 'a' && first <= 'z')
+	}
+	return false
+}
+
+func shortenLongPathToken(token string) string {
+	pathPart, suffix := splitPathLineColSuffix(token)
+	segments := strings.FieldsFunc(pathPart, func(r rune) bool {
+		return r == '/' || r == '\\'
+	})
+	if len(segments) <= 3 {
+		return token
+	}
+	return ".../" + strings.Join(segments[len(segments)-3:], "/") + suffix
+}
+
+// splitPathLineColSuffix splits a trailing ":line" or ":line:col" numeric
+// suffix off a path token so shortening preserves it.
+func splitPathLineColSuffix(token string) (string, string) {
+	end := len(token)
+	for i := 0; i < 2; i++ {
+		idx := strings.LastIndex(token[:end], ":")
+		if idx <= 0 || idx == end-1 || !allDigitsFailure(token[idx+1:end]) {
+			break
+		}
+		end = idx
+	}
+	return token[:end], token[end:]
+}
+
+func allDigitsFailure(value string) bool {
+	for i := 0; i < len(value); i++ {
+		if value[i] < '0' || value[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func shortenFailurePath(anchor string) string {
@@ -566,24 +697,10 @@ func stackKey(line string) string {
 	return strings.TrimSpace(line)
 }
 
+// failureAnchor delegates to the canonical DiagnosticAnchor detector so the
+// failure reducer and line helpers share one source-extension list.
 func failureAnchor(line string) string {
-	lower := strings.ToLower(line)
-	for _, ext := range []string{".go:", ".py:", ".rs:", ".ts:", ".tsx:", ".mts:", ".cts:", ".js:", ".jsx:", ".mjs:", ".cjs:", ".php:", ".phtml:", ".java:", ".c:", ".cc:", ".cpp:", ".h:", ".hpp:"} {
-		idx := strings.Index(lower, ext)
-		if idx < 0 {
-			continue
-		}
-		start := idx
-		for start > 0 && !strings.ContainsRune(" \t([{\"'", rune(line[start-1])) {
-			start--
-		}
-		end := idx + len(ext)
-		for end < len(line) && !strings.ContainsRune(" \t)]}\"'", rune(line[end])) {
-			end++
-		}
-		return line[start:end]
-	}
-	return ""
+	return DiagnosticAnchor(line)
 }
 
 func maxFailureInt(left, right int) int {

@@ -116,98 +116,15 @@ func JoinLimitedLines(lines []string, maxLines int) string {
 }
 
 func FoldConsecutiveLines(lines []string) []string {
-	if len(lines) == 0 {
-		return nil
-	}
-	out := make([]string, 0, len(lines))
-	current := strings.TrimSpace(lines[0])
-	count := 0
-	flush := func() {
-		if current == "" || count == 0 {
-			return
-		}
-		if count > 1 {
-			out = append(out, fmt.Sprintf("%s (x%d)", current, count))
-			return
-		}
-		out = append(out, current)
-	}
-
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			continue
-		}
-		if trimmed == current {
-			count++
-			continue
-		}
-		flush()
-		current = trimmed
-		count = 1
-	}
-	flush()
-	return out
+	return declarative.FoldConsecutive(lines)
 }
 
 func FoldConsecutiveSimilarLines(lines []string) []string {
-	if len(lines) == 0 {
-		return nil
-	}
-	out := make([]string, 0, len(lines))
-	current := strings.TrimSpace(lines[0])
-	currentKey := similarLineKey(current)
-	count := 0
-	flush := func() {
-		if current == "" || count == 0 {
-			return
-		}
-		if count > 1 {
-			out = append(out, fmt.Sprintf("%s (x%d)", current, count))
-			return
-		}
-		out = append(out, current)
-	}
-
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			continue
-		}
-		key := similarLineKey(trimmed)
-		if key == currentKey {
-			count++
-			continue
-		}
-		flush()
-		current = trimmed
-		currentKey = key
-		count = 1
-	}
-	flush()
-	return out
+	return declarative.FoldConsecutiveSimilar(lines)
 }
 
 func similarLineKey(line string) string {
-	trimmed := strings.TrimSpace(line)
-	if trimmed == "" {
-		return ""
-	}
-	parts := strings.Fields(trimmed)
-	if len(parts) >= 2 && looksLikeTimestampPrefix(parts[0]) {
-		return strings.Join(parts[1:], " ")
-	}
-	return trimmed
-}
-
-func looksLikeTimestampPrefix(value string) bool {
-	if len(value) < len("2006-01-02T15:04:05Z") {
-		return false
-	}
-	if value[4] != '-' || value[7] != '-' {
-		return false
-	}
-	return strings.Contains(value, "T") || strings.Contains(value, "_")
+	return declarative.SimilarLineKey(line)
 }
 
 func SelectUniqueAnchoredLines(lines []string, maxFrames int) []string {
@@ -237,9 +154,19 @@ func SelectUniqueAnchoredLines(lines []string, maxFrames int) []string {
 	return out
 }
 
+// diagnosticAnchorExtensions lists the source-file extensions recognized as
+// diagnostic anchors ("path/file.ext:line" references). This is the single
+// canonical list shared by DiagnosticAnchor and the failure reducer.
+var diagnosticAnchorExtensions = []string{
+	".go:", ".py:", ".rs:", ".ts:", ".tsx:", ".mts:", ".cts:", ".js:", ".jsx:", ".mjs:", ".cjs:",
+	".php:", ".phtml:", ".java:", ".c:", ".cc:", ".cpp:", ".h:", ".hpp:",
+	".rb:", ".kt:", ".kts:", ".swift:", ".scala:", ".cs:", ".ex:", ".exs:", ".erl:", ".m:", ".mm:",
+	".lua:", ".dart:", ".clj:", ".sh:", ".bash:", ".zig:", ".vue:", ".svelte:",
+}
+
 func DiagnosticAnchor(line string) string {
 	lower := strings.ToLower(line)
-	for _, ext := range []string{".go:", ".py:", ".rs:", ".ts:", ".tsx:", ".mts:", ".cts:", ".js:", ".jsx:", ".mjs:", ".cjs:", ".php:", ".phtml:", ".java:", ".c:", ".cc:", ".cpp:", ".h:", ".hpp:"} {
+	for _, ext := range diagnosticAnchorExtensions {
 		idx := strings.Index(lower, ext)
 		if idx < 0 {
 			continue

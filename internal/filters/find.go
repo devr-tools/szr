@@ -16,16 +16,24 @@ const (
 
 var reducerOnlySearchNoiseDirs = []string{
 	".gradle",
+	".idea",
 	".mypy_cache",
 	".nox",
 	".nuxt",
+	".nyc_output",
 	".output",
 	".parcel-cache",
 	".pnpm-store",
+	".pytest_cache",
 	".ruff_cache",
 	".svelte-kit",
+	".terraform",
+	".tox",
 	".venv",
+	".vscode",
 	".yarn",
+	"DerivedData",
+	"Pods",
 	"out",
 	"tmp",
 }
@@ -200,9 +208,17 @@ func searchReducerNoiseBucket(path string) string {
 	switch {
 	case strings.HasSuffix(lower, ".min.js"):
 		return "minified assets"
+	case strings.HasSuffix(lower, ".min.mjs"):
+		return "minified assets"
 	case strings.HasSuffix(lower, ".min.css"):
 		return "minified assets"
+	case strings.HasSuffix(lower, ".bundle.js"):
+		return "minified assets"
 	case strings.HasSuffix(lower, ".js.map"):
+		return "source maps"
+	case strings.HasSuffix(lower, ".mjs.map"):
+		return "source maps"
+	case strings.HasSuffix(lower, ".cjs.map"):
 		return "source maps"
 	case strings.HasSuffix(lower, ".css.map"):
 		return "source maps"

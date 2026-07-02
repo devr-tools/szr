@@ -102,23 +102,41 @@ func classifyLogLine(line string) logLineKind {
 	}
 }
 
+var errorLogLevelTokens = []string{
+	"panic",
+	"fatal",
+	"error",
+	"failed",
+	"failure",
+	"exception",
+	"traceback",
+	"assertionerror",
+}
+
+var hintLogLevelTokens = []string{"warning", "warn", "hint", "help", "note"}
+
+var boilerplateLogLevelTokens = []string{
+	"debug",
+	"info",
+	"trace",
+	"progress",
+	"downloading",
+	"downloaded",
+	"fetching",
+	"installing",
+	"installed",
+	"resolving",
+	"waiting",
+	"retrying",
+	"connected",
+	"heartbeat",
+}
+
 func isErrorLogLine(lower string) bool {
-	for _, marker := range []string{
-		"panic:",
-		"fatal",
-		"error",
-		"failed",
-		"failure",
-		"exception",
-		"traceback",
-		"assertionerror",
-		"segmentation fault",
-	} {
-		if strings.Contains(lower, marker) {
-			return true
-		}
+	if strings.Contains(lower, "segmentation fault") {
+		return true
 	}
-	return false
+	return hasLeadingLogLevelToken(lower, errorLogLevelTokens)
 }
 
 func isAnchorLogLine(line, lower string) bool {
@@ -132,36 +150,77 @@ func isAnchorLogLine(line, lower string) bool {
 }
 
 func isHintLogLine(lower string) bool {
-	for _, marker := range []string{"warning", "warn:", "hint:", "help:", "note:"} {
-		if strings.Contains(lower, marker) {
+	return hasLeadingLogLevelToken(lower, hintLogLevelTokens)
+}
+
+func isBoilerplateLogLine(lower string) bool {
+	if strings.Contains(lower, "listening on") || strings.Contains(lower, "watching for changes") {
+		return true
+	}
+	return hasLeadingLogLevelToken(lower, boilerplateLogLevelTokens)
+}
+
+// hasLeadingLogLevelToken reports whether one of the first few
+// whitespace/bracket-delimited fields of the (lowercased) line matches a level
+// marker. Token matching avoids substring misfires such as "information"
+// matching "info" or "no errors" matching "error".
+func hasLeadingLogLevelToken(lower string, markers []string) bool {
+	const maxLogLevelTokenFields = 3
+	fields := 0
+	i := 0
+	for i < len(lower) && fields < maxLogLevelTokenFields {
+		raw, next, ok := nextLogToken(lower, i)
+		i = next
+		if !ok {
+			break
+		}
+		token := strings.Trim(raw, logTokenPunctuationCutset)
+		if token == "" {
+			continue
+		}
+		fields++
+		if matchesLogLevelMarker(token, markers) {
 			return true
 		}
 	}
 	return false
 }
 
-func isBoilerplateLogLine(lower string) bool {
-	for _, marker := range []string{
-		"debug",
-		"info",
-		"trace",
-		"progress",
-		"downloading",
-		"downloaded",
-		"fetching",
-		"installing",
-		"installed",
-		"resolving",
-		"waiting",
-		"retrying",
-		"connected",
-		"heartbeat",
-		"listening on",
-		"watching for changes",
-	} {
-		if strings.Contains(lower, marker) {
+// nextLogToken scans the next delimiter-separated field of lower starting at
+// pos, returning the field, the position after it, and ok=false when no field
+// remains.
+func nextLogToken(lower string, pos int) (token string, next int, ok bool) {
+	i := pos
+	for i < len(lower) && isLogTokenDelimiter(lower[i]) {
+		i++
+	}
+	start := i
+	for i < len(lower) && !isLogTokenDelimiter(lower[i]) {
+		i++
+	}
+	if start == i {
+		return "", i, false
+	}
+	return lower[start:i], i, true
+}
+
+// matchesLogLevelMarker reports whether token equals a marker ("error",
+// "[warn]", "info:") or ends with one ("typeerror:", "assertionerror").
+func matchesLogLevelMarker(token string, markers []string) bool {
+	for _, marker := range markers {
+		if token == marker || strings.HasSuffix(token, marker) {
 			return true
 		}
+	}
+	return false
+}
+
+const logTokenPunctuationCutset = ":.,;!?\"'`*-"
+
+func isLogTokenDelimiter(c byte) bool {
+	switch c {
+	case ' ', '\t', '[', ']', '(', ')', '{', '}', '<', '>', '|', '=':
+		return true
 	}
 	return false
 }

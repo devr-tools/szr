@@ -42,6 +42,7 @@ func Profiles(maxLines int, maxGroups int) []engine.Profile {
 				InjectsPrepareArgs: true,
 				FastPathBypass:     engine.FastPathBypassSafeOnly,
 				RequireFullCapture: true,
+				BenignExitCodes:    []int{1},
 			},
 			Match: func(inv engine.Invocation) bool {
 				return inv.Classification.Display.Head == "grep" && isRecursiveGrepCommand(inv.Display)
@@ -63,6 +64,7 @@ func Profiles(maxLines int, maxGroups int) []engine.Profile {
 				InjectsPrepareArgs: true,
 				FastPathBypass:     engine.FastPathBypassSafeOnly,
 				RequireFullCapture: true,
+				BenignExitCodes:    []int{1},
 			},
 			Match: func(inv engine.Invocation) bool {
 				return inv.Classification.Display.Head == "rg" && isRipgrepFilesCommand(inv.Display)
@@ -84,6 +86,7 @@ func Profiles(maxLines int, maxGroups int) []engine.Profile {
 				InjectsPrepareArgs: true,
 				FastPathBypass:     engine.FastPathBypassSafeOnly,
 				RequireFullCapture: true,
+				BenignExitCodes:    []int{1},
 			},
 			Match: func(inv engine.Invocation) bool {
 				return inv.Classification.Display.Head == "rg" && isRipgrepFilesWithMatchesCommand(inv.Display)
@@ -105,6 +108,7 @@ func Profiles(maxLines int, maxGroups int) []engine.Profile {
 				InjectsPrepareArgs: true,
 				FastPathBypass:     engine.FastPathBypassSafeOnly,
 				RequireFullCapture: true,
+				BenignExitCodes:    []int{1},
 			},
 			Match: func(inv engine.Invocation) bool {
 				return inv.Classification.Display.Head == "rg" && isRipgrepCommand(inv.Display)
