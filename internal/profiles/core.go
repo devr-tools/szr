@@ -16,6 +16,7 @@ func coreProfiles(maxLines int) []engine.Profile {
 		catReadProfile(maxLines),
 		goTestJSONProfile(maxLines),
 		goBuildProfile(maxLines),
+		goModProfile(maxLines),
 		genericTestProfile(maxLines),
 		genericSummaryProfile(maxLines),
 	}
