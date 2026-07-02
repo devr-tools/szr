@@ -58,7 +58,8 @@ func TestRenderStreamingOutputUltraCompactPreservesFailureAnchors(t *testing.T) 
 	}
 	exec := Execution{Stdout: "noise", Stderr: raw, ExitCode: 1}
 
-	rendered, _, _ := renderStreamingOutput(profile, inv, exec, nil, ResolveBudget(profile, inv, 12), combineStreams(exec.Stdout, exec.Stderr), false, FastPathDecision{})
+	rawCombined := combineStreams(exec.Stdout, exec.Stderr)
+	rendered, _, _ := renderStreamingOutput(profile, inv, exec, nil, ResolveBudget(profile, inv, 12), rawCombined, false, FastPathDecision{}, len(rawCombined), false)
 	if strings.Count(rendered, "\n") != 1 {
 		t.Fatalf("expected two-line ultra-compact failure render, got %q", rendered)
 	}

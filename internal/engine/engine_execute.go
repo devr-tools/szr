@@ -28,7 +28,7 @@ func (e *Engine) ExecuteStreaming(
 
 	preparedInv, profile, command, budget, streamReducer, options, profileConfidence := e.prepareStreamingExecution(inv, passthrough, onPartial)
 	runResult, execResult, fastPath, rawCombined, rawBytesRead, rawTokens, duration, err := e.runStreamingCommand(ctx, inv, command, profile, streamReducer, options)
-	rendered, fallbackUsed, recoveryPlan := renderStreamingOutput(profile, preparedInv, execResult, streamReducer, budget, rawCombined, passthrough, fastPath)
+	rendered, fallbackUsed, recoveryPlan := renderStreamingOutput(profile, preparedInv, execResult, streamReducer, budget, rawCombined, passthrough, fastPath, rawBytesRead, runResult.captureTruncated)
 	teePath := e.ensureStreamingArtifactPath(runResult.teePath, execResult.ExitCode, rawCombined, command, profile, fallbackUsed, recoveryPlan, passthrough)
 	rendered = renderedDisplayFinalizer{
 		profile:             profile,
@@ -142,10 +142,12 @@ func renderStreamingOutput(
 	rawCombined string,
 	passthrough bool,
 	fastPath FastPathDecision,
+	rawBytesRead int,
+	captureTruncated bool,
 ) (string, bool, RecoveryPlan) {
 	rendered := rawCombined
 	if !passthrough {
-		rendered = renderedStreamingContent(profile, preparedInv, execResult, streamReducer, rawCombined, fastPath)
+		rendered = renderedStreamingContent(profile, preparedInv, execResult, streamReducer, rawCombined, fastPath, rawBytesRead, captureTruncated)
 	}
 	fallbackUsed := streamingFallbackUsed(profile, streamReducer, passthrough, rendered, rawCombined)
 	recoveryPlan := reducerRecoveryPlan(streamReducer)
@@ -173,9 +175,14 @@ func renderedStreamingContent(
 	streamReducer StreamReducer,
 	rawCombined string,
 	fastPath FastPathDecision,
+	rawBytesRead int,
+	captureTruncated bool,
 ) string {
 	switch {
 	case shouldApplyBypass(profile, fastPath):
+		if summary, ok := reducerSummaryForBypass(execResult.ExitCode, streamReducer, rawCombined, rawBytesRead, captureTruncated); ok {
+			return summary
+		}
 		return rawCombined
 	case streamReducer != nil:
 		return streamReducer.Result()
@@ -184,6 +191,38 @@ func renderedStreamingContent(
 	default:
 		return rawCombined
 	}
+}
+
+// reducerSummaryForBypass returns the stream reducer's summary when the
+// tiny-output fast path fired but the reducer produced a strictly cheaper,
+// fully-parsed summary of the same bytes. It is deliberately conservative:
+// any hint that the reducer saw less than the full raw output (truncated
+// capture buffers from early capture stop or preview limits, fallback mode,
+// or a partial parse) keeps the raw bypass. The small-output guard
+// (preferRawSmallOutputForProfile) still runs afterwards for guarded
+// profiles and may flip back to raw, subject to its own canonical-summary
+// exception.
+func reducerSummaryForBypass(
+	exitCode int,
+	streamReducer StreamReducer,
+	rawCombined string,
+	rawBytesRead int,
+	captureTruncated bool,
+) (string, bool) {
+	if exitCode != 0 || streamReducer == nil || captureTruncated {
+		return "", false
+	}
+	if streamReducer.FallbackUsed() || streamReducer.BytesParsed() < rawBytesRead {
+		return "", false
+	}
+	summary := streamReducer.Result()
+	if strings.TrimSpace(summary) == "" {
+		return "", false
+	}
+	if history.EstimateTokens(summary) >= history.EstimateTokens(rawCombined) {
+		return "", false
+	}
+	return summary, true
 }
 
 func streamingFallbackUsed(profile Profile, streamReducer StreamReducer, passthrough bool, rendered string, rawCombined string) bool {
