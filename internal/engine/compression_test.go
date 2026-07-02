@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -26,7 +27,7 @@ func TestEnforceCompressionContractCompressesLargeOutput(t *testing.T) {
 
 	raw := strings.Repeat("token ", 80)
 	text := strings.Repeat("token ", 40)
-	compressed, plan, changed := enforceCompressionContract(text, raw, OutputBudget{MaxTokens: 32}, RecoveryPlan{}, false, true)
+	compressed, plan, changed := enforceCompressionContract(text, raw, 0, OutputBudget{MaxTokens: 32}, RecoveryPlan{}, false, true)
 	if !changed {
 		t.Fatal("expected compression contract to apply")
 	}
@@ -36,6 +37,49 @@ func TestEnforceCompressionContractCompressesLargeOutput(t *testing.T) {
 	}
 	if plan.Kind != RecoveryKindFullOutput || plan.Summary == "" || !plan.RequireRawCapture {
 		t.Fatalf("expected recovery plan for compressed output, got %#v", plan)
+	}
+}
+
+func TestEnforceCompressionContractBudgetsAgainstStreamedRawTokens(t *testing.T) {
+	t.Parallel()
+
+	// Simulate a preview-truncated capture: rawCombined only holds a small
+	// prefix of the true output while the streamed token counter saw all of
+	// it. The retained-token budget must follow the streamed count.
+	preview := strings.Repeat("token ", 80)
+	text := strings.Repeat("keep ", 60)
+	streamedRawTokens := 1000
+
+	compressed, plan, changed := enforceCompressionContract(text, preview, streamedRawTokens, OutputBudget{MaxTokens: 512}, RecoveryPlan{}, false, true)
+	if changed {
+		t.Fatalf("expected true-raw budget to keep filtered text, got %q (plan %#v)", compressed, plan)
+	}
+	if compressed != text {
+		t.Fatalf("unexpected text change without compression: %q", compressed)
+	}
+
+	// The same preview without the streamed count must still compress, which
+	// pins the old (buggy) preview-derived budget as the tighter one.
+	previewCompressed, previewPlan, previewChanged := enforceCompressionContract(text, preview, 0, OutputBudget{MaxTokens: 512}, RecoveryPlan{}, false, true)
+	if !previewChanged {
+		t.Fatalf("expected preview-only budget to compress, got %q", previewCompressed)
+	}
+	if !strings.Contains(previewPlan.Summary, "from "+strconv.Itoa(history.EstimateTokens(preview))) {
+		t.Fatalf("expected recovery summary to report raw token source, got %q", previewPlan.Summary)
+	}
+}
+
+func TestCompressionRecoverySummaryReportsTrueRawTokens(t *testing.T) {
+	t.Parallel()
+
+	raw := strings.Repeat("word ", 300)
+	text := strings.Repeat("keep ", 200)
+	_, plan, changed := enforceCompressionContract(text, raw[:200], 300, OutputBudget{MaxTokens: 512}, RecoveryPlan{}, false, true)
+	if !changed {
+		t.Fatal("expected compression for oversized filtered text")
+	}
+	if !strings.Contains(plan.Summary, "from 300") {
+		t.Fatalf("expected summary to report streamed raw tokens, got %q", plan.Summary)
 	}
 }
 
@@ -67,7 +111,7 @@ func TestEnforceCompressionContractSkipsSmallRawOutput(t *testing.T) {
 
 	raw := strings.Repeat("token ", 20)
 	text := strings.Repeat("token ", 18)
-	compressed, _, changed := enforceCompressionContract(text, raw, OutputBudget{MaxTokens: 8}, RecoveryPlan{}, false, true)
+	compressed, _, changed := enforceCompressionContract(text, raw, 0, OutputBudget{MaxTokens: 8}, RecoveryPlan{}, false, true)
 	if changed {
 		t.Fatal("did not expect contract on small raw output")
 	}
@@ -81,7 +125,7 @@ func TestEnforceCompressionContractDisabled(t *testing.T) {
 
 	raw := strings.Repeat("token ", 80)
 	text := strings.Repeat("token ", 40)
-	compressed, _, changed := enforceCompressionContract(text, raw, OutputBudget{MaxTokens: 16}, RecoveryPlan{}, false, false)
+	compressed, _, changed := enforceCompressionContract(text, raw, 0, OutputBudget{MaxTokens: 16}, RecoveryPlan{}, false, false)
 	if changed || compressed != text {
 		t.Fatalf("expected disabled compression contract to preserve text, got changed=%v text=%q", changed, compressed)
 	}

@@ -54,6 +54,7 @@ func (a *App) runSpread(args []string) int {
 	ui.metric("failed commands", failureRate, withBar(summary.FailureRate, failureRate, ui.color, false))
 	ui.metric("fallback usage", fallbackRate, withBar(summary.FallbackRate, fallbackRate, ui.color, false))
 	ui.metric("tee usage", teeRate, withBar(summary.TeeRate, teeRate, ui.color, false))
+	renderSpreadPassthrough(ui, summary)
 	renderSpreadTopCommands(ui, summary.TopCommands)
 	renderSpreadProfiles(ui, summary.ProfileStats)
 	renderSpreadHotspots(ui, summary.CommandHotspots)
@@ -100,6 +101,21 @@ func isSpreadExcludedCommand(command string) bool {
 		fields = fields[1:]
 	}
 	return fields[0] == "uninstall"
+}
+
+func renderSpreadPassthrough(ui spreadUI, summary history.Summary) {
+	if summary.PassthroughCommands == 0 {
+		return
+	}
+	ui.metric(
+		"proxied (unfiltered)",
+		fmt.Sprintf(
+			"%d commands, %s tokens - excluded from savings analysis",
+			summary.PassthroughCommands,
+			formatCompactCount(summary.PassthroughTokens),
+		),
+		"",
+	)
 }
 
 func renderSpreadTopCommands(ui spreadUI, commands []history.CommandStat) {

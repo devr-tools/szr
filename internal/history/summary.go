@@ -44,13 +44,20 @@ func Summarize(records []Record, limit int) Summary {
 		rec := hydrateRecord(raw)
 		updateSummaryTotals(&summary, rec)
 		durations = append(durations, rec.DurationMS)
+		if rec.Passthrough {
+			// Intentionally-raw runs stay in the global tallies above but
+			// must not skew savings analysis or improvement suggestions.
+			continue
+		}
 		updateSummaryCommand(commands, rec)
 		updateSummaryProfile(profileStats, rec)
 		updateSummaryCommandHotspot(commandHotspots, rec)
 		updateSummaryFingerprint(fingerprintStats, rec)
 	}
 
-	summary.AveragePct /= float64(summary.Commands)
+	if savingsSamples := summary.Commands - summary.PassthroughCommands; savingsSamples > 0 {
+		summary.AveragePct /= float64(savingsSamples)
+	}
 	summary.FailureRate = percent(summary.Failures, summary.Commands)
 	summary.FallbackRate = percent(summary.Fallbacks, summary.Commands)
 	summary.TeeRate = percent(summary.TeeCount, summary.Commands)
@@ -72,7 +79,12 @@ func updateSummaryTotals(summary *Summary, rec Record) {
 	summary.RawTokens += rec.RawTokens
 	summary.FilteredTokens += rec.FilteredTokens
 	summary.TotalDurationMS += rec.DurationMS
-	summary.AveragePct += rec.SavingsPct
+	if rec.Passthrough {
+		summary.PassthroughCommands++
+		summary.PassthroughTokens += rec.RawTokens
+	} else {
+		summary.AveragePct += rec.SavingsPct
+	}
 	summary.RawBytesRead += rec.RawBytesRead
 	summary.BytesParsed += rec.BytesParsed
 	summary.BytesEmitted += rec.BytesEmitted

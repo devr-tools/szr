@@ -19,6 +19,22 @@ func Profiles(maxLines int, maxGroups int) []engine.Profile {
 		},
 		ParseBytes: profilekit.ParseCombined,
 	}
+	// Stdin-mode grep output has no path:line: prefixes, so the grouped
+	// ripgrep reducer would drop every line and report "no matches".
+	// Route those invocations to a compact line summary instead.
+	grepSummary := ripgrepSummary
+	grepSummary.Render = func(inv engine.Invocation, exec engine.Execution) string {
+		if isStdinGrepInvocation(inv) {
+			return filters.CompactLines(exec.Stdout+"\n"+exec.Stderr, maxLines)
+		}
+		return filters.SummarizeRipgrep(exec.Stdout+"\n"+exec.Stderr, maxGroups, maxLines)
+	}
+	grepSummary.StreamRender = func(inv engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
+		if isStdinGrepInvocation(inv) {
+			return filters.NewCompactLineReducer(budget.MaxLines, 0)
+		}
+		return filters.NewRipgrepReducer(maxGroups, budget.MaxLines)
+	}
 	pathListSummary := profilekit.SummaryConfig{
 		StreamPreference: engine.StreamStdoutFirst,
 		Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 8)),
@@ -35,7 +51,7 @@ func Profiles(maxLines int, maxGroups int) []engine.Profile {
 	return []engine.Profile{
 		profilekit.WithSummary(engine.Profile{
 			Name:        "grep",
-			Description: "Normalizes recursive grep into stable line-oriented output and groups matches by file.",
+			Description: "Normalizes recursive grep into stable line-oriented output and groups matches by file; compacts stdin-filter grep output.",
 			Confidence:  engine.ConfidenceHigh,
 			Capabilities: engine.ProfileCapabilities{
 				StructuredMode:     engine.StructuredModePreferred,
@@ -45,16 +61,20 @@ func Profiles(maxLines int, maxGroups int) []engine.Profile {
 				BenignExitCodes:    []int{1},
 			},
 			Match: func(inv engine.Invocation) bool {
-				return inv.Classification.Display.Head == "grep" && isRecursiveGrepCommand(inv.Display)
+				if inv.Classification.Display.Head != "grep" {
+					return false
+				}
+				return isRecursiveGrepCommand(inv.Display) || isStdinGrepCommand(inv.Display)
 			},
 			Prepare: func(inv engine.Invocation) []string {
 				return prepareGrep(inv.Command)
 			},
 			Explain: []string{
 				"Targets recursive plain-text `grep` usage and adds filename plus line-number flags when the user did not already request them.",
+				"Also targets pattern-only grep pipeline filters reading stdin, leaving their arguments untouched and compacting the matched lines instead of grouping by file.",
 				"Groups matches by file and keeps grep as a viable fallback when `rg` is unavailable.",
 			},
-		}, ripgrepSummary),
+		}, grepSummary),
 		profilekit.WithSummary(engine.Profile{
 			Name:        "ripgrep-files",
 			Description: "Summarizes `rg --files` output into a bounded path list.",

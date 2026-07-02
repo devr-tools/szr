@@ -2,6 +2,7 @@ package engine_test
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -74,6 +75,84 @@ func TestExecuteKeepsFinalDisplayWithinCompressionContract(t *testing.T) {
 				t.Fatalf("expected compact recovery suffix in display, got %q", result.Display)
 			}
 		})
+	}
+}
+
+// TestStreamingCompressionContractUsesTrueRawTokensNotPreview reproduces the
+// preview-truncation bug: when full capture is off, rawCombined holds only a
+// short preview of the raw stream, and the contract used to budget retained
+// tokens against that preview (preview/5) instead of the true streamed token
+// count (trueRaw/5), crushing perfectly sized reducer summaries.
+func TestStreamingCompressionContractUsesTrueRawTokensNotPreview(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	paths := testutil.Paths(root)
+	testutil.EnsurePaths(t, paths)
+
+	lines := make([]string, 0, 200)
+	for i := 1; i <= 200; i++ {
+		lines = append(lines, fmt.Sprintf("record-%03d value=%d status=ok", i, i))
+	}
+	fullOutput := strings.Join(lines, "\n")
+	commandPath := testutil.WriteExecutable(t, root, "bigstream-emit", "#!/bin/sh\ncat <<'EOF'\n"+fullOutput+"\nEOF\n")
+
+	summaryLines := make([]string, 0, 10)
+	for i := 0; i < 10; i++ {
+		summaryLines = append(summaryLines, fmt.Sprintf("field-%02d: object keys=%d items=%d", i, i+2, i*3))
+	}
+	summaryText := strings.Join(summaryLines, "\n")
+
+	cfg := config.Default()
+	store := history.New(paths.HistoryFile)
+	e := engine.New(cfg, paths, store, []engine.Profile{{
+		Name:       "structure-preview",
+		Confidence: engine.ConfidenceHigh,
+		Match: func(inv engine.Invocation) bool {
+			return len(inv.Display) > 0 && inv.Display[0] == "bigstream"
+		},
+		StreamRender: func(engine.Invocation, engine.OutputBudget) engine.StreamReducer {
+			return &staticReducer{rendered: summaryText}
+		},
+	}})
+
+	result, err := e.Execute(context.Background(), engine.Invocation{
+		Command: []string{commandPath},
+		Display: []string{"bigstream"},
+		Cwd:     root,
+	}, false)
+	if err != nil {
+		t.Fatalf("execute streaming summary: %v", err)
+	}
+
+	// Preconditions that make the regression observable: capture must be
+	// preview-truncated and the summary must exceed the old preview-derived
+	// retention cap, so the buggy path would demonstrably compress it.
+	if len(result.RawCombined) >= len(fullOutput) {
+		t.Fatalf("expected preview-limited capture, got %d of %d raw bytes", len(result.RawCombined), len(fullOutput))
+	}
+	previewCap := retainedTokenCap(history.EstimateTokens(result.RawCombined))
+	summaryTokens := history.EstimateTokens(summaryText)
+	if summaryTokens <= previewCap {
+		t.Fatalf("fixture too small to detect regression: summary=%d tokens, preview cap=%d", summaryTokens, previewCap)
+	}
+
+	if got := history.EstimateTokens(result.Display); got <= previewCap {
+		t.Fatalf("regression: display crushed to preview-derived cap %d, got %d tokens in %q", previewCap, got, result.Display)
+	}
+	if result.Display != summaryText {
+		t.Fatalf("expected structure summary to survive the compression contract intact, got %q", result.Display)
+	}
+	if got := history.EstimateTokens(result.Display); got > retainedTokenCap(history.EstimateTokens(fullOutput)) {
+		t.Fatalf("expected display within the true-raw retention cap, got %d tokens", got)
+	}
+
+	records, loadErr := store.LoadAll()
+	if loadErr != nil {
+		t.Fatalf("load history: %v", loadErr)
+	}
+	if len(records) != 1 || records[0].RawTokens <= 2*history.EstimateTokens(result.RawCombined) {
+		t.Fatalf("expected streamed raw token count to dwarf the capture preview, got %#v", records)
 	}
 }
 

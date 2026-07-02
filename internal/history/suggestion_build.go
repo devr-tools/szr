@@ -29,7 +29,7 @@ func accumulateBudgetSuggestions(records []Record) map[string]*budgetSuggestionA
 	stats := map[string]*budgetSuggestionAccumulator{}
 	for _, raw := range records {
 		rec := hydrateRecord(raw)
-		if rec.CommandFingerprint == "" {
+		if rec.CommandFingerprint == "" || rec.Passthrough {
 			continue
 		}
 		acc := stats[rec.CommandFingerprint]

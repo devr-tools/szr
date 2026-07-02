@@ -385,6 +385,23 @@ var builtinSpecs = []Spec{
 		MinQualityScore: 75,
 	},
 	{
+		Name:        "gh-pr-checks-watch",
+		Class:       "gh-pr-checks",
+		Description: "gh pr checks --watch transcript with repeated table repaints converging to one failing check.",
+		ProfileName: "gh-pr-checks",
+		Command:     []string{"gh", "pr", "checks", "42", "--watch"},
+		Display:     []string{"gh", "pr", "checks", "42", "--watch"},
+		ExitCode:    8,
+		StdoutFile:  "testdata/gh_pr_checks_watch.txt",
+		ExpectedContains: []string{
+			"checks: 13 pass, 1 fail, 1 skipping (15 total)",
+			"watched 3 updates",
+			"fail: test (windows-latest quick)",
+		},
+		MinTokenSavings: 85,
+		MinQualityScore: 80,
+	},
+	{
 		Name:        "repeated-timestamped-logs",
 		Class:       "repeated-logs",
 		Description: "200+ timestamped INFO/WARN log lines with a handful of distinct messages that should fold hard.",

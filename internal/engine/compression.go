@@ -15,11 +15,11 @@ const (
 	compressionContractRetainedDen  = 5
 )
 
-func enforceCompressionContract(text string, rawCombined string, budget OutputBudget, plan RecoveryPlan, passthrough bool, enabled bool) (string, RecoveryPlan, bool) {
+func enforceCompressionContract(text string, rawCombined string, rawTokens int, budget OutputBudget, plan RecoveryPlan, passthrough bool, enabled bool) (string, RecoveryPlan, bool) {
 	if passthrough || !enabled {
 		return text, plan, false
 	}
-	rawTokens := history.EstimateTokens(rawCombined)
+	rawTokens = trueRawTokenCount(rawTokens, rawCombined)
 	if rawTokens < compressionContractMinRawTokens {
 		return text, plan, false
 	}
@@ -32,11 +32,27 @@ func enforceCompressionContract(text string, rawCombined string, budget OutputBu
 	if strings.TrimSpace(compressed) == "" {
 		return text, plan, false
 	}
-	updatedPlan := plan
-	updatedPlan.Kind = RecoveryKindFullOutput
-	updatedPlan.RequireRawCapture = strings.TrimSpace(rawCombined) != ""
-	updatedPlan.Summary = compressionRecoverySummary(plan.Summary, allowedTokens, rawTokens)
-	return compressed, updatedPlan, true
+	return compressed, compressionContractPlan(plan, rawCombined, allowedTokens, rawTokens), true
+}
+
+func compressionContractPlan(plan RecoveryPlan, rawCombined string, allowedTokens int, rawTokens int) RecoveryPlan {
+	plan.Kind = RecoveryKindFullOutput
+	plan.RequireRawCapture = strings.TrimSpace(rawCombined) != ""
+	plan.Summary = compressionRecoverySummary(plan.Summary, allowedTokens, rawTokens)
+	return plan
+}
+
+// trueRawTokenCount returns the raw token count the compression contract
+// should budget against. Streaming runs may capture only a short preview of
+// the raw output while the streamed token counter saw the full stream, so
+// prefer the provided count and only fall back to estimating the captured
+// text when it is the larger signal (the batch path, where rawCombined is the
+// complete output).
+func trueRawTokenCount(provided int, rawCombined string) int {
+	if estimated := history.EstimateTokens(rawCombined); estimated > provided {
+		return estimated
+	}
+	return provided
 }
 
 func compressionContractAllowedTokens(rawTokens int, budget OutputBudget) int {

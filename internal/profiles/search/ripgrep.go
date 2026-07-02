@@ -26,16 +26,106 @@ func isRecursiveGrepCommand(args []string) bool {
 	if !containsRecursiveGrepFlag(args[1:]) {
 		return false
 	}
-	for _, arg := range args[1:] {
+	return !hasGrepOutputShapeOverride(args[1:])
+}
+
+// isStdinGrepCommand reports whether the invocation is a non-recursive grep
+// with a pattern but no path operands, meaning grep reads from stdin (the
+// typical pipeline filter shape, e.g. `... | grep -n '^#'`).
+func isStdinGrepCommand(args []string) bool {
+	args = engine.CanonicalArgsForClassification(args)
+	if len(args) == 0 || args[0] != "grep" {
+		return false
+	}
+	if containsRecursiveGrepFlag(args[1:]) {
+		return false
+	}
+	if hasGrepOutputShapeOverride(args[1:]) {
+		return false
+	}
+	return grepReadsStdin(args[1:])
+}
+
+func hasGrepOutputShapeOverride(args []string) bool {
+	for _, arg := range args {
 		switch arg {
 		case "-h", "-l", "-L", "-c", "-q", "-o", "-v", "--no-filename", "--files-with-matches", "--files-without-match", "--count", "--quiet", "--only-matching", "--invert-match":
-			return false
+			return true
 		}
 		if strings.HasPrefix(arg, "-") && strings.Contains(arg[1:], "h") {
-			return false
+			return true
 		}
 	}
-	return true
+	return false
+}
+
+// grepReadsStdin reports whether grep args (head excluded) leave grep without
+// any path operands, so it reads from stdin. Callers must first rule out
+// recursive flags: recursive grep without a path defaults to "." instead of
+// stdin. Parsing is conservative: an argument that cannot be confidently
+// classified counts as a path operand, which keeps the invocation out of
+// stdin mode.
+func grepReadsStdin(args []string) bool {
+	positionals, patternFromFlag := grepOperands(args)
+	if patternFromFlag {
+		return positionals == 0
+	}
+	return positionals == 1
+}
+
+// grepOperands counts non-flag operands and reports whether the pattern is
+// supplied via -e/-f style flags instead of the first operand.
+func grepOperands(args []string) (positionals int, patternFromFlag bool) {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == "--":
+			return positionals + len(args) - i - 1, patternFromFlag
+		case isGrepPatternFlag(arg):
+			patternFromFlag = true
+			if !strings.Contains(arg, "=") {
+				i++
+			}
+		case consumesGrepValue(arg):
+			i++
+		case strings.HasPrefix(arg, "-") && arg != "-":
+			continue
+		default:
+			positionals++
+		}
+	}
+	return positionals, patternFromFlag
+}
+
+func isGrepPatternFlag(arg string) bool {
+	switch arg {
+	case "-e", "-f", "--regexp", "--file":
+		return true
+	default:
+		return strings.HasPrefix(arg, "--regexp=") || strings.HasPrefix(arg, "--file=")
+	}
+}
+
+// isStdinGrepInvocation mirrors the stdin-mode matcher for render-time
+// dispatch, preferring the display args the matcher classified.
+func isStdinGrepInvocation(inv engine.Invocation) bool {
+	args := inv.Display
+	if len(args) == 0 {
+		args = inv.Command
+	}
+	return isStdinGrepCommand(args)
+}
+
+func consumesGrepValue(arg string) bool {
+	switch arg {
+	case "-m", "-A", "-B", "-C", "-d", "-D",
+		"--max-count", "--after-context", "--before-context", "--context",
+		"--label", "--binary-files", "--devices", "--directories",
+		"--include", "--exclude", "--exclude-dir", "--exclude-from":
+		return true
+	default:
+		return false
+	}
 }
 
 func isRipgrepFilesCommand(args []string) bool {
@@ -88,6 +178,13 @@ func prepareGrep(command []string) []string {
 	}
 
 	out := append([]string{}, command...)
+	// A grep reading stdin must keep its output byte-compatible with the
+	// user's invocation: injecting -n or -H would prefix every line with
+	// line numbers or "(standard input)", breaking pipeline semantics.
+	// Leave stdin filters entirely untouched.
+	if !containsRecursiveGrepFlag(out[1:]) && grepReadsStdin(out[1:]) {
+		return out
+	}
 	if !containsGrepLineNumberFlag(out[1:]) {
 		out = append(out[:1], append([]string{"-n"}, out[1:]...)...)
 	}

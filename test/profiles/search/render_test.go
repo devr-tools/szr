@@ -38,6 +38,56 @@ func TestRipgrepProfileRender(t *testing.T) {
 	}
 }
 
+func TestGrepProfileRenderStdinMode(t *testing.T) {
+	list := profiles.Builtins(6)
+	profile := testutil.FindProfile(t, list, "grep")
+
+	stdinInv := engine.Classify(engine.Invocation{Display: []string{"grep", "-n", `^#\|^##\|^###`}})
+
+	// Stdin grep emits plain matched lines without path:line: prefixes; the
+	// render must keep the lines instead of reporting "no matches".
+	rendered := profile.Render(stdinInv, engine.Execution{
+		Stdout: strings.Join([]string{
+			"# Title",
+			"## Section",
+			"### Subsection",
+		}, "\n"),
+	})
+	for _, want := range []string{"# Title", "## Section", "### Subsection"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected %q in stdin grep render output:\n%s", want, rendered)
+		}
+	}
+	if strings.Contains(rendered, "no matches") {
+		t.Fatalf("stdin grep render must not degrade to no matches:\n%s", rendered)
+	}
+
+	streamed := profile.StreamRender(stdinInv, profile.Budget)
+	streamed.ConsumeStdout([]byte("# Title\n"))
+	streamed.ConsumeStdout([]byte("## Section\n"))
+	got := streamed.Result()
+	for _, want := range []string{"# Title", "## Section"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in stdin grep stream output: %q", want, got)
+		}
+	}
+
+	// File-mode grep keeps the grouped rendering.
+	fileInv := engine.Classify(engine.Invocation{Display: []string{"grep", "-rn", "todo", "."}})
+	grouped := profile.Render(fileInv, engine.Execution{
+		Stdout: strings.Join([]string{
+			"one.go:1:first",
+			"one.go:2:second",
+			"two.go:9:two",
+		}, "\n"),
+	})
+	for _, want := range []string{"one.go:1: first (2 matches)", "two.go:9: two (1 matches)"} {
+		if !strings.Contains(grouped, want) {
+			t.Fatalf("expected %q in grouped grep render output:\n%s", want, grouped)
+		}
+	}
+}
+
 func TestFindProfileRender(t *testing.T) {
 	list := profiles.Builtins(6)
 	profile := testutil.FindProfile(t, list, "path-find")

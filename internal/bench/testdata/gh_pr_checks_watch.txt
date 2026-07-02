@@ -1,0 +1,63 @@
+CodeQL	pass	6s	https://github.com/devr-tools/szr/runs/84842210450
+lint	pass	24s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420601
+Analyze (go)	pending	0	https://github.com/devr-tools/szr/runs/84842210488
+test (ubuntu-latest full)	pending	0	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420696
+test (macos-latest full)	pending	0	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420710
+test (windows-latest quick)	pending	0	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420722
+build (linux amd64)	pass	18s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420801
+build (linux arm64)	pass	21s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420815
+build (darwin arm64)	pass	19s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420829
+build (windows amd64)	pending	0	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420843
+integration (postgres)	pending	0	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420901
+integration (redis)	pending	0	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420915
+coverage	pending	0	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420930
+docs	skipping	0	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420944
+release-please	pass	4s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420958
+
+CodeQL	pass	6s	https://github.com/devr-tools/szr/runs/84842210450
+lint	pass	24s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420601
+Analyze (go)	pass	1m8s	https://github.com/devr-tools/szr/runs/84842210488
+test (ubuntu-latest full)	pass	42s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420696
+test (macos-latest full)	pending	0	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420710
+test (windows-latest quick)	pending	0	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420722
+build (linux amd64)	pass	18s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420801
+build (linux arm64)	pass	21s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420815
+build (darwin arm64)	pass	19s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420829
+build (windows amd64)	pass	33s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420843
+integration (postgres)	pending	0	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420901
+integration (redis)	pass	49s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420915
+coverage	pending	0	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420930
+docs	skipping	0	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420944
+release-please	pass	4s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420958
+
+CodeQL	pass	6s	https://github.com/devr-tools/szr/runs/84842210450
+lint	pass	24s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420601
+Analyze (go)	pass	1m8s	https://github.com/devr-tools/szr/runs/84842210488
+test (ubuntu-latest full)	pass	42s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420696
+test (macos-latest full)	pass	58s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420710
+test (windows-latest quick)	fail	1m31s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420722
+build (linux amd64)	pass	18s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420801
+build (linux arm64)	pass	21s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420815
+build (darwin arm64)	pass	19s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420829
+build (windows amd64)	pass	33s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420843
+integration (postgres)	pass	1m12s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420901
+integration (redis)	pass	49s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420915
+coverage	pending	0	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420930
+docs	skipping	0	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420944
+release-please	pass	4s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420958
+
+CodeQL	pass	6s	https://github.com/devr-tools/szr/runs/84842210450
+lint	pass	24s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420601
+Analyze (go)	pass	1m8s	https://github.com/devr-tools/szr/runs/84842210488
+test (ubuntu-latest full)	pass	42s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420696
+test (macos-latest full)	pass	58s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420710
+test (windows-latest quick)	fail	1m31s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420722
+build (linux amd64)	pass	18s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420801
+build (linux arm64)	pass	21s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420815
+build (darwin arm64)	pass	19s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420829
+build (windows amd64)	pass	33s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420843
+integration (postgres)	pass	1m12s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420901
+integration (redis)	pass	49s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420915
+coverage	pass	36s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420930
+docs	skipping	0	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420944
+release-please	pass	4s	https://github.com/devr-tools/szr/actions/runs/28610684653/job/84842420958
