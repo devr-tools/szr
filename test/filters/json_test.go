@@ -1,6 +1,7 @@
 package filters_test
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -61,11 +62,87 @@ func TestJSONStructure(t *testing.T) {
 		t.Fatalf("unexpected empty array shape: %q", got)
 	}
 
-	rendered := filters.RenderJSON([]byte(`{"a":"x","items":[{"id":1}]}`), filters.JSONModeStructure, 3)
+	rendered := filters.RenderJSON([]byte(`{"a":"x","items":[{"id":1}]}`), filters.JSONModeStructure, 10)
 	for _, want := range []string{"a: string", "id: number"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected %q in json structure render:\n%s", want, rendered)
 		}
+	}
+}
+
+func TestJSONStructureLineCap(t *testing.T) {
+	t.Parallel()
+
+	// Structure mode now honors maxLines: only the first lines are rendered
+	// and the remainder is folded into an overflow marker.
+	capped := filters.RenderJSON([]byte(`{"a":"x","items":[{"id":1}]}`), filters.JSONModeStructure, 3)
+	lines := strings.Split(capped, "\n")
+	if len(lines) != 4 {
+		t.Fatalf("expected 3 lines plus marker, got %d:\n%s", len(lines), capped)
+	}
+	if lines[len(lines)-1] != "... +5 more lines" {
+		t.Fatalf("expected overflow marker, got %q:\n%s", lines[len(lines)-1], capped)
+	}
+
+	// A wide object is capped at the default budget when maxLines is 0.
+	wide := "{"
+	for i := 0; i < 100; i++ {
+		if i > 0 {
+			wide += ","
+		}
+		wide += `"zzz` + strconv.Itoa(i) + `":1`
+	}
+	wide += "}"
+	rendered := filters.RenderJSONStructure([]byte(wide))
+	got := strings.Split(rendered, "\n")
+	if len(got) != 41 {
+		t.Fatalf("expected default cap of 40 lines plus marker, got %d lines:\n%s", len(got), rendered)
+	}
+	// 100 keys + "{" + "}" = 102 total lines, 40 shown.
+	if got[len(got)-1] != "... +62 more lines" {
+		t.Fatalf("expected overflow marker for wide object, got %q", got[len(got)-1])
+	}
+}
+
+func TestJSONStructureDepthCap(t *testing.T) {
+	t.Parallel()
+
+	deep := filters.RenderJSONStructure([]byte(`{"a":{"b":{"c":{"d":{"e":1,"f":2},"arr":[1,2,3]}}}}`))
+	if !strings.Contains(deep, "d: {... 2 keys}") {
+		t.Fatalf("expected depth-capped object summary in:\n%s", deep)
+	}
+	if !strings.Contains(deep, "arr: [3 items]") {
+		t.Fatalf("expected depth-capped array summary in:\n%s", deep)
+	}
+	if strings.Contains(deep, "e: number") {
+		t.Fatalf("expected nodes beyond depth cap to be summarized:\n%s", deep)
+	}
+}
+
+func TestJSONStructureKeyPriority(t *testing.T) {
+	t.Parallel()
+
+	rendered := filters.RenderJSONStructure([]byte(`{"zeta":"later","message":"boom","status":"FAILED","id":"vm_123"}`))
+	order := []string{"id: string", "status: string", "message: string", "zeta: string"}
+	last := -1
+	for _, want := range order {
+		idx := strings.Index(rendered, want)
+		if idx < 0 {
+			t.Fatalf("expected %q in structure render:\n%s", want, rendered)
+		}
+		if idx <= last {
+			t.Fatalf("expected %q after prior priority keys:\n%s", want, rendered)
+		}
+		last = idx
+	}
+}
+
+func TestJSONStructureArrayItemCount(t *testing.T) {
+	t.Parallel()
+
+	rendered := filters.RenderJSONStructure([]byte(`{"items":[{"id":1},{"id":2},{"id":3}]}`))
+	if !strings.Contains(rendered, "... +2 more items") {
+		t.Fatalf("expected remaining item marker in:\n%s", rendered)
 	}
 }
 

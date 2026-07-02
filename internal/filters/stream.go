@@ -6,25 +6,48 @@ import (
 )
 
 type ansiStripper struct {
-	inEscape bool
-	inCSI    bool
+	inEscape  bool // saw ESC, deciding what kind of sequence follows
+	inCSI     bool // inside ESC [ ... ; ends on a final byte 0x40-0x7e
+	inString  bool // inside OSC/DCS/SOS/PM/APC; ends on BEL or ST (ESC \)
+	stringEsc bool // saw ESC inside a string sequence, checking for ST
 }
 
 func (s *ansiStripper) Consume(chunk []byte, emit func(byte)) {
 	for _, b := range chunk {
 		switch {
+		case s.stringEsc:
+			// ESC seen inside an OSC/DCS-style string: ESC \ (ST) ends it.
+			s.stringEsc = false
+			if b == '\\' {
+				s.inString = false
+			} else if b == 0x1b {
+				s.stringEsc = true
+			}
+		case s.inString:
+			if b == 0x07 { // BEL terminator (common for OSC)
+				s.inString = false
+			} else if b == 0x1b {
+				s.stringEsc = true
+			}
 		case s.inCSI:
+			// Parameter (0x30-0x3f) and intermediate (0x20-0x2f) bytes are
+			// consumed; a final byte 0x40-0x7e ends the sequence.
 			if b >= 0x40 && b <= 0x7e {
 				s.inCSI = false
-				s.inEscape = false
 			}
 		case s.inEscape:
-			if b == '[' {
+			s.inEscape = false
+			switch {
+			case b == '[':
 				s.inCSI = true
-				continue
-			}
-			if (b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z') {
-				s.inEscape = false
+			case b == ']' || b == 'P' || b == 'X' || b == '^' || b == '_':
+				// OSC, DCS, SOS, PM, APC: string sequences until BEL/ST.
+				s.inString = true
+			case b >= 0x20 && b <= 0x2f:
+				// Intermediate byte (e.g. ESC ( B); final byte follows.
+				s.inEscape = true
+			default:
+				// Two-byte escape (ESC + final byte); already consumed.
 			}
 		case b == 0x1b:
 			s.inEscape = true
