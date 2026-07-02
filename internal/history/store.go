@@ -98,6 +98,20 @@ func (s *Store) compact() {
 // to grow before the next compaction. It returns ok=false when compaction
 // should be skipped (read error, oversized line, or nothing to drop).
 func (s *Store) retainedLines() ([][]byte, bool) {
+	lines, ok := s.readHistoryLines()
+	if !ok {
+		return nil, false
+	}
+	start := retainStart(lines, s.retainRecords, s.maxFileBytes/2)
+	if start == 0 {
+		return nil, false
+	}
+	return lines[start:], true
+}
+
+// readHistoryLines reads every non-empty line of the history file. It returns
+// ok=false on open or scan errors (including oversized lines).
+func (s *Store) readHistoryLines() ([][]byte, bool) {
 	file, err := os.Open(s.path)
 	if err != nil {
 		return nil, false
@@ -114,14 +128,17 @@ func (s *Store) retainedLines() ([][]byte, bool) {
 		}
 		lines = append(lines, append([]byte(nil), line...))
 	}
-	if scanner.Err() != nil {
-		return nil, false
-	}
+	return lines, scanner.Err() == nil
+}
 
-	retainBytes := s.maxFileBytes / 2
+// retainStart walks backward from the newest line and returns the index of
+// the oldest line to keep. The newest line is always kept; older lines are
+// added until the record cap is reached or the byte budget (line length plus
+// trailing newline) would be exceeded.
+func retainStart(lines [][]byte, retainRecords int, retainBytes int64) int {
 	total := int64(0)
 	start := len(lines)
-	for start > 0 && len(lines)-start < s.retainRecords {
+	for start > 0 && len(lines)-start < retainRecords {
 		lineBytes := int64(len(lines[start-1]) + 1)
 		if start < len(lines) && total+lineBytes > retainBytes {
 			break
@@ -129,10 +146,7 @@ func (s *Store) retainedLines() ([][]byte, bool) {
 		total += lineBytes
 		start--
 	}
-	if start == 0 {
-		return nil, false
-	}
-	return lines[start:], true
+	return start
 }
 
 func writeCompactedLines(file *os.File, lines [][]byte) bool {

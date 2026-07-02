@@ -35,6 +35,61 @@ var applyResultVerbs = map[string]struct{}{
 	"serverside-applied": {},
 }
 
+type applyScan struct {
+	alerts []string
+	verbs  map[string][]string
+	order  []string
+}
+
+func scanApplyLines(lines []string) applyScan {
+	scan := applyScan{verbs: map[string][]string{}}
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if isKubectlAlertLine(trimmed) {
+			scan.alerts = append(scan.alerts, shared.Clip(trimmed, 160))
+			continue
+		}
+		resource, verb, ok := parseApplyResultLine(trimmed)
+		if !ok {
+			continue
+		}
+		if _, seen := scan.verbs[verb]; !seen {
+			scan.order = append(scan.order, verb)
+		}
+		scan.verbs[verb] = append(scan.verbs[verb], resource)
+	}
+	scan.alerts = shared.UniqueStrings(scan.alerts)
+	return scan
+}
+
+func renderApplyHeaderLine(scan applyScan) string {
+	headerParts := make([]string, 0, len(scan.order))
+	for _, verb := range scan.order {
+		headerParts = append(headerParts, fmt.Sprintf("%s=%d", verb, len(scan.verbs[verb])))
+	}
+	return "resources: " + strings.Join(headerParts, " ")
+}
+
+func renderApplyVerbLine(verb string, names []string) string {
+	const sampleSize = 3
+	sample := names
+	suffix := ""
+	if len(names) > sampleSize {
+		sample = names[:sampleSize]
+		suffix = fmt.Sprintf(" +%d more", len(names)-sampleSize)
+	}
+	return shared.Clip(fmt.Sprintf("%s: %s%s", verb, strings.Join(sample, ", "), suffix), 160)
+}
+
+func renderApplyScan(scan applyScan, maxLines int) kubernetesSummaryResult {
+	out := []string{renderApplyHeaderLine(scan)}
+	out = append(out, scan.alerts...)
+	for _, verb := range scan.order {
+		out = append(out, renderApplyVerbLine(verb, scan.verbs[verb]))
+	}
+	return summarizeKubernetesLines(out, maxLines)
+}
+
 func summarizeApplyResult(input string, maxLines int) kubernetesSummaryResult {
 	if maxLines <= 0 {
 		maxLines = 10
@@ -46,51 +101,14 @@ func summarizeApplyResult(input string, maxLines int) kubernetesSummaryResult {
 		return kubernetesSummaryResult{Text: "ok"}
 	}
 
-	alerts := []string{}
-	verbs := map[string][]string{}
-	order := []string{}
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if isKubectlAlertLine(trimmed) {
-			alerts = append(alerts, shared.Clip(trimmed, 160))
-			continue
-		}
-		resource, verb, ok := parseApplyResultLine(trimmed)
-		if !ok {
-			continue
-		}
-		if _, seen := verbs[verb]; !seen {
-			order = append(order, verb)
-		}
-		verbs[verb] = append(verbs[verb], resource)
-	}
-
-	alerts = shared.UniqueStrings(alerts)
-	if len(order) == 0 {
-		if len(alerts) == 0 {
+	scan := scanApplyLines(lines)
+	if len(scan.order) == 0 {
+		if len(scan.alerts) == 0 {
 			return kubernetesSummaryResult{Text: shared.CompactLines(clean, maxLines)}
 		}
-		return summarizeKubernetesLines(alerts, maxLines)
+		return summarizeKubernetesLines(scan.alerts, maxLines)
 	}
-
-	const sampleSize = 3
-	headerParts := make([]string, 0, len(order))
-	for _, verb := range order {
-		headerParts = append(headerParts, fmt.Sprintf("%s=%d", verb, len(verbs[verb])))
-	}
-	out := []string{"resources: " + strings.Join(headerParts, " ")}
-	out = append(out, alerts...)
-	for _, verb := range order {
-		names := verbs[verb]
-		sample := names
-		suffix := ""
-		if len(names) > sampleSize {
-			sample = names[:sampleSize]
-			suffix = fmt.Sprintf(" +%d more", len(names)-sampleSize)
-		}
-		out = append(out, shared.Clip(fmt.Sprintf("%s: %s%s", verb, strings.Join(sample, ", "), suffix), 160))
-	}
-	return summarizeKubernetesLines(out, maxLines)
+	return renderApplyScan(scan, maxLines)
 }
 
 func parseApplyResultLine(line string) (string, string, bool) {
@@ -133,6 +151,49 @@ func KubectlRolloutRecoveryInfo(input string, maxLines int) (string, string, boo
 	return shared.FullOutputRecovery(fmt.Sprintf("omitted %d additional lines", result.OmittedCount))
 }
 
+type rolloutScan struct {
+	waitingCount int
+	lastWaiting  string
+	finals       []string
+}
+
+func scanRolloutLines(lines []string) rolloutScan {
+	scan := rolloutScan{}
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		switch {
+		case isRolloutWaitingLine(trimmed):
+			scan.waitingCount++
+			scan.lastWaiting = trimmed
+		case isRolloutFinalLine(trimmed):
+			scan.finals = append(scan.finals, shared.Clip(trimmed, 160))
+		}
+	}
+	return scan
+}
+
+func isRolloutWaitingLine(line string) bool {
+	return strings.HasPrefix(line, "Waiting for") && strings.Contains(line, "rollout")
+}
+
+func isRolloutFinalLine(line string) bool {
+	return strings.Contains(line, "successfully rolled out") ||
+		strings.Contains(line, "exceeded its progress deadline") ||
+		isKubectlAlertLine(line)
+}
+
+func renderRolloutScan(scan rolloutScan, maxLines int) kubernetesSummaryResult {
+	out := []string{}
+	if scan.waitingCount > 1 {
+		out = append(out, fmt.Sprintf("progress: collapsed %d rollout updates", scan.waitingCount-1))
+	}
+	if scan.lastWaiting != "" {
+		out = append(out, shared.Clip(scan.lastWaiting, 160))
+	}
+	out = append(out, shared.UniqueStrings(scan.finals)...)
+	return summarizeKubernetesLines(out, maxLines)
+}
+
 func summarizeRolloutResult(input string, maxLines int) kubernetesSummaryResult {
 	if maxLines <= 0 {
 		maxLines = 8
@@ -144,35 +205,11 @@ func summarizeRolloutResult(input string, maxLines int) kubernetesSummaryResult 
 		return kubernetesSummaryResult{Text: "ok"}
 	}
 
-	waitingCount := 0
-	lastWaiting := ""
-	finals := []string{}
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		switch {
-		case strings.HasPrefix(trimmed, "Waiting for") && strings.Contains(trimmed, "rollout"):
-			waitingCount++
-			lastWaiting = trimmed
-		case strings.Contains(trimmed, "successfully rolled out"),
-			strings.Contains(trimmed, "exceeded its progress deadline"),
-			isKubectlAlertLine(trimmed):
-			finals = append(finals, shared.Clip(trimmed, 160))
-		}
-	}
-
-	if waitingCount == 0 && len(finals) == 0 {
+	scan := scanRolloutLines(lines)
+	if scan.waitingCount == 0 && len(scan.finals) == 0 {
 		return kubernetesSummaryResult{Text: shared.CompactLines(clean, maxLines)}
 	}
-
-	out := []string{}
-	if waitingCount > 1 {
-		out = append(out, fmt.Sprintf("progress: collapsed %d rollout updates", waitingCount-1))
-	}
-	if lastWaiting != "" {
-		out = append(out, shared.Clip(lastWaiting, 160))
-	}
-	out = append(out, shared.UniqueStrings(finals)...)
-	return summarizeKubernetesLines(out, maxLines)
+	return renderRolloutScan(scan, maxLines)
 }
 
 func SummarizeDiff(input string, maxLines int) string {
@@ -191,57 +228,76 @@ func KubectlDiffRecoveryInfo(input string, maxLines int) (string, string, bool) 
 	return shared.FullOutputRecovery(fmt.Sprintf("omitted %d additional lines", result.OmittedCount))
 }
 
+type kubectlDiffObject struct {
+	name    string
+	added   int
+	removed int
+}
+
+type kubectlDiffScan struct {
+	objects []kubectlDiffObject
+	alerts  []string
+}
+
+func (s *kubectlDiffScan) ingestLine(line string) {
+	switch {
+	case strings.HasPrefix(line, "diff "):
+		s.objects = append(s.objects, kubectlDiffObject{name: kubectlDiffObjectName(line)})
+	case strings.HasPrefix(line, "+++"), strings.HasPrefix(line, "---"):
+	case strings.HasPrefix(line, "+"):
+		if len(s.objects) > 0 {
+			s.objects[len(s.objects)-1].added++
+		}
+	case strings.HasPrefix(line, "-"):
+		if len(s.objects) > 0 {
+			s.objects[len(s.objects)-1].removed++
+		}
+	default:
+		s.ingestAlertCandidate(line)
+	}
+}
+
+func (s *kubectlDiffScan) ingestAlertCandidate(line string) {
+	trimmed := strings.TrimSpace(line)
+	if trimmed != "" && isKubectlAlertLine(trimmed) {
+		s.alerts = append(s.alerts, shared.Clip(trimmed, 160))
+	}
+}
+
+func kubectlDiffObjectName(line string) string {
+	fields := strings.Fields(line)
+	if len(fields) == 0 {
+		return ""
+	}
+	return path.Base(fields[len(fields)-1])
+}
+
+func renderKubectlDiffScan(scan *kubectlDiffScan, maxLines int) kubernetesSummaryResult {
+	out := []string{fmt.Sprintf("diff: %d objects changed", len(scan.objects))}
+	out = append(out, scan.alerts...)
+	for _, object := range scan.objects {
+		out = append(out, shared.Clip(fmt.Sprintf("%s: +%d -%d", object.name, object.added, object.removed), 160))
+	}
+	return summarizeKubernetesLines(out, maxLines)
+}
+
 func summarizeDiffResult(input string, maxLines int) kubernetesSummaryResult {
 	if maxLines <= 0 {
 		maxLines = 10
 	}
 
 	clean := shared.StripANSI(input)
-	type diffObject struct {
-		name    string
-		added   int
-		removed int
-	}
-	objects := []diffObject{}
-	alerts := []string{}
+	scan := &kubectlDiffScan{}
 	for _, line := range strings.Split(clean, "\n") {
-		switch {
-		case strings.HasPrefix(line, "diff "):
-			fields := strings.Fields(line)
-			name := ""
-			if len(fields) > 0 {
-				name = path.Base(fields[len(fields)-1])
-			}
-			objects = append(objects, diffObject{name: name})
-		case strings.HasPrefix(line, "+++"), strings.HasPrefix(line, "---"):
-		case strings.HasPrefix(line, "+"):
-			if len(objects) > 0 {
-				objects[len(objects)-1].added++
-			}
-		case strings.HasPrefix(line, "-"):
-			if len(objects) > 0 {
-				objects[len(objects)-1].removed++
-			}
-		default:
-			trimmed := strings.TrimSpace(line)
-			if trimmed != "" && isKubectlAlertLine(trimmed) {
-				alerts = append(alerts, shared.Clip(trimmed, 160))
-			}
-		}
+		scan.ingestLine(line)
 	}
 
-	alerts = shared.UniqueStrings(alerts)
-	if len(objects) == 0 {
-		if len(alerts) > 0 {
-			return summarizeKubernetesLines(alerts, maxLines)
+	scan.alerts = shared.UniqueStrings(scan.alerts)
+	if len(scan.objects) == 0 {
+		if len(scan.alerts) > 0 {
+			return summarizeKubernetesLines(scan.alerts, maxLines)
 		}
 		return kubernetesSummaryResult{Text: shared.CompactLines(clean, maxLines)}
 	}
-
-	out := []string{fmt.Sprintf("diff: %d objects changed", len(objects))}
-	out = append(out, alerts...)
-	for _, object := range objects {
-		out = append(out, shared.Clip(fmt.Sprintf("%s: +%d -%d", object.name, object.added, object.removed), 160))
-	}
-	return summarizeKubernetesLines(out, maxLines)
+	return renderKubectlDiffScan(scan, maxLines)
 }

@@ -23,38 +23,50 @@ func foldConsecutive(lines []string, keyFn func(string) string) []string {
 	if len(lines) == 0 {
 		return nil
 	}
-	out := make([]string, 0, len(lines))
-	current := ""
-	currentKey := ""
-	count := 0
-	flush := func() {
-		if count == 0 {
-			return
-		}
-		if count > 1 {
-			out = append(out, fmt.Sprintf("%s (x%d)", current, count))
-		} else {
-			out = append(out, current)
-		}
-		count = 0
-	}
+	folder := &lineRunFolder{out: make([]string, 0, len(lines))}
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" {
 			continue
 		}
-		key := keyFn(trimmed)
-		if count > 0 && key == currentKey {
-			count++
-			continue
-		}
-		flush()
-		current = trimmed
-		currentKey = key
-		count = 1
+		folder.ingest(trimmed, keyFn(trimmed))
 	}
-	flush()
-	return out
+	folder.flush()
+	return folder.out
+}
+
+// lineRunFolder tracks the current run of same-key lines while folding.
+type lineRunFolder struct {
+	out        []string
+	current    string
+	currentKey string
+	count      int
+}
+
+// ingest extends the pending run when key matches, otherwise flushes it and
+// starts a new run at the given line.
+func (f *lineRunFolder) ingest(trimmed, key string) {
+	if f.count > 0 && key == f.currentKey {
+		f.count++
+		return
+	}
+	f.flush()
+	f.current = trimmed
+	f.currentKey = key
+	f.count = 1
+}
+
+// flush appends the pending run to the output as "line" or "line (xN)".
+func (f *lineRunFolder) flush() {
+	if f.count == 0 {
+		return
+	}
+	if f.count > 1 {
+		f.out = append(f.out, fmt.Sprintf("%s (x%d)", f.current, f.count))
+	} else {
+		f.out = append(f.out, f.current)
+	}
+	f.count = 0
 }
 
 // SimilarLineKey normalizes a line for fold-similar comparisons: it strips a
@@ -143,29 +155,45 @@ func looksLikeTimestampPrefix(value string) bool {
 // looksLikeClockToken reports whether a token is a bare clock prefix like
 // "15:04:05", "15:04:05.123", or "15:04:05,123".
 func looksLikeClockToken(token string) bool {
-	if len(token) < 8 {
+	if len(token) < 8 || !looksLikeClockCore(token[:8]) {
 		return false
 	}
+	return looksLikeClockFraction(token[8:])
+}
+
+// looksLikeClockCore reports whether an 8-byte segment has the "HH:MM:SS"
+// shape: digits everywhere except colons at positions 2 and 5.
+func looksLikeClockCore(core string) bool {
 	for i := 0; i < 8; i++ {
 		if i == 2 || i == 5 {
-			if token[i] != ':' {
+			if core[i] != ':' {
 				return false
 			}
 			continue
 		}
-		if token[i] < '0' || token[i] > '9' {
+		if core[i] < '0' || core[i] > '9' {
 			return false
 		}
 	}
-	rest := token[8:]
+	return true
+}
+
+// looksLikeClockFraction reports whether the remainder after "HH:MM:SS" is
+// empty or a '.'/',' separator followed by at least one digit.
+func looksLikeClockFraction(rest string) bool {
 	if rest == "" {
 		return true
 	}
 	if len(rest) < 2 || (rest[0] != '.' && rest[0] != ',') {
 		return false
 	}
-	for i := 1; i < len(rest); i++ {
-		if rest[i] < '0' || rest[i] > '9' {
+	return isDigitRun(rest[1:])
+}
+
+// isDigitRun reports whether every byte of s is an ASCII digit.
+func isDigitRun(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
 			return false
 		}
 	}
@@ -178,12 +206,7 @@ func looksLikeEpochToken(token string) bool {
 	if len(token) != 10 && len(token) != 13 {
 		return false
 	}
-	for i := 0; i < len(token); i++ {
-		if token[i] < '0' || token[i] > '9' {
-			return false
-		}
-	}
-	return true
+	return isDigitRun(token)
 }
 
 func looksLikeSyslogMonth(token string) bool {
@@ -198,12 +221,7 @@ func looksLikeSyslogDay(token string) bool {
 	if len(token) == 0 || len(token) > 2 {
 		return false
 	}
-	for i := 0; i < len(token); i++ {
-		if token[i] < '0' || token[i] > '9' {
-			return false
-		}
-	}
-	return true
+	return isDigitRun(token)
 }
 
 // looksLikeTrailingCounter reports whether a token looks like a bare counter,

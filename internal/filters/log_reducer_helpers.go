@@ -169,27 +169,47 @@ func hasLeadingLogLevelToken(lower string, markers []string) bool {
 	fields := 0
 	i := 0
 	for i < len(lower) && fields < maxLogLevelTokenFields {
-		for i < len(lower) && isLogTokenDelimiter(lower[i]) {
-			i++
-		}
-		start := i
-		for i < len(lower) && !isLogTokenDelimiter(lower[i]) {
-			i++
-		}
-		if start == i {
+		raw, next, ok := nextLogToken(lower, i)
+		i = next
+		if !ok {
 			break
 		}
-		token := strings.Trim(lower[start:i], logTokenPunctuationCutset)
+		token := strings.Trim(raw, logTokenPunctuationCutset)
 		if token == "" {
 			continue
 		}
 		fields++
-		for _, marker := range markers {
-			// Exact token match ("error", "[warn]", "info:") or a marker
-			// suffix ("typeerror:", "assertionerror").
-			if token == marker || strings.HasSuffix(token, marker) {
-				return true
-			}
+		if matchesLogLevelMarker(token, markers) {
+			return true
+		}
+	}
+	return false
+}
+
+// nextLogToken scans the next delimiter-separated field of lower starting at
+// pos, returning the field, the position after it, and ok=false when no field
+// remains.
+func nextLogToken(lower string, pos int) (token string, next int, ok bool) {
+	i := pos
+	for i < len(lower) && isLogTokenDelimiter(lower[i]) {
+		i++
+	}
+	start := i
+	for i < len(lower) && !isLogTokenDelimiter(lower[i]) {
+		i++
+	}
+	if start == i {
+		return "", i, false
+	}
+	return lower[start:i], i, true
+}
+
+// matchesLogLevelMarker reports whether token equals a marker ("error",
+// "[warn]", "info:") or ends with one ("typeerror:", "assertionerror").
+func matchesLogLevelMarker(token string, markers []string) bool {
+	for _, marker := range markers {
+		if token == marker || strings.HasSuffix(token, marker) {
+			return true
 		}
 	}
 	return false

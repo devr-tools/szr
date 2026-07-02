@@ -40,62 +40,58 @@ func SummarizeTerraform(input string, maxLines int) string {
 	return summarizeTerraformResult(shared.StripANSI(input), maxLines).Text
 }
 
-func summarizeTerraformResult(input string, maxLines int) buildSystemSummaryResult {
-	if maxLines <= 0 {
-		maxLines = 12
-	}
+type terraformScan struct {
+	headers      []string
+	attrs        []string
+	summaries    []string
+	alerts       []string
+	alertContext int
+}
 
+func (s *terraformScan) ingestLine(raw string) {
+	trimmed := strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(raw), "│╷╵┃"))
+	if trimmed == "" {
+		return
+	}
+	switch {
+	case strings.HasPrefix(trimmed, "Error:") || strings.HasPrefix(trimmed, "Warning:"):
+		s.alerts = append(s.alerts, shared.Clip(trimmed, 160))
+		s.alertContext = 4
+	case s.alertContext > 0:
+		s.alerts = append(s.alerts, "  "+shared.Clip(trimmed, 158))
+		s.alertContext--
+	case isTerraformResourceHeader(trimmed):
+		s.headers = append(s.headers, shared.Clip(trimmed, 160))
+	case isTerraformSummaryLine(trimmed):
+		s.summaries = append(s.summaries, shared.Clip(trimmed, 160))
+	case isTerraformAttrLine(trimmed):
+		s.attrs = append(s.attrs, shared.Clip(trimmed, 160))
+	}
+}
+
+func (s *terraformScan) empty() bool {
+	return len(s.headers) == 0 && len(s.attrs) == 0 && len(s.summaries) == 0 && len(s.alerts) == 0
+}
+
+func appendTerraformCappedLines(out, lines []string, limit int, moreFormat string) []string {
+	if len(lines) > limit {
+		out = append(out, lines[:limit]...)
+		return append(out, fmt.Sprintf(moreFormat, len(lines)-limit))
+	}
+	return append(out, lines...)
+}
+
+func renderTerraformScan(scan *terraformScan, maxLines int) buildSystemSummaryResult {
 	const attrCap = 4
 	headerCap := maxLines / 2
 	if headerCap < 3 {
 		headerCap = 3
 	}
 
-	headers := []string{}
-	attrs := []string{}
-	summaries := []string{}
-	alerts := []string{}
-	alertContext := 0
-	for _, raw := range strings.Split(input, "\n") {
-		trimmed := strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(raw), "│╷╵┃"))
-		if trimmed == "" {
-			continue
-		}
-		switch {
-		case strings.HasPrefix(trimmed, "Error:") || strings.HasPrefix(trimmed, "Warning:"):
-			alerts = append(alerts, shared.Clip(trimmed, 160))
-			alertContext = 4
-		case alertContext > 0:
-			alerts = append(alerts, "  "+shared.Clip(trimmed, 158))
-			alertContext--
-		case isTerraformResourceHeader(trimmed):
-			headers = append(headers, shared.Clip(trimmed, 160))
-		case isTerraformSummaryLine(trimmed):
-			summaries = append(summaries, shared.Clip(trimmed, 160))
-		case isTerraformAttrLine(trimmed):
-			attrs = append(attrs, shared.Clip(trimmed, 160))
-		}
-	}
-
-	summaries = shared.UniqueStrings(summaries)
-	if len(headers) == 0 && len(attrs) == 0 && len(summaries) == 0 && len(alerts) == 0 {
-		return buildSystemSummaryResult{Text: shared.CompactLines(input, maxLines)}
-	}
-
-	out := append([]string{}, summaries...)
-	out = append(out, alerts...)
-	if len(headers) > headerCap {
-		out = append(out, headers[:headerCap]...)
-		out = append(out, fmt.Sprintf("+%d more resource changes", len(headers)-headerCap))
-	} else {
-		out = append(out, headers...)
-	}
-	if len(attrs) > attrCap {
-		out = append(out, attrs[:attrCap]...)
-		out = append(out, fmt.Sprintf("+%d more attribute lines", len(attrs)-attrCap))
-	} else {
-		out = append(out, attrs...)
-	}
+	out := append([]string{}, scan.summaries...)
+	out = append(out, scan.alerts...)
+	out = appendTerraformCappedLines(out, scan.headers, headerCap, "+%d more resource changes")
+	out = appendTerraformCappedLines(out, scan.attrs, attrCap, "+%d more attribute lines")
 
 	result := buildSystemSummaryResult{
 		Text: shared.JoinLimitedLines(out, maxLines),
@@ -104,6 +100,23 @@ func summarizeTerraformResult(input string, maxLines int) buildSystemSummaryResu
 		result.OmittedCount = len(out) - maxLines
 	}
 	return result
+}
+
+func summarizeTerraformResult(input string, maxLines int) buildSystemSummaryResult {
+	if maxLines <= 0 {
+		maxLines = 12
+	}
+
+	scan := &terraformScan{}
+	for _, raw := range strings.Split(input, "\n") {
+		scan.ingestLine(raw)
+	}
+
+	scan.summaries = shared.UniqueStrings(scan.summaries)
+	if scan.empty() {
+		return buildSystemSummaryResult{Text: shared.CompactLines(input, maxLines)}
+	}
+	return renderTerraformScan(scan, maxLines)
 }
 
 func isTerraformResourceHeader(line string) bool {
