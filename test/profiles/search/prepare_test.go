@@ -39,6 +39,15 @@ func TestRipgrepProfilePrepare(t *testing.T) {
 	assertProfileMatches(t, grepProfile, []string{"/usr/bin/grep", "-rn", "todo", "."}, true)
 	assertProfileMatches(t, grepProfile, []string{"grep", "-n", "todo", "."}, false)
 	assertProfileMatches(t, grepProfile, []string{"grep", "-rnh", "todo", "."}, false)
+	// Pattern-only invocations read stdin (pipeline filters) and must match.
+	assertProfileMatches(t, grepProfile, []string{"grep", "-n", `^#\|^##\|^###`}, true)
+	assertProfileMatches(t, grepProfile, []string{"grep", "todo"}, true)
+	assertProfileMatches(t, grepProfile, []string{"/usr/bin/grep", "-nE", "^#"}, true)
+	assertProfileMatches(t, grepProfile, []string{"grep", "-e", "todo"}, true)
+	assertProfileMatches(t, grepProfile, []string{"grep", "-rn", "todo"}, true)
+	assertProfileMatches(t, grepProfile, []string{"grep", "-c", "todo"}, false)
+	assertProfileMatches(t, grepProfile, []string{"grep", "-v", "todo"}, false)
+	assertProfileMatches(t, grepProfile, []string{"grep", "-n", "todo", "file.txt"}, false)
 	assertProfileMatches(t, profile, []string{"rg", "todo", "."}, true)
 	assertProfileMatches(t, profile, []string{"rg", "--json", "todo"}, false)
 	assertProfileMatches(t, profile, []string{"rg", "--files"}, false)
@@ -194,6 +203,36 @@ func TestRipgrepProfilePrepare(t *testing.T) {
 	grepScopedWant := []string{"grep", "--color=never", "-H", "-rn", "todo", "service/src/backend"}
 	if !reflect.DeepEqual(grepScoped, grepScopedWant) {
 		t.Fatalf("unexpected scoped grep prepare: %#v", grepScoped)
+	}
+
+	// Stdin-mode grep (pattern, no path operands) must be left untouched so
+	// injected flags cannot change the bytes a pipeline consumer sees.
+	for _, command := range [][]string{
+		{"grep", "-n", `^#\|^##\|^###`},
+		{"grep", "todo"},
+		{"grep", "-e", "todo"},
+	} {
+		prepared := grepProfile.Prepare(engine.Invocation{Command: command})
+		if !reflect.DeepEqual(prepared, command) {
+			t.Fatalf("expected stdin grep command %#v to be preserved, got %#v", command, prepared)
+		}
+	}
+
+	// Recursive grep without a path operand searches "." and still gets the
+	// normalization flags.
+	grepRecursiveNoPath := grepProfile.Prepare(engine.Invocation{Command: []string{"grep", "-rn", "todo"}})
+	if len(grepRecursiveNoPath) <= 3 {
+		t.Fatalf("expected recursive grep without path to gain flags, got %#v", grepRecursiveNoPath)
+	}
+	found := false
+	for _, arg := range grepRecursiveNoPath {
+		if arg == "-H" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected -H in recursive grep prepare, got %#v", grepRecursiveNoPath)
 	}
 }
 
