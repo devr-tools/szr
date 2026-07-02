@@ -21,6 +21,7 @@ type Record struct {
 	SavedTokens        int       `json:"saved_tokens"`
 	SavingsPct         float64   `json:"savings_pct"`
 	FallbackUsed       bool      `json:"fallback_used,omitempty"`
+	Passthrough        bool      `json:"passthrough,omitempty"`
 	TeePath            string    `json:"tee_path,omitempty"`
 }
 
@@ -37,6 +38,8 @@ type Summary struct {
 	FallbackRate        float64            `json:"fallback_rate"`
 	TeeCount            int                `json:"tee_count"`
 	TeeRate             float64            `json:"tee_rate"`
+	PassthroughCommands int                `json:"passthrough_commands,omitempty"`
+	PassthroughTokens   int                `json:"passthrough_tokens,omitempty"`
 	DurationP50MS       int64              `json:"duration_p50_ms"`
 	DurationP95MS       int64              `json:"duration_p95_ms"`
 	RawBytesRead        int                `json:"raw_bytes_read"`
