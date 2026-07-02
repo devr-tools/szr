@@ -30,6 +30,9 @@ func summarizeBuildSystemResult(input string, maxLines int) buildSystemSummaryRe
 	}
 
 	clean := shared.StripANSI(input)
+	if isTerraformOutput(clean) {
+		return summarizeTerraformResult(clean, maxLines)
+	}
 	lines := []string{}
 	summaries := []string{}
 	for _, line := range shared.NonEmptyLines(clean) {
@@ -40,6 +43,8 @@ func summarizeBuildSystemResult(input string, maxLines int) buildSystemSummaryRe
 			strings.HasPrefix(trimmed, "task: Failed to run task"),
 			strings.HasPrefix(trimmed, "FAILED:"),
 			strings.HasPrefix(trimmed, "ERROR:"),
+			strings.HasPrefix(trimmed, "[ERROR]"),
+			strings.HasPrefix(trimmed, "[WARNING]"),
 			strings.HasPrefix(trimmed, "ninja: error:"),
 			strings.HasPrefix(trimmed, "ninja: build stopped:"),
 			strings.HasPrefix(trimmed, "CMake Error"),

@@ -157,5 +157,83 @@ func Profiles(maxLines int) []engine.Profile {
 				"Reuses the describe/event summarizer to keep failure reasons and backoff-style events near the top.",
 			},
 		},
+		{
+			Name:             "kubectl-apply",
+			Description:      "Groups per-resource `kubectl apply`/`kubectl delete` results into counts by verb while keeping errors and warnings.",
+			Confidence:       engine.ConfidenceHigh,
+			StreamPreference: engine.StreamStdoutFirst,
+			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 10)),
+			LatencyBudget:    profilekit.LatencyBudget(25),
+			Match: func(inv engine.Invocation) bool {
+				return isKubectlCommand(inv.Display, "apply") || isKubectlCommand(inv.Display, "delete")
+			},
+			Render: func(_ engine.Invocation, exec engine.Execution) string {
+				return kubefilter.SummarizeApply(exec.Stdout+"\n"+exec.Stderr, maxLines)
+			},
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
+				return shared.NewBufferedTextReducerWithRecovery(true, true, func(input string) string {
+					return kubefilter.SummarizeApply(input, budget.MaxLines)
+				}, func(input string) (string, string, bool) {
+					return kubefilter.KubectlApplyRecoveryInfo(input, budget.MaxLines)
+				})
+			},
+			ParseBytes: profilekit.ParseCombined,
+			Explain: []string{
+				"Collapses per-resource result lines such as `deployment.apps/foo configured` into counts by verb plus a short name sample.",
+				"Always keeps `Error from server ...` and `Warning:` lines so operational failures stay visible.",
+			},
+		},
+		{
+			Name:             "kubectl-rollout",
+			Description:      "Collapses repeated `kubectl rollout status` progress into the last state plus the final outcome.",
+			Confidence:       engine.ConfidenceHigh,
+			StreamPreference: engine.StreamStdoutFirst,
+			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 8)),
+			LatencyBudget:    profilekit.LatencyBudget(25),
+			Match: func(inv engine.Invocation) bool {
+				return isKubectlCommand(inv.Display, "rollout")
+			},
+			Render: func(_ engine.Invocation, exec engine.Execution) string {
+				return kubefilter.SummarizeRollout(exec.Stdout+"\n"+exec.Stderr, maxLines)
+			},
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
+				return shared.NewBufferedTextReducerWithRecovery(true, true, func(input string) string {
+					return kubefilter.SummarizeRollout(input, budget.MaxLines)
+				}, func(input string) (string, string, bool) {
+					return kubefilter.KubectlRolloutRecoveryInfo(input, budget.MaxLines)
+				})
+			},
+			ParseBytes: profilekit.ParseCombined,
+			Explain: []string{
+				"Collapses repeated `Waiting for deployment ... rollout` progress lines into the last observed state.",
+				"Keeps the final `successfully rolled out` confirmation or the terminating error line.",
+			},
+		},
+		{
+			Name:             "kubectl-diff",
+			Description:      "Summarizes `kubectl diff` output as changed objects with added/removed line counts.",
+			Confidence:       engine.ConfidenceHigh,
+			StreamPreference: engine.StreamStdoutFirst,
+			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 10)),
+			LatencyBudget:    profilekit.LatencyBudget(25),
+			Match: func(inv engine.Invocation) bool {
+				return isKubectlCommand(inv.Display, "diff")
+			},
+			Render: func(_ engine.Invocation, exec engine.Execution) string {
+				return kubefilter.SummarizeDiff(exec.Stdout+"\n"+exec.Stderr, maxLines)
+			},
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
+				return shared.NewBufferedTextReducerWithRecovery(true, true, func(input string) string {
+					return kubefilter.SummarizeDiff(input, budget.MaxLines)
+				}, func(input string) (string, string, bool) {
+					return kubefilter.KubectlDiffRecoveryInfo(input, budget.MaxLines)
+				})
+			},
+			ParseBytes: profilekit.ParseCombined,
+			Explain: []string{
+				"Reduces `kubectl diff` unified diffs to one line per changed object with +/- line counts.",
+				"Keeps server errors and warnings so failed diffs remain diagnosable.",
+			},
+		},
 	}
 }
