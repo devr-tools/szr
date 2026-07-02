@@ -55,23 +55,19 @@ func Profiles(maxLines int) []engine.Profile {
 				return inv.Command
 			},
 			Render: func(_ engine.Invocation, exec engine.Execution) string {
-				return shared.SummarizeGenericFailure(exec.Stdout+"\n"+exec.Stderr, maxLines)
+				return ghfilter.SummarizePRChecks(exec.Stdout+"\n"+exec.Stderr, maxLines)
 			},
 			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return shared.NewGenericFailureReducerWithOptions(shared.GenericFailureReducerOptions{
-					MaxLines:           budget.MaxLines,
-					MaxBytes:           budget.MaxBytes,
-					MinFailures:        budget.MinFailures,
-					MinAnchors:         budget.MinAnchors,
-					MinHints:           budget.MinHints,
-					NoisePrefiltering:  budget.NoisePrefiltering,
-					SemanticCompaction: budget.SemanticCompaction,
+				return newBufferedCombinedReducer(func(input string) string {
+					return ghfilter.SummarizePRChecks(input, budget.MaxLines)
+				}, func(input string) (string, string, bool) {
+					return ghfilter.GHPRChecksRecoveryInfo(input, budget.MaxLines)
 				})
 			},
 			ParseBytes: profilekit.ParseCombined,
 			Explain: []string{
-				"Matches `gh pr checks` to keep failed and pending checks visible.",
-				"Uses a failure-oriented reducer so long check tables collapse toward the blocking rows.",
+				"Matches `gh pr checks` and folds the check table into status counts with only blocking rows listed.",
+				"Keeps full URLs for failing, cancelled, and pending checks and dedupes repeated `--watch` repaints into the final state.",
 			},
 		},
 		{
