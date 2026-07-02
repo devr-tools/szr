@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.0](https://github.com/devr-tools/szr/compare/v0.9.0...v0.10.0) (2026-07-02)
+
+
+### Features
+
+* **cli:** drive What's New banner from embedded changelog and show version on spread ([a9e1be7](https://github.com/devr-tools/szr/commit/a9e1be7c0f03958adc0d42ba239fe24c40dc31a4))
+* **cli:** drive What's New banner from embedded changelog and show version on spread ([6a39817](https://github.com/devr-tools/szr/commit/6a398171ff4b151034a7ff5e9e4062b885927dbe))
+
 ## [0.9.0](https://github.com/devr-tools/szr/compare/v0.8.0...v0.9.0) (2026-07-02)
 
 
