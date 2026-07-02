@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.9.0](https://github.com/devr-tools/szr/compare/v0.8.0...v0.9.0) (2026-07-02)
+
+
+### Features
+
+* **filters:** add declarative dedup/fold primitives and restore CompactLines duplicate folding ([bafe5a9](https://github.com/devr-tools/szr/commit/bafe5a952786e21ae143b71b619d22a0936a7c76))
+* **filters:** collapse tree chains, keep representative grep matches, widen noise suppression ([fa87868](https://github.com/devr-tools/szr/commit/fa878680a764279d0ef1677574c64b3e4f79e9d9))
+* **filters:** fold no-signal logs and unify diagnostic anchors in failure output ([6818b9b](https://github.com/devr-tools/szr/commit/6818b9bb6d4fec824c1d21be880790914640b0f8))
+* **profiles:** compress git operation and go module download output ([dc36817](https://github.com/devr-tools/szr/commit/dc36817e659e53364acc51211362fb4e6351b280))
+* **profiles:** route golangci-lint and staticcheck through the failure reducer ([1848079](https://github.com/devr-tools/szr/commit/1848079ce7a229c3f972114ec51003e351deae41))
+* **profiles:** summarize kubectl mutations, docker transfers, and terraform plans ([53ae21c](https://github.com/devr-tools/szr/commit/53ae21c9141b7fde2f9807cdd1a9356206b6e96d))
+* raise token savings with declarative folding, broader profile coverage, and engine tuning ([9fc299e](https://github.com/devr-tools/szr/commit/9fc299e90721f892a54250e4c6481a6dfa03c672))
+
+
+### Bug Fixes
+
+* **engine:** apply the never-worse-than-raw guard to all profiles ([f157097](https://github.com/devr-tools/szr/commit/f157097b6a46750e2f68a8f0fc08385614793025))
+* **engine:** treat grep/ripgrep no-match exits as benign ([21f0c80](https://github.com/devr-tools/szr/commit/21f0c808df6a4ed66824d400037212531d06665f))
+* **filters:** cap JSON structure rendering and strip OSC escape sequences ([46a8a0f](https://github.com/devr-tools/szr/commit/46a8a0f925ee45e0238caf47a8dfc9db72e49a00))
+
+
+### Performance Improvements
+
+* **engine:** bound history growth, enable adaptive budgets, prefer cheaper bypass summaries ([ea22557](https://github.com/devr-tools/szr/commit/ea225573deee3cc72cfeb302dd728aa6ad234b0c))
+
 ## [0.8.0](https://github.com/devr-tools/szr/compare/v0.7.0...v0.8.0) (2026-06-24)
 
 
