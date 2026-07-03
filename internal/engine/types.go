@@ -46,6 +46,9 @@ type Result struct {
 	// because the capture was incomplete and no artifact held the full raw
 	// stream.
 	VerifierSkipped bool
+	// DedupRef is the short session-dedup reference emitted in place of the
+	// render when the output was byte-identical to a recent run.
+	DedupRef string
 }
 
 type Classification struct {

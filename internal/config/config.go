@@ -30,7 +30,17 @@ type Advanced struct {
 	CompressionContract       bool `json:"compression_contract"`
 	CompactArtifactRefs       bool `json:"compact_artifact_refs"`
 	RetentionVerifier         bool `json:"retention_verifier"`
+	// SessionDedup replaces re-renders of byte-identical recent output with a
+	// short expandable reference.
+	SessionDedup bool `json:"session_dedup"`
+	// SessionDedupWindowMinutes bounds how far back an identical run may be
+	// referenced.
+	SessionDedupWindowMinutes int `json:"session_dedup_window_minutes"`
 }
+
+// DefaultSessionDedupWindowMinutes is the recency window used when the
+// configured window is missing or invalid.
+const DefaultSessionDedupWindowMinutes = 30
 
 type UpdateCheck struct {
 	Enabled       bool `json:"enabled"`
@@ -70,6 +80,11 @@ func Default() Config {
 			// tokens it spends. On by default because it is the product's
 			// identity, not an optimization.
 			RetentionVerifier: true,
+			// Session dedup is safe by default: a reference is only emitted
+			// for byte-identical raw output whose stored artifact still
+			// verifies, so expansion always recovers the exact bytes.
+			SessionDedup:              true,
+			SessionDedupWindowMinutes: DefaultSessionDedupWindowMinutes,
 		},
 		UpdateCheck: UpdateCheck{
 			Enabled:       false,

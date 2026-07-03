@@ -52,6 +52,7 @@ func (a *App) printHelp() {
 			{"szr hotspots [--json]", "Rank low-savings, fallback-heavy, and slow fingerprints."},
 			{"szr explain <cmd...>", "Show the matched profile, budget, and rewrite decisions."},
 			{"szr tee --latest", "Inspect the latest preserved full failure log."},
+			{"szr expand <ref>", "Recover the full output behind an 'unchanged from previous run' reference."},
 			{"szr profiles", "List builtin reducer profiles."},
 			{"szr doctor [--history|--json]", "Check runtime diagnostics and optional history health."},
 			{"szr settings", "Interactively edit szr user settings."},
@@ -122,6 +123,8 @@ func (a *App) printCommands() {
 			{"szr tee [--latest|<id>|--json]", "Inspect preserved full-output artifacts."},
 			{"szr tee find <query>", "Search preserved tee artifacts by id, command, or profile."},
 			{"szr tee prune [flags]", "Remove stale or missing tee artifacts and rewrite the index."},
+			{"szr expand <ref>", "Print the raw output behind a session dedup reference byte-exact."},
+			{"szr expand --last", "Print the raw output for the most recent dedup reference."},
 		},
 	})
 	a.printHelpSection(ui, helpSection{

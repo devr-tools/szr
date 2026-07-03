@@ -99,7 +99,7 @@ func TestCollectCommandStreamsContinuesDrainingAfterReducerDone(t *testing.T) {
 
 func TestCopyStreamPreservesTeeAfterReducerDone(t *testing.T) {
 	dir := t.TempDir()
-	tee, err := newTeeCapture(dir, []string{"test"}, true)
+	tee, err := newTeeCapture(dir, []string{"test"}, true, false)
 	if err != nil {
 		t.Fatalf("newTeeCapture error: %v", err)
 	}
