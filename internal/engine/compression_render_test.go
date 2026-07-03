@@ -10,7 +10,7 @@ import (
 func TestRenderExecutionAppliesCompressionContract(t *testing.T) {
 	t.Parallel()
 
-	raw := strings.Repeat("token ", 80)
+	raw := strings.Repeat("token ", 400)
 	profile := Profile{
 		Name:   "contract-render",
 		Budget: OutputBudget{MaxLines: 12, MaxTokens: 32},

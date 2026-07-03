@@ -156,6 +156,138 @@ func TestStreamingCompressionContractUsesTrueRawTokensNotPreview(t *testing.T) {
 	}
 }
 
+// TestExecuteFailingLintDiagnosticsSurviveVerbatim reproduces a benchmark
+// loss: a golangci-lint failure with two concrete issues (~61 raw tokens)
+// used to render as a bare "..." plus tee pointer because the compression
+// contract armed at 40 raw tokens and crushed the failure escape. Small
+// failing outputs must reach the caller verbatim.
+func TestExecuteFailingLintDiagnosticsSurviveVerbatim(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	paths := testutil.Paths(root)
+	testutil.EnsurePaths(t, paths)
+
+	issueOne := "calc/calc.go:20:12: Error return value of `fmt.Errorf` is not checked (errcheck)"
+	issueTwo := "calc/calc.go:17:6: func unusedHelper is unused (unused)"
+	lintOutput := strings.Join([]string{issueOne, issueTwo, "2 issues:", "* errcheck: 1", "* unused: 1"}, "\n")
+	commandPath := testutil.WriteExecutable(t, root, "lint-fail", "#!/bin/sh\ncat <<'EOF'\n"+lintOutput+"\nEOF\nexit 1\n")
+
+	cfg := config.Default()
+	store := history.New(paths.HistoryFile)
+	e := engine.New(cfg, paths, store, profiles.Builtins(6))
+
+	result, err := e.Execute(context.Background(), engine.Invocation{
+		Command: []string{commandPath},
+		Display: []string{"golangci-lint", "run", "./calc/"},
+		Cwd:     root,
+	}, false)
+	if err != nil {
+		t.Fatalf("execute failing lint: %v", err)
+	}
+	if result.ExitCode != 1 {
+		t.Fatalf("expected exit code 1, got %#v", result)
+	}
+	for _, want := range []string{issueOne, issueTwo} {
+		if !strings.Contains(result.Display, want) {
+			t.Fatalf("expected issue line %q verbatim in display, got %q", want, result.Display)
+		}
+	}
+}
+
+// TestExecuteFailureNeverRendersContentFree pins the failure fidelity
+// guarantee end to end: even when a profile renders nothing but an ellipsis
+// marker for a failing command, the engine must fall back to compact raw
+// lines instead of shipping zero signal.
+func TestExecuteFailureNeverRendersContentFree(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	paths := testutil.Paths(root)
+	testutil.EnsurePaths(t, paths)
+
+	errorLine := `E0702 memcache.go:265 "Unhandled Error" err="connection refused"`
+	spam := make([]string, 0, 6)
+	for i := 0; i < 5; i++ {
+		spam = append(spam, errorLine)
+	}
+	spam = append(spam, "The connection to the server localhost:8080 was refused - did you specify the right host or port?")
+	commandPath := testutil.WriteExecutable(t, root, "marker-fail", "#!/bin/sh\ncat <<'EOF' >&2\n"+strings.Join(spam, "\n")+"\nEOF\nexit 1\n")
+
+	cfg := config.Default()
+	store := history.New(paths.HistoryFile)
+	e := engine.New(cfg, paths, store, []engine.Profile{{
+		Name:       "marker-only",
+		Confidence: engine.ConfidenceHigh,
+		Match: func(inv engine.Invocation) bool {
+			return len(inv.Display) > 0 && inv.Display[0] == "marker-fail"
+		},
+		Render: func(engine.Invocation, engine.Execution) string {
+			return "..."
+		},
+	}})
+
+	result, err := e.Execute(context.Background(), engine.Invocation{
+		Command: []string{commandPath},
+		Display: []string{"marker-fail"},
+		Cwd:     root,
+	}, false)
+	if err != nil {
+		t.Fatalf("execute marker-only failure: %v", err)
+	}
+	if result.ExitCode != 1 {
+		t.Fatalf("expected exit code 1, got %#v", result)
+	}
+	if !strings.Contains(result.Display, "connection refused") && !strings.Contains(result.Display, "localhost:8080") {
+		t.Fatalf("expected diagnostic content for failing command, got %q", result.Display)
+	}
+}
+
+// TestExecuteFailureRecoversDiagnosticsFromTeeArtifact reproduces the
+// kubectl-nocluster benchmark loss: a stdout-only stream profile never
+// buffers stderr, so when the command fails with stderr-only diagnostics the
+// in-memory capture is empty and the display collapsed to a bare tee
+// pointer. The failure escape must recover content from the tee artifact.
+func TestExecuteFailureRecoversDiagnosticsFromTeeArtifact(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	paths := testutil.Paths(root)
+	testutil.EnsurePaths(t, paths)
+
+	errorLine := `E0702 memcache.go:265 "Unhandled Error" err="connection refused"`
+	commandPath := testutil.WriteExecutable(t, root, "stderr-fail", "#!/bin/sh\ncat <<'EOF' >&2\n"+errorLine+"\nEOF\nexit 1\n")
+
+	cfg := config.Default()
+	store := history.New(paths.HistoryFile)
+	e := engine.New(cfg, paths, store, []engine.Profile{{
+		Name:             "stdout-only-table",
+		Confidence:       engine.ConfidenceHigh,
+		StreamPreference: engine.StreamStdoutOnly,
+		Match: func(inv engine.Invocation) bool {
+			return len(inv.Display) > 0 && inv.Display[0] == "stderr-fail"
+		},
+		StreamRender: func(engine.Invocation, engine.OutputBudget) engine.StreamReducer {
+			return &staticReducer{rendered: ""}
+		},
+	}})
+
+	result, err := e.Execute(context.Background(), engine.Invocation{
+		Command: []string{commandPath},
+		Display: []string{"stderr-fail"},
+		Cwd:     root,
+	}, false)
+	if err != nil {
+		t.Fatalf("execute stderr-only failure: %v", err)
+	}
+	if result.ExitCode != 1 {
+		t.Fatalf("expected exit code 1, got %#v", result)
+	}
+	if !strings.Contains(result.Display, "connection refused") {
+		t.Fatalf("expected stderr diagnostics recovered from tee artifact, got %q", result.Display)
+	}
+}
+
 func TestRenderExecutionUltraCompactCompactsSingleLineAndBlankOutput(t *testing.T) {
 	t.Parallel()
 

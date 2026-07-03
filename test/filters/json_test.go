@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/devr-tools/szr/internal/filters"
+	"github.com/devr-tools/szr/internal/history"
 )
 
 func TestGoJSONSummary(t *testing.T) {
@@ -23,8 +24,16 @@ func TestGoJSONSummary(t *testing.T) {
 		}
 	}
 	allPass := filters.SummarizeGoTestJSON(`{"Action":"pass","Package":"pkg/pass"}`)
-	if allPass != "packages: pass=1 fail=0\nall tests passed" {
+	if allPass != "1 package passed" {
 		t.Fatalf("unexpected all pass summary: %q", allPass)
+	}
+	multiPass := filters.SummarizeGoTestJSON(strings.Join([]string{
+		`{"Action":"pass","Package":"pkg/a"}`,
+		`{"Action":"pass","Package":"pkg/b"}`,
+		`{"Action":"pass","Package":"pkg/c"}`,
+	}, "\n"))
+	if multiPass != "3 packages passed" {
+		t.Fatalf("unexpected multi-package all pass summary: %q", multiPass)
 	}
 	goJSON = filters.SummarizeGoTestJSON(strings.Join([]string{
 		`{"Action":"fail","Package":"pkg/fail","Test":"One"}`,
@@ -40,6 +49,35 @@ func TestGoJSONSummary(t *testing.T) {
 	compactFallback := filters.SummarizeGoTestJSON("not-json")
 	if compactFallback != "not-json" {
 		t.Fatalf("unexpected go json fallback: %q", compactFallback)
+	}
+}
+
+// TestGoJSONSummaryAllPassStaysCheaperThanPlainOutput reproduces a
+// benchmark loss: `szr go test` rewrites the command to `go test -json`, so
+// the never-worse-than-raw guard compares the render against the JSON
+// stream instead of the tiny plain output the user's command would have
+// printed. The all-pass summary must therefore cost no more tokens than the
+// plain-mode output — even for a single cached package.
+func TestGoJSONSummaryAllPassStaysCheaperThanPlainOutput(t *testing.T) {
+	t.Parallel()
+
+	// Captured from `go test ./calc/ -run TestAdd -json` in the benchmark
+	// arena repository; plain mode printed exactly one line.
+	arenaJSON := strings.Join([]string{
+		`{"Time":"2026-07-02T19:13:27.558747-04:00","Action":"start","Package":"arena/calc"}`,
+		`{"Time":"2026-07-02T19:13:27.558834-04:00","Action":"run","Package":"arena/calc","Test":"TestAdd"}`,
+		`{"Time":"2026-07-02T19:13:27.558849-04:00","Action":"output","Package":"arena/calc","Test":"TestAdd","Output":"=== RUN   TestAdd\n"}`,
+		`{"Time":"2026-07-02T19:13:27.558861-04:00","Action":"output","Package":"arena/calc","Test":"TestAdd","Output":"--- PASS: TestAdd (0.00s)\n"}`,
+		`{"Time":"2026-07-02T19:13:27.558864-04:00","Action":"pass","Package":"arena/calc","Test":"TestAdd","Elapsed":0}`,
+		`{"Time":"2026-07-02T19:13:27.558869-04:00","Action":"output","Package":"arena/calc","Output":"PASS\n"}`,
+		`{"Time":"2026-07-02T19:13:27.558872-04:00","Action":"output","Package":"arena/calc","Output":"ok  \tarena/calc\t(cached)\n"}`,
+		`{"Time":"2026-07-02T19:13:27.558876-04:00","Action":"pass","Package":"arena/calc","Elapsed":0}`,
+	}, "\n")
+	plainOutput := "ok  \tarena/calc\t(cached)"
+
+	summary := filters.SummarizeGoTestJSON(arenaJSON)
+	if got, limit := history.EstimateTokens(summary), history.EstimateTokens(plainOutput); got > limit {
+		t.Fatalf("expected all-pass summary (%d tokens, %q) to cost no more than plain output (%d tokens, %q)", got, summary, limit, plainOutput)
 	}
 }
 

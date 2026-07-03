@@ -804,10 +804,18 @@ func countGoTestPackages(packages map[string]*goTestPackageState) (int, int) {
 }
 
 func renderGoTestSummary(passed, failed int, failures map[string][]string) goTestSummaryResult {
+	if failed == 0 && len(failures) == 0 {
+		// All-pass renders must stay terser than what the user's ORIGINAL
+		// command would have printed. `go test` is silently rewritten to
+		// `go test -json`, so the never-worse-than-raw guard compares the
+		// render against the huge JSON stream and can never protect the tiny
+		// plain `ok <pkg>` lines the user asked for. One short line keeps the
+		// render cheaper than even a single-package plain run.
+		return goTestSummaryResult{Text: goTestAllPassLine(passed)}
+	}
 	var out []string
 	out = append(out, fmt.Sprintf("packages: pass=%d fail=%d", passed, failed))
 	if len(failures) == 0 {
-		out = append(out, "all tests passed")
 		return goTestSummaryResult{Text: strings.Join(out, "\n")}
 	}
 
@@ -835,4 +843,11 @@ func renderGoTestSummary(passed, failed int, failures map[string][]string) goTes
 		}
 	}
 	return result
+}
+
+func goTestAllPassLine(passed int) string {
+	if passed == 1 {
+		return "1 package passed"
+	}
+	return fmt.Sprintf("%d packages passed", passed)
 }

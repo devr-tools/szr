@@ -8,9 +8,16 @@ import (
 	"github.com/devr-tools/szr/internal/history"
 )
 
+// Fidelity floor for the compression contract. The contract exists to keep
+// LARGE outputs at <=1/5 of their raw token cost; on small outputs the
+// absolute savings are trivial while the fidelity cost is total (a 61-token
+// lint failure crushed to 13 tokens of ellipses is zero signal). The raw
+// threshold therefore only arms the contract for genuinely big outputs, and
+// the retained-token floor guarantees the contract never crushes a render
+// below a usable diagnostic size.
 const (
-	compressionContractMinRawTokens = 40
-	compressionContractMinTokens    = 8
+	compressionContractMinRawTokens = 200
+	compressionContractMinTokens    = 48
 	compressionContractRetainedNum  = 1
 	compressionContractRetainedDen  = 5
 )
@@ -60,48 +67,271 @@ func compressionContractAllowedTokens(rawTokens int, budget OutputBudget) int {
 		return 0
 	}
 	allowed := compressionScaleIntCeil(rawTokens, compressionContractRetainedNum, compressionContractRetainedDen)
-	if allowed < compressionContractMinTokens {
-		allowed = compressionContractMinTokens
-	}
 	if budget.MaxTokens > 0 && budget.MaxTokens < allowed {
 		allowed = budget.MaxTokens
 	}
-	if allowed < 1 {
-		return 1
+	// The usable floor is applied after the budget cap on purpose: a profile
+	// budget must not be able to push the contract below the fidelity floor.
+	if allowed < compressionContractMinTokens {
+		allowed = compressionContractMinTokens
 	}
 	return allowed
 }
 
+// hardCapTokens compresses text to roughly maxTokens while preserving the
+// most diagnostic content. It operates line-first: whole lines are scored
+// with the shared anchor/keyword machinery and the highest-value lines are
+// kept verbatim, because a render must never be less informative than the
+// tokens it spends — shredding lines into word salad destroys diagnostics.
+// Word-range compression is only a fallback for a single overlong line. The
+// result is never content-free: when the cap would leave only ellipsis
+// markers, the single highest-value line is kept even if it exceeds the cap.
 func hardCapTokens(text string, maxTokens int) string {
 	if maxTokens <= 0 {
 		return ""
 	}
-	fields := strings.Fields(text)
+	lines := normalizedCompressionLines(text)
+	if len(lines) == 0 {
+		return ""
+	}
+	if candidate := strings.Join(lines, "\n"); history.EstimateTokens(candidate) <= maxTokens {
+		return candidate
+	}
+	if kept := selectWholeLinesWithinCap(lines, maxTokens); kept != "" {
+		return kept
+	}
+	return capSingleLine(bestCompressionLine(lines), maxTokens)
+}
+
+// normalizedCompressionLines splits text into non-blank lines with collapsed
+// intra-line whitespace, preserving line boundaries (unlike the old
+// whole-text strings.Fields flattening, which erased the structure the line
+// scorer needs).
+func normalizedCompressionLines(text string) []string {
+	rawLines := strings.Split(text, "\n")
+	lines := make([]string, 0, len(rawLines))
+	for _, line := range rawLines {
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		lines = append(lines, strings.Join(fields, " "))
+	}
+	return lines
+}
+
+// selectWholeLinesWithinCap keeps the highest-scoring whole lines that fit
+// within maxTokens, in original order, with "..." markers for elided runs.
+// The first content line is always tried first: by convention across szr
+// profiles it is the render's headline summary, and a capped render that
+// loses its headline is strictly less informative than one that loses a
+// detail line. Returns "" when not even one whole line fits.
+func selectWholeLinesWithinCap(lines []string, maxTokens int) string {
+	kept := make([]bool, len(lines))
+	best := ""
+	for _, idx := range compressionSelectionOrder(lines, maxTokens) {
+		kept[idx] = true
+		candidate := buildCompressedFromKeptLines(lines, kept)
+		if history.EstimateTokens(candidate) <= maxTokens {
+			best = candidate
+			continue
+		}
+		kept[idx] = false
+	}
+	return best
+}
+
+// compressionSelectionOrder returns the whole-line candidate order with the
+// headline (first content line) forced to the front so it is granted budget
+// before any detail line can crowd it out. Pre-existing ellipsis markers are
+// never headlines.
+func compressionSelectionOrder(lines []string, maxTokens int) []int {
+	order := compressionLineOrder(lines, maxTokens)
+	if len(lines) == 0 || lines[0] == "..." {
+		return order
+	}
+	reordered := make([]int, 0, len(order)+1)
+	reordered = append(reordered, 0)
+	for _, idx := range order {
+		if idx != 0 {
+			reordered = append(reordered, idx)
+		}
+	}
+	return reordered
+}
+
+// compressionLineOrder returns line indexes ordered most-valuable-first,
+// pre-trimmed to the top maxTokens candidates (each kept line costs at least
+// one token, so lower-ranked lines can never be selected). Pre-existing
+// ellipsis marker lines are never candidates: elision markers are re-derived
+// from the gaps, so keeping stale ones would double them up.
+func compressionLineOrder(lines []string, maxTokens int) []int {
+	order := compressionCandidateLineIndexes(lines)
+	sortCompressionLineOrder(order, lines)
+	if len(order) > maxTokens {
+		order = order[:maxTokens]
+	}
+	return order
+}
+
+func compressionCandidateLineIndexes(lines []string) []int {
+	order := make([]int, 0, len(lines))
+	for i, line := range lines {
+		if line != "..." {
+			order = append(order, i)
+		}
+	}
+	if len(order) == 0 {
+		order = append(order, 0)
+	}
+	return order
+}
+
+func sortCompressionLineOrder(order []int, lines []string) {
+	scores := make([]int, len(lines))
+	densities := make([]int, len(lines))
+	for i, line := range lines {
+		scores[i] = compressionLineScore(lines, i, line)
+		densities[i] = scores[i] * 100 / compressionMaxInt(history.EstimateTokens(line), 1)
+	}
+	sort.Slice(order, func(a, b int) bool {
+		left, right := order[a], order[b]
+		if densities[left] != densities[right] {
+			return densities[left] > densities[right]
+		}
+		if scores[left] != scores[right] {
+			return scores[left] > scores[right]
+		}
+		return left < right
+	})
+}
+
+func compressionLineScore(lines []string, index int, line string) int {
+	score := compressionRangeScore(strings.Fields(line))
+	// Mirror the edge bonuses of the word-range builder: the first and last
+	// lines carry framing (headers, exit summaries) worth keeping.
+	if index == 0 {
+		score += 8
+	}
+	if index == len(lines)-1 && len(lines) > 1 {
+		score += 6
+	}
+	return score
+}
+
+func bestCompressionLine(lines []string) string {
+	order := compressionLineOrder(lines, 1)
+	return lines[order[0]]
+}
+
+func buildCompressedFromKeptLines(lines []string, kept []bool) string {
+	parts := make([]string, 0, len(lines))
+	pendingGap := false
+	for i, line := range lines {
+		if !kept[i] {
+			pendingGap = true
+			continue
+		}
+		if pendingGap {
+			parts = append(parts, "...")
+			pendingGap = false
+		}
+		parts = append(parts, line)
+	}
+	if pendingGap {
+		parts = append(parts, "...")
+	}
+	return strings.Join(parts, "\n")
+}
+
+// capSingleLine applies word-range compression inside one overlong line.
+// The final fallback deliberately returns real content past the cap rather
+// than a bare ellipsis: an over-budget line still informs, a marker never
+// does.
+func capSingleLine(line string, maxTokens int) string {
+	fields := strings.Fields(line)
 	if len(fields) == 0 {
 		return ""
 	}
-	normalized := strings.Join(fields, " ")
-	if history.EstimateTokens(normalized) <= maxTokens {
-		return normalized
+	if candidate := capSingleLineByRanges(fields, maxTokens); candidate != "" {
+		return candidate
 	}
-	if maxTokens == 1 {
-		return "..."
+	if candidate := capSingleLineByPrefix(fields, maxTokens); candidate != "" {
+		return candidate
 	}
+	if history.EstimateTokens(line) <= 2*maxTokens {
+		return line
+	}
+	return clipRunes(line, maxTokens*4) + " ..."
+}
 
+func capSingleLineByRanges(fields []string, maxTokens int) string {
+	if maxTokens <= 1 {
+		return ""
+	}
 	selected := selectCompressionRanges(fields, maxTokens)
-	if len(selected) > 0 {
-		candidate := buildCompressedFromRanges(fields, selected)
-		if strings.TrimSpace(candidate) != "" && history.EstimateTokens(candidate) <= maxTokens {
-			return candidate
-		}
+	if len(selected) == 0 {
+		return ""
+	}
+	candidate := buildCompressedFromRanges(fields, selected)
+	if !isContentFreeRender(candidate) && history.EstimateTokens(candidate) <= maxTokens {
+		return candidate
+	}
+	return ""
+}
+
+func capSingleLineByPrefix(fields []string, maxTokens int) string {
+	if maxTokens <= 1 {
+		return ""
 	}
 	for keep := len(fields); keep > 0; keep-- {
 		candidate := buildCompressedFromRanges(fields, []compressionRange{{start: 0, end: keep}})
-		if history.EstimateTokens(candidate) <= maxTokens {
+		if !isContentFreeRender(candidate) && history.EstimateTokens(candidate) <= maxTokens {
 			return candidate
 		}
 	}
-	return "..."
+	return ""
+}
+
+func clipRunes(text string, max int) string {
+	runes := []rune(text)
+	if len(runes) <= max {
+		return text
+	}
+	return strings.TrimSpace(string(runes[:max]))
+}
+
+// isContentFreeRender reports whether text carries no real content — only
+// elision markers and artifact bookkeeping lines. Such a render spends
+// tokens on zero signal; callers treat it as equivalent to empty.
+func isContentFreeRender(text string) bool {
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || isRenderMarkerLine(line) {
+			continue
+		}
+		for _, field := range strings.Fields(line) {
+			if strings.Trim(field, ".…") != "" {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func isRenderMarkerLine(line string) bool {
+	if line == "[full output saved]" {
+		return true
+	}
+	if !strings.HasSuffix(line, "]") {
+		return false
+	}
+	for _, prefix := range []string{"[tee: ", "[recovery: ", "[full output: "} {
+		if strings.HasPrefix(line, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 type compressionRange struct {

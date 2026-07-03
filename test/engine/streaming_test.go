@@ -326,7 +326,10 @@ func TestExecutePersistsRecoveryArtifactOnCompressionContract(t *testing.T) {
 	if !strings.Contains(result.Display, "[recovery: ") && !strings.Contains(result.Display, "[tee: ") && !strings.Contains(result.Display, "[full output saved]") {
 		t.Fatalf("expected budget-aware recovery suffix in display, got %q", result.Display)
 	}
-	allowed := 16
+	// The compression contract's fidelity floor (48 tokens) deliberately
+	// beats the tiny 16-token profile budget: no budget may crush a render
+	// below a usable diagnostic size.
+	allowed := retainedTokenCap(history.EstimateTokens(strings.TrimSpace(result.RawCombined)))
 	if got := history.EstimateTokens(result.Display); got > allowed {
 		t.Fatalf("expected final display <= %d tokens after hint decoration, got %d (%q)", allowed, got, result.Display)
 	}
