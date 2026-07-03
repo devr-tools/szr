@@ -42,3 +42,12 @@ bin/
 coverage.html
 .coverage.internal.out
 .tmp*/
+
+# packaging build artifacts (npm/pip wrappers, generated from release binaries)
+packaging/.staging/
+packaging/npm/dist/
+packaging/pypi/dist/
+
+# ...but the launcher source lives in a bin/ dir, which the rule above would hide
+!packaging/npm/launcher/bin/
+!packaging/npm/launcher/bin/szr

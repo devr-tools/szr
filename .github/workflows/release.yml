@@ -328,3 +328,122 @@ jobs:
             echo "- SHA256: \`$FORMULA_SHA256\`"
             echo "- Suggested branch: \`$FORMULA_BRANCH\`"
           } >>"$GITHUB_STEP_SUMMARY"
+
+  publish-npm:
+    needs: build-release
+    if: needs.build-release.outputs.prerelease != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Required for npm trusted publishing (OIDC) — no NPM_TOKEN needed.
+      id-token: write
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Upgrade npm for trusted publishing
+        # Trusted publishing (OIDC) requires npm >= 11.5.1; the runner ships an
+        # older npm by default.
+        run: npm install -g npm@latest
+
+      - name: Resolve package version
+        id: version
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ needs.build-release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ "$RELEASE_TAG" == *-v* ]]; then
+            version="${RELEASE_TAG##*-v}"
+          else
+            version="${RELEASE_TAG#v}"
+          fi
+          echo "version=$version" >>"$GITHUB_OUTPUT"
+
+      - name: Stage release binaries
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          ./packaging/extract-binaries.sh "${{ needs.build-release.outputs.tag }}" "${{ steps.version.outputs.version }}"
+
+      - name: Build npm packages
+        run: ./packaging/npm/build.sh "${{ steps.version.outputs.version }}"
+
+      - name: Publish to npm
+        # Authentication is via OIDC trusted publishing (id-token: write above);
+        # no NODE_AUTH_TOKEN/.npmrc. Provenance is attached automatically.
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          publish_dir() {
+            local dir="$1"
+            local name ver
+            name="$(node -p "require('./$dir/package.json').name")"
+            ver="$(node -p "require('./$dir/package.json').version")"
+            if npm view "$name@$ver" version >/dev/null 2>&1; then
+              echo "$name@$ver already published, skipping"
+            else
+              npm publish "$dir" --access public
+            fi
+          }
+
+          # Platform packages first so the launcher's optional deps resolve.
+          for dir in packaging/npm/dist/szr-*/package; do
+            publish_dir "$dir"
+          done
+          publish_dir packaging/npm/dist/szr/package
+
+  publish-pypi:
+    needs: build-release
+    if: needs.build-release.outputs.prerelease != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve package version
+        id: version
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ needs.build-release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ "$RELEASE_TAG" == *-v* ]]; then
+            version="${RELEASE_TAG##*-v}"
+          else
+            version="${RELEASE_TAG#v}"
+          fi
+          echo "version=$version" >>"$GITHUB_OUTPUT"
+
+      - name: Stage release binaries
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          ./packaging/extract-binaries.sh "${{ needs.build-release.outputs.tag }}" "${{ steps.version.outputs.version }}"
+
+      - name: Build wheels
+        run: |
+          set -euo pipefail
+          python3 packaging/pypi/build_wheels.py "${{ steps.version.outputs.version }}" packaging/.staging packaging/pypi/dist
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: packaging/pypi/dist
+          skip-existing: true

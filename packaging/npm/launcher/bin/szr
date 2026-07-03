@@ -1,0 +1,51 @@
+#!/usr/bin/env node
+"use strict";
+
+// Launcher for @devr-tools/szr.
+//
+// The real binary ships inside a platform-specific optionalDependency
+// (e.g. @devr-tools/szr-darwin-arm64). npm installs only the package that
+// matches the host's os/cpu, so this shim resolves that package and execs the
+// bundled binary. There is deliberately no postinstall step and no network
+// access at install time.
+
+const { spawnSync } = require("child_process");
+const os = require("os");
+
+const PLATFORM_PACKAGES = {
+  "darwin-x64": "@devr-tools/szr-darwin-x64",
+  "darwin-arm64": "@devr-tools/szr-darwin-arm64",
+  "linux-x64": "@devr-tools/szr-linux-x64",
+  "linux-arm64": "@devr-tools/szr-linux-arm64",
+  "win32-x64": "@devr-tools/szr-win32-x64",
+};
+
+function resolveBinary() {
+  const key = `${os.platform()}-${os.arch()}`;
+  const pkg = PLATFORM_PACKAGES[key];
+  if (!pkg) {
+    throw new Error(
+      `szr: unsupported platform "${key}". ` +
+        `Supported: ${Object.keys(PLATFORM_PACKAGES).join(", ")}.`
+    );
+  }
+  const binName = os.platform() === "win32" ? "szr.exe" : "szr";
+  try {
+    return require.resolve(`${pkg}/bin/${binName}`);
+  } catch (_err) {
+    throw new Error(
+      `szr: the platform package "${pkg}" is not installed.\n` +
+        `This usually means szr was installed with --no-optional/--omit=optional, ` +
+        `or on an unsupported platform. Reinstall without those flags.`
+    );
+  }
+}
+
+const result = spawnSync(resolveBinary(), process.argv.slice(2), {
+  stdio: "inherit",
+});
+
+if (result.error) {
+  throw result.error;
+}
+process.exit(result.status === null ? 1 : result.status);

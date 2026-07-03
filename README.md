@@ -79,6 +79,20 @@ brew install devr-tools/tap/szr
 szr self doctor
 ```
 
+npm (installs a prebuilt binary, no Go toolchain required):
+
+```bash
+npm install -g @devr-tools/szr
+szr self doctor
+```
+
+pip (installs a prebuilt binary per platform):
+
+```bash
+pip install szr
+szr self doctor
+```
+
 ## Main commands
 
 Run your normal commands through `szr`:
