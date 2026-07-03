@@ -36,6 +36,10 @@ type Advanced struct {
 	// SessionDedupWindowMinutes bounds how far back an identical run may be
 	// referenced.
 	SessionDedupWindowMinutes int `json:"session_dedup_window_minutes"`
+	// DeltaRender replaces a rerun's render with a compact change digest
+	// against the previous run's stored output when the digest is strictly
+	// cheaper. Rides on the session dedup store and window.
+	DeltaRender bool `json:"delta_render"`
 }
 
 // DefaultSessionDedupWindowMinutes is the recency window used when the
@@ -85,6 +89,11 @@ func Default() Config {
 			// verifies, so expansion always recovers the exact bytes.
 			SessionDedup:              true,
 			SessionDedupWindowMinutes: DefaultSessionDedupWindowMinutes,
+			// Delta rendering is safe by default for the same reason: a
+			// digest is only emitted against a verified stored baseline, only
+			// when strictly cheaper than the render it replaces, and never
+			// drops a critical changed line.
+			DeltaRender: true,
 		},
 		UpdateCheck: UpdateCheck{
 			Enabled:       false,

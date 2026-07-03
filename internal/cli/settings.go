@@ -164,6 +164,12 @@ func (a *App) settingsActions() map[string]settingsAction {
 				return fmt.Sprintf("%dm", cfg.Advanced.SessionDedupWindowMinutes)
 			})
 		},
+		"18": func(app *App, reader *bufio.Reader, stdout, stderr io.Writer) (int, bool) {
+			return app.updateBooleanSetting(reader, stdout, stderr, "delta rendering", app.config.Advanced.DeltaRender, "settings: delta rendering unchanged", func(cfg *config.Config, value bool) string {
+				cfg.Advanced.DeltaRender = value
+				return enabledLabel(cfg.Advanced.DeltaRender)
+			})
+		},
 	}
 }
 
@@ -250,6 +256,7 @@ func (a *App) printSettingsMenu(w io.Writer, cfg config.Config, configFile strin
 	printSettingsRow(w, "15", "retention verifier", enabledLabel(cfg.Advanced.RetentionVerifier))
 	printSettingsRow(w, "16", "session dedup", enabledLabel(cfg.Advanced.SessionDedup))
 	printSettingsRow(w, "17", "session dedup window minutes", fmt.Sprintf("%d", cfg.Advanced.SessionDedupWindowMinutes))
+	printSettingsRow(w, "18", "delta rendering", enabledLabel(cfg.Advanced.DeltaRender))
 	fmt.Fprintln(w, strings.Repeat("-", 54))
 	printSettingsRow(w, "q", "save and exit", "")
 	fmt.Fprint(w, "> ")

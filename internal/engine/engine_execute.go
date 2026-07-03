@@ -81,9 +81,11 @@ func (e *Engine) ExecuteStreaming(
 	record.VerifierRepairs = verification.repairs
 	record.VerifierSkipped = verification.skipped
 	record.DedupRef = dedupOutcome.ref
+	record.DeltaRef = dedupOutcome.deltaRef
 	e.appendStreamingHistory(record)
 	result := buildStreamingResult(profile, profileConfidence, rendered, rawCombined, execResult.ExitCode, teePath, duration, fallbackUsed, fastPath, rawBytesRead, bytesParsed, bytesEmitted, verification)
 	result.DedupRef = dedupOutcome.ref
+	result.DeltaRef = dedupOutcome.deltaRef
 	publishFinalPartial(onPartial, result)
 	if err != nil {
 		return result, err

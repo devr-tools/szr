@@ -72,7 +72,9 @@ func TestRunRoutes(t *testing.T) {
 		{"doctor missing tool", []string{"doctor"}, 0, []string{"go: missing"}, nil, ""},
 		{"git status", []string{"git", "status"}, 0, []string{"main...origin/main", "M  README.md"}, nil, ""},
 		{"git log", []string{"git", "log"}, 0, []string{"abc123 first", "def456 second"}, nil, ""},
-		{"git diff", []string{"git", "diff"}, 0, []string{"files=1 +1 -1", "a.go | 2 +-"}, nil, ""},
+		// A tiny diff's complete raw output is cheaper than summary+pointer,
+		// so the final-display guard prefers it.
+		{"git diff", []string{"git", "diff"}, 0, []string{"diff --git a/a.go b/a.go", "1 insertion(+)"}, nil, ""},
 		{"go test", []string{"go", "test", "./..."}, 0, []string{"pkg/fail", "TestSad"}, nil, ""},
 		{"go build", []string{"go", "build"}, 1, []string{"compile error"}, nil, ""},
 		{"go vet", []string{"go", "vet"}, 1, []string{"warning: suspicious"}, nil, ""},
@@ -284,7 +286,7 @@ func TestSettingsInteractivePersistsConfig(t *testing.T) {
 
 	var code int
 	var stdout, stderr string
-	testutil.WithStdin(t, "1\n1\n2\n1\n3\n12\n4\n2\n5\n20\n6\n11\n7\n2\n8\n2\n9\n2\n10\n1\n11\n2\n12\n2\n13\n2\n14\n2\nq\n", func() {
+	testutil.WithStdin(t, "1\n1\n2\n1\n3\n12\n4\n2\n5\n20\n6\n11\n7\n2\n8\n2\n9\n2\n10\n1\n11\n2\n12\n2\n13\n2\n14\n2\n18\n2\nq\n", func() {
 		code, stdout, stderr = testutil.RunApp(t, app, "settings")
 	})
 	if code != 0 || stderr != "" {
@@ -309,6 +311,7 @@ func TestSettingsInteractivePersistsConfig(t *testing.T) {
 		"saved: semantic compaction disabled",
 		"saved: compression contract disabled",
 		"saved: compact artifact refs disabled",
+		"saved: delta rendering disabled",
 		"settings: saved and exiting",
 	)
 
@@ -337,7 +340,7 @@ func assertSavedSettingsConfig(t *testing.T, saved config.Config) {
 	if saved.TeeOnFailure || saved.MaxPreviewLines != 20 || saved.MaxMatchGroups != 11 || saved.ReasoningBudgetMode != config.ReasoningBudgetAgent {
 		t.Fatalf("unexpected saved config: %#v", saved)
 	}
-	if saved.Advanced.AggressivePrepareRewrites || saved.Advanced.NoisePrefiltering || !saved.Advanced.AdaptiveBudgets || saved.Advanced.EarlyCaptureStop || saved.Advanced.SemanticCompaction || saved.Advanced.CompressionContract || saved.Advanced.CompactArtifactRefs {
+	if saved.Advanced.AggressivePrepareRewrites || saved.Advanced.NoisePrefiltering || !saved.Advanced.AdaptiveBudgets || saved.Advanced.EarlyCaptureStop || saved.Advanced.SemanticCompaction || saved.Advanced.CompressionContract || saved.Advanced.CompactArtifactRefs || saved.Advanced.DeltaRender {
 		t.Fatalf("unexpected advanced settings: %#v", saved.Advanced)
 	}
 }

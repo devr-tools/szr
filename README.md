@@ -48,6 +48,9 @@ It keeps the useful signal, preserves the wrapped command's exit code, and helps
 
 **Re-runs cost almost nothing.** Agents run `git status`, `git diff`, and test suites over and over. When output is byte-identical to a recent run, szr emits a two-line reference instead (`unchanged from previous run (39s ago, x3 identical) [ref: …]`) — and `szr expand <ref>` recovers the original byte-exact, on demand. The store is machine-level, so concurrent agents share it automatically: what one agent already saw, another can reference.
 
+- **Edit-test loops render as deltas.** When a rerun's output *changed* instead of repeating, szr can emit a compact change digest — `since last run (2m ago): +3 -1 lines` plus the changed lines themselves — but only when that is strictly cheaper than the normal summary, and never at the cost of a critical line: a newly-failing test always appears in the digest. The baseline stays one `szr expand <ref>` away.
+- **Agent fleets get their own scope.** Export `SZR_SESSION=<id>` before launching parallel agents and the whole fleet shares one dedup/delta scope: what one agent rendered, its siblings reference. Runs without the variable stay in the machine scope and never cross-match scoped sessions; `szr expand` resolves refs from any scope.
+
 **Anomalies are the payload.** List and table summaries always keep the rows that differ — the one stopped instance among 800 running, the `past_due` row in a result set — plus exact counts. Uniform JSON arrays render as a compact table that halves the token cost of list-shaped API responses at equal information.
 
 **Everything is recoverable.** Whatever a summary omits is preserved in a local artifact with an exact pointer — compression never costs you the ability to look at the full output.
@@ -131,8 +134,6 @@ Use this surface when you want to:
 
 ## Upcoming features
 
-- delta rendering for edit-test loops: re-run a command and see only what changed since the last run
-- shared context scopes for agent fleets: one agent renders, parallel agents reference
 - stdin pipe mode for filtering output already in flight
 - broader reducer coverage and better fallback handling for noisy real-world commands
 
@@ -151,7 +152,8 @@ Use this surface when you want to:
 | `szr doctor [--json]` | Check runtime diagnostics and local history health. |
 | `szr self doctor [--json]` | Check install state, `PATH`, config, cache, and version details. |
 | `szr settings` | Open the interactive settings menu for update checks, auto update, and other local preferences. |
-| `szr expand <ref>` | Recover the byte-exact original output behind a dedup reference. |
+| `szr expand <ref>` | Recover the byte-exact original output behind a dedup or delta baseline reference. |
+| `SZR_SESSION=<id> szr <cmd...>` | Scope dedup and delta references to one agent session; export it fleet-wide so parallel agents share a scope. |
 | `szr tee --latest` | Inspect the latest preserved full-output artifact. |
 | `szr explain go test ./...` | Show the matched profile, budget, and rewrite decisions for a command. |
 | `szr commands` | Show the full command catalog for power users and agents. |

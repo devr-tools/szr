@@ -44,6 +44,15 @@ type sessionDedupOutcome struct {
 	// ref is the short reference emitted in place of the render, empty when
 	// dedup did not fire.
 	ref string
+	// deltaRef is the baseline reference behind a delta digest render, empty
+	// when delta rendering did not fire.
+	deltaRef string
+}
+
+// sessionScope resolves the dedup/delta namespace for this run from the
+// ScopeEnv environment variable; blank means the machine scope.
+func sessionScope() string {
+	return strings.TrimSpace(os.Getenv(dedup.ScopeEnv))
 }
 
 // sessionDedupWantsRawCapture reports whether the run should retain its tee
@@ -105,7 +114,9 @@ func recentDedupMatches(store *dedup.Store, in sessionDedupInput, source dedupRa
 // dedupOutcomeAndEntry decides between emitting a reference to a verified
 // previous run and recording this run as a fresh reference target. A match
 // whose artifact is missing or corrupt falls through to the fresh-artifact
-// path so a dangling reference is never emitted.
+// path so a dangling reference is never emitted. Fresh runs whose output
+// merely changed (rather than repeated) may render as a delta digest against
+// the previous run's artifact; byte-identical dedup always takes precedence.
 func dedupOutcomeAndEntry(
 	store *dedup.Store,
 	in sessionDedupInput,
@@ -121,6 +132,9 @@ func dedupOutcomeAndEntry(
 	if !storeDedupArtifact(store, &entry, source) {
 		return sessionDedupOutcome{rendered: in.rendered}, dedup.Entry{}, false
 	}
+	if outcome, ok := deltaRenderOutcome(store, in, source, now); ok {
+		return outcome, entry, true
+	}
 	return sessionDedupOutcome{rendered: in.rendered}, entry, true
 }
 
@@ -130,6 +144,7 @@ func dedupKeyForRun(in sessionDedupInput, source dedupRawSource) dedup.Key {
 		Cwd:                in.inv.Cwd,
 		ExitCode:           in.exitCode,
 		RawHash:            source.hash,
+		Scope:              sessionScope(),
 	}
 }
 
@@ -143,6 +158,7 @@ func dedupEntryForRun(in sessionDedupInput, source dedupRawSource, now time.Time
 		ExitCode:           in.exitCode,
 		RawBytes:           source.rawBytes,
 		Truncated:          source.truncated,
+		Scope:              sessionScope(),
 	}
 }
 

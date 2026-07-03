@@ -341,6 +341,9 @@ func assertInstallDefaultInstruction(t *testing.T, file installers.File) {
 	if !strings.Contains(file.Content, "explain <cmd...>") || !strings.Contains(file.Content, "proxy <cmd...>") || !strings.Contains(file.Content, "wrap the noisy producer instead of the whole pipeline") || !strings.Contains(file.Content, "szr find <path> --name \"*.py\"") || !strings.Contains(file.Content, "szr run /usr/bin/grep ...") {
 		t.Fatalf("unexpected instruction body: %q", file.Content)
 	}
+	if !strings.Contains(file.Content, "Orchestrators export `SZR_SESSION=<id>` so parallel agents share references") || !strings.Contains(file.Content, "since last run") {
+		t.Fatalf("expected delta/scope guidance in instruction body: %q", file.Content)
+	}
 }
 
 func classifyInstallPlanFile(target installers.Target, path string) string {
@@ -436,7 +439,7 @@ func assertInstallCodexInstruction(t *testing.T, file installers.File) {
 	t.Helper()
 	switch {
 	case strings.HasSuffix(file.Path, filepath.Join(".codex", "szr.md")):
-		if file.Strategy != installers.StrategyWrite || !strings.Contains(file.Content, "## szr for Codex") || !strings.Contains(file.Content, "Codex does not install a Bash rewrite hook today") || !strings.Contains(file.Content, "szr grep <pattern> <path>") {
+		if file.Strategy != installers.StrategyWrite || !strings.Contains(file.Content, "## szr for Codex") || !strings.Contains(file.Content, "Codex does not install a Bash rewrite hook today") || !strings.Contains(file.Content, "szr grep <pattern> <path>") || !strings.Contains(file.Content, "Orchestrators export `SZR_SESSION=<id>` so parallel agents share references") {
 			t.Fatalf("unexpected Codex shared file: %#v", file)
 		}
 	case strings.HasSuffix(file.Path, "AGENTS.md"):

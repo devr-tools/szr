@@ -25,10 +25,10 @@ func TestRenderExecutionPrefersRawOverOversizedCanonicalSummary(t *testing.T) {
 func TestRenderExecutionKeepsCanonicalSummaryWithinSlack(t *testing.T) {
 	t.Parallel()
 
-	// A genuinely compact canonical summary (within 1.25x of raw tokens)
-	// still survives the small-output guard.
+	// A genuinely compact canonical summary (at or below raw tokens) still
+	// survives the small-output guard.
 	raw := "pkg/a.go:12:TODO fix widget\npkg/b.go:8:TODO fix gadget\npkg/c.go:4:TODO fix sprocket\npkg/d.go:2:TODO fix flange"
-	summary := "4 matches across 4 files\ndirs: pkg/ (4)"
+	summary := "4 matches | dirs: pkg/ (4)"
 	rendered := RenderExecution(Profile{
 		Name:   "ripgrep",
 		Render: func(Invocation, Execution) string { return summary },
