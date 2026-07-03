@@ -1,9 +1,12 @@
 package github
 
 import (
+	"strings"
+
 	"github.com/devr-tools/szr/internal/engine"
 	shared "github.com/devr-tools/szr/internal/filters"
 	ghfilter "github.com/devr-tools/szr/internal/filters/github"
+	jsonqueryfilter "github.com/devr-tools/szr/internal/filters/jsonquery"
 	"github.com/devr-tools/szr/internal/profilekit"
 )
 
@@ -156,5 +159,53 @@ func Profiles(maxLines int) []engine.Profile {
 				"Keeps workflow status, branch or event context, failed jobs, and failed step names visible for repair loops.",
 			},
 		},
+		{
+			Name:             "gh-api",
+			Description:      "Summarizes raw gh api JSON responses into bounded structured previews.",
+			Confidence:       engine.ConfidenceMedium,
+			StreamPreference: engine.StreamStdoutFirst,
+			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 10)),
+			LatencyBudget:    profilekit.LatencyBudget(20),
+			Match: func(inv engine.Invocation) bool {
+				return isGHAPICommand(inv.Display)
+			},
+			Render: func(_ engine.Invocation, exec engine.Execution) string {
+				return jsonqueryfilter.SummarizeQueryOutput(exec.Stdout, exec.Stderr, maxLines)
+			},
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
+				return newBufferedCombinedReducer(func(input string) string {
+					return jsonqueryfilter.SummarizeQueryOutput(input, "", budget.MaxLines)
+				}, func(input string) (string, string, bool) {
+					return jsonqueryfilter.QueryOutputRecoveryInfo(input, "", budget.MaxLines)
+				})
+			},
+			ParseBytes: profilekit.ParseCombined,
+			Explain: []string{
+				"Matches `gh api` calls that do not already filter with --jq, --template, or --silent.",
+				"Renders JSON responses as bounded value previews and never rewrites the request itself.",
+			},
+		},
 	}
+}
+
+func isGHAPICommand(args []string) bool {
+	_, _, head, _, ok := ghCommand(args)
+	if !ok || head != "api" {
+		return false
+	}
+	if containsAny(args, "--jq", "-q", "--template", "-t", "--silent") {
+		return false
+	}
+	return !containsAnyPrefix(args, "--jq=", "--template=")
+}
+
+func containsAnyPrefix(args []string, prefixes ...string) bool {
+	for _, arg := range args {
+		for _, prefix := range prefixes {
+			if strings.HasPrefix(arg, prefix) {
+				return true
+			}
+		}
+	}
+	return false
 }

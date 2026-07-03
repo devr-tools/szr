@@ -40,6 +40,7 @@ type Summary struct {
 	TeeRate             float64            `json:"tee_rate"`
 	PassthroughCommands int                `json:"passthrough_commands,omitempty"`
 	PassthroughTokens   int                `json:"passthrough_tokens,omitempty"`
+	FilteredSavingsPct  float64            `json:"filtered_savings_pct"`
 	DurationP50MS       int64              `json:"duration_p50_ms"`
 	DurationP95MS       int64              `json:"duration_p95_ms"`
 	RawBytesRead        int                `json:"raw_bytes_read"`

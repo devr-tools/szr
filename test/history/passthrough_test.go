@@ -69,6 +69,49 @@ func TestSummarizeExcludesPassthroughFromSavingsAnalysis(t *testing.T) {
 	}
 
 	assertNoPassthroughSavingsArtifacts(t, summary)
+
+	// Filtered raw = 4200-4000 = 200, saved = 160 -> 80% over filtered
+	// traffic, even though overall savings is 160/4200 = 3.8%.
+	if !closeEnough(summary.FilteredSavingsPct, 80, 0.01) {
+		t.Fatalf("expected filtered savings pct over non-proxied raw, got %#v", summary.FilteredSavingsPct)
+	}
+}
+
+func TestSummarizeSkipsZeroOutputRecordsInHotspots(t *testing.T) {
+	records := []history.Record{
+		{
+			Timestamp:          time.Date(2026, 7, 3, 10, 0, 0, 0, time.UTC),
+			Command:            "profile",
+			CommandFingerprint: history.Fingerprint("profile"),
+			Profile:            "passthrough",
+			RawTokens:          0,
+			FilteredTokens:     0,
+		},
+		{
+			Timestamp:          time.Date(2026, 7, 3, 11, 0, 0, 0, time.UTC),
+			Command:            "szr git status",
+			CommandFingerprint: history.Fingerprint("szr git status"),
+			Profile:            "git-status",
+			RawTokens:          100,
+			FilteredTokens:     20,
+			SavedTokens:        80,
+			SavingsPct:         80,
+		},
+	}
+	summary := history.Summarize(records, 8)
+	if summary.Commands != 2 {
+		t.Fatalf("expected zero-output run kept in totals, got %#v", summary.Commands)
+	}
+	for _, hotspot := range summary.CommandHotspots {
+		if hotspot.Command == "profile" {
+			t.Fatalf("expected zero-output command excluded from hotspots, got %#v", summary.CommandHotspots)
+		}
+	}
+	for _, fingerprint := range summary.FingerprintHotspots {
+		if fingerprint.Command == "profile" {
+			t.Fatalf("expected zero-output fingerprint excluded, got %#v", summary.FingerprintHotspots)
+		}
+	}
 }
 
 func assertNoPassthroughSavingsArtifacts(t *testing.T, summary history.Summary) {
