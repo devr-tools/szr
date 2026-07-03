@@ -48,6 +48,9 @@ func renderInstructionBodyForHook(paths Paths, hookPath string) string {
 		fmt.Sprintf("- When exact `/usr/bin/find` or `/usr/bin/grep` flags matter, wrap them explicitly with `%s run /usr/bin/find ...` or `%s run /usr/bin/grep ...` instead of expecting an auto-rewrite.", paths.Binary, paths.Binary),
 		fmt.Sprintf("- Use `%s explain <cmd...>` when you need to inspect the active profile before bypassing it.", paths.Binary),
 		fmt.Sprintf("- Use `%s proxy <cmd...>` when raw output matters more than compression.", paths.Binary),
+		fmt.Sprintf("- When output shows `unchanged from previous run [ref: <id>]`, it is byte-identical to a run you already saw - do not re-run the command; use `%s expand <id>` only if you need the full content again.", paths.Binary),
+		"- A `missing detail:` section contains critical lines szr's retention verifier recovered from raw output - treat it as part of the command output.",
+		fmt.Sprintf("- For long agent loops, prefer the `agent` reasoning budget mode (`%s settings`) for tighter default budgets.", paths.Binary),
 		"- If `szr` reports a tee artifact for a failure, inspect that full artifact path instead of rerunning the command unfiltered.",
 		hookDescription,
 	}
@@ -66,6 +69,9 @@ func renderCodexInstructionBody(paths Paths) string {
 		fmt.Sprintf("- If exact `/usr/bin/find` or `/usr/bin/grep` flags matter, wrap them explicitly with `%s run /usr/bin/find ...` or `%s run /usr/bin/grep ...`.", paths.Binary, paths.Binary),
 		fmt.Sprintf("- Use `%s explain <cmd...>` when you need to inspect the active profile before bypassing it.", paths.Binary),
 		fmt.Sprintf("- Use `%s proxy <cmd...>` when raw output matters more than compression.", paths.Binary),
+		fmt.Sprintf("- When output shows `unchanged from previous run [ref: <id>]`, it is byte-identical to a run you already saw - do not re-run the command; use `%s expand <id>` only if you need the full content again.", paths.Binary),
+		"- A `missing detail:` section contains critical lines szr's retention verifier recovered from raw output - treat it as part of the command output.",
+		fmt.Sprintf("- For long agent loops, prefer the `agent` reasoning budget mode (`%s settings`) for tighter default budgets.", paths.Binary),
 		"- If `szr` reports a tee artifact for a failure, inspect that full artifact path instead of rerunning the command unfiltered.",
 	}
 	return strings.Join(lines, "\n")
