@@ -1,0 +1,18 @@
+  Determining projects to restore...
+  Restored /workspace/billing-svc/Billing.Api/Billing.Api.csproj (in 402 ms).
+  Restored /workspace/billing-svc/Billing.Core/Billing.Core.csproj (in 377 ms).
+  Restored /workspace/billing-svc/Billing.Tests/Billing.Tests.csproj (in 415 ms).
+  Billing.Core -> /workspace/billing-svc/Billing.Core/bin/Debug/net9.0/Billing.Core.dll
+/workspace/billing-svc/Billing.Api/Services/InvoiceService.cs(52,21): error CS0103: The name 'invocie' does not exist in the current context [/workspace/billing-svc/Billing.Api/Billing.Api.csproj]
+/workspace/billing-svc/Billing.Api/Services/InvoiceService.cs(93,52): error CS1002: ; expected [/workspace/billing-svc/Billing.Api/Billing.Api.csproj]
+/workspace/billing-svc/Billing.Api/Controllers/InvoicesController.cs(27,33): warning CS8602: Dereference of a possibly null reference. [/workspace/billing-svc/Billing.Api/Billing.Api.csproj]
+
+Build FAILED.
+
+/workspace/billing-svc/Billing.Api/Controllers/InvoicesController.cs(27,33): warning CS8602: Dereference of a possibly null reference. [/workspace/billing-svc/Billing.Api/Billing.Api.csproj]
+/workspace/billing-svc/Billing.Api/Services/InvoiceService.cs(52,21): error CS0103: The name 'invocie' does not exist in the current context [/workspace/billing-svc/Billing.Api/Billing.Api.csproj]
+/workspace/billing-svc/Billing.Api/Services/InvoiceService.cs(93,52): error CS1002: ; expected [/workspace/billing-svc/Billing.Api/Billing.Api.csproj]
+    1 Warning(s)
+    2 Error(s)
+
+Time Elapsed 00:00:03.18
