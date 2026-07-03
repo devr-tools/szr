@@ -44,7 +44,7 @@ func (e *Engine) ExecuteStreaming(
 		passthrough:         passthrough,
 		compactArtifactRefs: preparedInv.Advanced.CompactArtifactRefs,
 		compressionContract: preparedInv.Advanced.CompressionContract,
-		guardSmallOutput:    shouldGuardSmallOutput(profile, passthrough),
+		guardSmallOutput:    shouldGuardSmallOutput(profile, passthrough) && !runResult.captureTruncated,
 		ultraCompact:        preparedInv.UltraCompact,
 	}.finalize()
 	bytesParsed := streamingBytesParsed(streamReducer, profile, execResult, rawBytesRead)
@@ -169,8 +169,8 @@ func renderStreamingOutput(
 	rendered = applyUltraCompactRender(preparedInv, execResult, rendered, rawCombined)
 	rendered, recoveryPlan, _ = enforceCompressionContract(rendered, rawCombined, rawTokens, budget, recoveryPlan, passthrough, preparedInv.Advanced.CompressionContract)
 	rendered = ensureInformativeFailureRender(profile, preparedInv, rendered, rawCombined, failureArtifactPath, execResult.ExitCode, passthrough, budget)
-	rendered = preferTerseRenderForRewrittenCommand(rendered, rawCombined, execResult.ExitCode, commandRewritten, passthrough)
-	if shouldGuardSmallOutput(profile, passthrough) && !preparedInv.UltraCompact {
+	rendered = preferTerseRenderForRewrittenCommand(rendered, rawCombined, execResult.ExitCode, commandRewritten, passthrough, captureTruncated)
+	if !captureTruncated && shouldGuardSmallOutput(profile, passthrough) && !preparedInv.UltraCompact {
 		rendered = preferRawSmallOutputForProfile(profile, rendered, rawCombined, execResult.ExitCode)
 	}
 	return rendered, fallbackUsed, recoveryPlan
@@ -275,8 +275,12 @@ func preferTerseRenderForRewrittenCommand(
 	exitCode int,
 	commandRewritten bool,
 	passthrough bool,
+	captureTruncated bool,
 ) string {
-	if passthrough || !commandRewritten || exitCode != 0 {
+	// When capture stopped at the preview limit, rawCombined is only the
+	// head of the stream; compacting it would replace a correct summary
+	// with the least informative part of the output.
+	if passthrough || !commandRewritten || exitCode != 0 || captureTruncated {
 		return rendered
 	}
 	renderedTokens := history.EstimateTokens(rendered)
