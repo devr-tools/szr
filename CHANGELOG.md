@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.15.0](https://github.com/devr-tools/szr/compare/v0.14.0...v0.15.0) (2026-07-03)
+
+
+### Features
+
+* **cli:** stdin pipe mode with content-sniffed summarization ([3b170da](https://github.com/devr-tools/szr/commit/3b170dac27881b7d193969c292ae345babf27cef))
+* delta rendering, swarm context scopes, and stdin pipe mode ([2e5fa2c](https://github.com/devr-tools/szr/commit/2e5fa2cf1ae66e3ce8bb58d2bcc81032dca94260))
+* **engine:** delta rendering for changed re-runs and swarm context scopes ([6c1ecd5](https://github.com/devr-tools/szr/commit/6c1ecd521b09bdbda93eaa1166f7e4e8a317567c))
+
+
+### Bug Fixes
+
+* **engine:** enforce never-worse-than-raw on the final display ([6c7265a](https://github.com/devr-tools/szr/commit/6c7265ac2d795c421995fad506172c41171ec03b))
+
 ## [0.14.0](https://github.com/devr-tools/szr/compare/v0.13.0...v0.14.0) (2026-07-03)
 
 
