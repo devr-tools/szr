@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.16.0](https://github.com/devr-tools/szr/compare/v0.15.0...v0.16.0) (2026-07-03)
+
+
+### Features
+
+* **engine:** route shell-wrapped and inline-eval commands to real profiles ([f30b23a](https://github.com/devr-tools/szr/commit/f30b23a2b602f2b23117487c639dac59c921a2fa))
+* route shell-wrapped and node inline-eval commands to real profiles ([86ef530](https://github.com/devr-tools/szr/commit/86ef530169038414e9cd765dd86326ef61aee079))
+
 ## [0.15.0](https://github.com/devr-tools/szr/compare/v0.14.0...v0.15.0) (2026-07-03)
 
 
