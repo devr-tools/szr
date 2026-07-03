@@ -152,6 +152,18 @@ func (a *App) settingsActions() map[string]settingsAction {
 				return enabledLabel(cfg.Advanced.RetentionVerifier)
 			})
 		},
+		"16": func(app *App, reader *bufio.Reader, stdout, stderr io.Writer) (int, bool) {
+			return app.updateBooleanSetting(reader, stdout, stderr, "session dedup", app.config.Advanced.SessionDedup, "settings: session dedup unchanged", func(cfg *config.Config, value bool) string {
+				cfg.Advanced.SessionDedup = value
+				return enabledLabel(cfg.Advanced.SessionDedup)
+			})
+		},
+		"17": func(app *App, reader *bufio.Reader, stdout, stderr io.Writer) (int, bool) {
+			return app.updatePositiveIntSetting(reader, stdout, stderr, "session dedup window minutes", "session dedup window minutes", "settings: session dedup window unchanged", func(cfg *config.Config, value int) string {
+				cfg.Advanced.SessionDedupWindowMinutes = value
+				return fmt.Sprintf("%dm", cfg.Advanced.SessionDedupWindowMinutes)
+			})
+		},
 	}
 }
 
@@ -236,6 +248,8 @@ func (a *App) printSettingsMenu(w io.Writer, cfg config.Config, configFile strin
 	printSettingsRow(w, "13", "compression contract", enabledLabel(cfg.Advanced.CompressionContract))
 	printSettingsRow(w, "14", "compact artifact refs", enabledLabel(cfg.Advanced.CompactArtifactRefs))
 	printSettingsRow(w, "15", "retention verifier", enabledLabel(cfg.Advanced.RetentionVerifier))
+	printSettingsRow(w, "16", "session dedup", enabledLabel(cfg.Advanced.SessionDedup))
+	printSettingsRow(w, "17", "session dedup window minutes", fmt.Sprintf("%d", cfg.Advanced.SessionDedupWindowMinutes))
 	fmt.Fprintln(w, strings.Repeat("-", 54))
 	printSettingsRow(w, "q", "save and exit", "")
 	fmt.Fprint(w, "> ")

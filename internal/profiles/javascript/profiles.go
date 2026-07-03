@@ -7,8 +7,8 @@ import (
 )
 
 func Profiles(maxLines int) []engine.Profile {
-	testSummary := profilekit.CombinedBufferedSummary(maxLines, 12, 35, engine.StreamStdoutFirst, jsfilter.SummarizeJSTest)
-	toolingSummary := profilekit.CombinedBufferedSummary(maxLines, 10, 30, engine.StreamStdoutFirst, jsfilter.SummarizeJSTooling)
+	testSummary := profilekit.CombinedBufferedContractSummary(maxLines, 12, 35, engine.StreamStdoutFirst, jsfilter.SummarizeJSTestUnderContract)
+	toolingSummary := profilekit.CombinedBufferedContractSummary(maxLines, 10, 30, engine.StreamStdoutFirst, jsfilter.SummarizeJSToolingUnderContract)
 
 	return []engine.Profile{
 		profilekit.WithSummary(engine.Profile{

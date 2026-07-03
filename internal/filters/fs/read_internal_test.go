@@ -1,6 +1,36 @@
 package fs
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+// TestSummarizeReadFileBinaryish pins the binary read path: reading a
+// control-byte file must render the byte count plus its embedded printable
+// strings instead of replaying byte noise as pseudo-code lines.
+func TestSummarizeReadFileBinaryish(t *testing.T) {
+	data := make([]byte, 0, 6000)
+	for i := 0; i < 5000; i++ {
+		data = append(data, byte(i%32))
+	}
+	data = append(data, []byte("MAGIC_OFFSET=0x7f3c")...)
+	for i := 0; i < 500; i++ {
+		data = append(data, byte(i%16))
+	}
+
+	got := SummarizeReadFile("firmware.bin", data, 12)
+	if !strings.HasPrefix(got, "binary output: ") {
+		t.Fatalf("expected binary headline for control-byte file, got:\n%s", got)
+	}
+	if !strings.Contains(got, "MAGIC_OFFSET=0x7f3c") {
+		t.Fatalf("expected embedded string needle in binary read preview:\n%s", got)
+	}
+
+	kind, _, requireRaw := ReadFileRecoveryInfo("firmware.bin", data, 12)
+	if kind != "full-output" || !requireRaw {
+		t.Fatalf("expected full-output recovery for binary read, got kind=%q requireRaw=%v", kind, requireRaw)
+	}
+}
 
 func TestNormalizePreviewLineCollapsesInlineBlocks(t *testing.T) {
 	if got := normalizePreviewLine("value = { keep: 1, drop: 2 }"); got != "value = { ... }" {

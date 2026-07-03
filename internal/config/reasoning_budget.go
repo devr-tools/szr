@@ -41,5 +41,8 @@ func Normalize(cfg Config) (Config, error) {
 	if cfg.UpdateCheck.IntervalHours <= 0 {
 		cfg.UpdateCheck.IntervalHours = Default().UpdateCheck.IntervalHours
 	}
+	if cfg.Advanced.SessionDedupWindowMinutes <= 0 {
+		cfg.Advanced.SessionDedupWindowMinutes = DefaultSessionDedupWindowMinutes
+	}
 	return cfg, nil
 }

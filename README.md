@@ -42,6 +42,16 @@ It keeps the useful signal, preserves the wrapped command's exit code, and helps
 - summarizes noisy output without hiding the important anchors
 - records local history so you can inspect token savings over time
 
+## Why szr
+
+**Fidelity is a runtime guarantee, not a promise.** A built-in retention verifier checks every render against the raw output — error lines, `file:line` anchors, diagnostic codes, failing test names — and repairs anything a filter dropped by appending the missing detail. Failing commands can never render content-free, explicit flags you pass are never overridden, and exit codes always match the wrapped command.
+
+**Re-runs cost almost nothing.** Agents run `git status`, `git diff`, and test suites over and over. When output is byte-identical to a recent run, szr emits a two-line reference instead (`unchanged from previous run (39s ago, x3 identical) [ref: …]`) — and `szr expand <ref>` recovers the original byte-exact, on demand. The store is machine-level, so concurrent agents share it automatically: what one agent already saw, another can reference.
+
+**Anomalies are the payload.** List and table summaries always keep the rows that differ — the one stopped instance among 800 running, the `past_due` row in a result set — plus exact counts. Uniform JSON arrays render as a compact table that halves the token cost of list-shaped API responses at equal information.
+
+**Everything is recoverable.** Whatever a summary omits is preserved in a local artifact with an exact pointer — compression never costs you the ability to look at the full output.
+
 ## Install
 
 Install the CLI with Go:
@@ -121,9 +131,9 @@ Use this surface when you want to:
 
 ## Upcoming features
 
-- stronger command recommendations based on real usage history and low-savings hotspots
-- deeper repository-aware noise filtering for generated files, vendor trees, and build output
-- more stable agent-facing output for long-running automated workflows
+- delta rendering for edit-test loops: re-run a command and see only what changed since the last run
+- shared context scopes for agent fleets: one agent renders, parallel agents reference
+- stdin pipe mode for filtering output already in flight
 - broader reducer coverage and better fallback handling for noisy real-world commands
 
 ## Command reference
@@ -141,6 +151,7 @@ Use this surface when you want to:
 | `szr doctor [--json]` | Check runtime diagnostics and local history health. |
 | `szr self doctor [--json]` | Check install state, `PATH`, config, cache, and version details. |
 | `szr settings` | Open the interactive settings menu for update checks, auto update, and other local preferences. |
+| `szr expand <ref>` | Recover the byte-exact original output behind a dedup reference. |
 | `szr tee --latest` | Inspect the latest preserved full-output artifact. |
 | `szr explain go test ./...` | Show the matched profile, budget, and rewrite decisions for a command. |
 | `szr commands` | Show the full command catalog for power users and agents. |

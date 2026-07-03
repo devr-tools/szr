@@ -24,6 +24,7 @@ type Record struct {
 	Passthrough        bool      `json:"passthrough,omitempty"`
 	VerifierRepairs    int       `json:"verifier_repairs,omitempty"`
 	VerifierSkipped    bool      `json:"verifier_skipped,omitempty"`
+	DedupRef           string    `json:"dedup_ref,omitempty"`
 	TeePath            string    `json:"tee_path,omitempty"`
 }
 

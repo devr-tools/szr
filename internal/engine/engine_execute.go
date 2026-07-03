@@ -31,7 +31,7 @@ func (e *Engine) ExecuteStreaming(
 	runResult, execResult, fastPath, rawCombined, rawBytesRead, rawTokens, duration, err := e.runStreamingCommand(ctx, inv, command, profile, streamReducer, options)
 	commandRewritten := commandWasRewritten(preparedInv.Command, command)
 	rendered, fallbackUsed, recoveryPlan := renderStreamingOutput(profile, preparedInv, execResult, streamReducer, budget, rawCombined, rawTokens, passthrough, fastPath, rawBytesRead, runResult.captureTruncated, commandRewritten, runResult.teePath)
-	teePath := e.ensureStreamingArtifactPath(runResult.teePath, execResult.ExitCode, rawCombined, command, profile, fallbackUsed, recoveryPlan, passthrough)
+	teePath := e.ensureStreamingArtifactPath(runResult.teePath, execResult.ExitCode, rawCombined, command, profile, fallbackUsed, recoveryPlan, passthrough, options.retainRawCapture)
 	rendered = renderedDisplayFinalizer{
 		profile:             profile,
 		exitCode:            execResult.ExitCode,
@@ -46,6 +46,7 @@ func (e *Engine) ExecuteStreaming(
 		compressionContract: preparedInv.Advanced.CompressionContract,
 		guardSmallOutput:    shouldGuardSmallOutput(profile, passthrough) && !runResult.captureTruncated,
 		ultraCompact:        preparedInv.UltraCompact,
+		captureComplete:     !streamingCaptureIncomplete(runResult),
 	}.finalize()
 	rendered, verification := applyRetentionVerifier(retentionVerifyInput{
 		rendered:          rendered,
@@ -60,13 +61,29 @@ func (e *Engine) ExecuteStreaming(
 		passthrough:       passthrough,
 		fastPathBypass:    fastPath.BypassCompression,
 	})
+	dedupOutcome := e.applySessionDedup(sessionDedupInput{
+		rendered:        rendered,
+		rawCombined:     rawCombined,
+		rawCapturePath:  runResult.teePath,
+		captureComplete: !streamingCaptureIncomplete(runResult),
+		exitCode:        execResult.ExitCode,
+		failureExit:     isFailureExit(profile, execResult.ExitCode),
+		passthrough:     passthrough,
+		inv:             preparedInv,
+		budget:          budget,
+		commandText:     strings.Join(inv.Display, " "),
+	})
+	rendered = dedupOutcome.rendered
+	cleanupDedupCapture(runResult.teePath, teePath)
 	bytesParsed := streamingBytesParsed(streamReducer, profile, execResult, rawBytesRead)
 	bytesEmitted := len(rendered)
 	record := buildStreamingHistoryRecord(inv, profile, profileConfidence, duration, execResult.ExitCode, rawBytesRead, bytesParsed, bytesEmitted, rawTokens, fallbackUsed, passthrough, teePath, rendered)
 	record.VerifierRepairs = verification.repairs
 	record.VerifierSkipped = verification.skipped
+	record.DedupRef = dedupOutcome.ref
 	e.appendStreamingHistory(record)
 	result := buildStreamingResult(profile, profileConfidence, rendered, rawCombined, execResult.ExitCode, teePath, duration, fallbackUsed, fastPath, rawBytesRead, bytesParsed, bytesEmitted, verification)
+	result.DedupRef = dedupOutcome.ref
 	publishFinalPartial(onPartial, result)
 	if err != nil {
 		return result, err
@@ -396,6 +413,7 @@ func (e *Engine) ensureStreamingArtifactPath(
 	fallbackUsed bool,
 	recoveryPlan RecoveryPlan,
 	passthrough bool,
+	keepRawCapture bool,
 ) string {
 	if teePath != "" {
 		if shouldPersistRecoveryArtifact(recoveryPlan, rawCombined, passthrough) {
@@ -404,7 +422,11 @@ func (e *Engine) ensureStreamingArtifactPath(
 		if isFailureExit(profile, exitCode) && e.config.TeeOnFailure && shouldPersistFailureArtifact(profile, fallbackUsed, passthrough) {
 			return teePath
 		}
-		_ = os.Remove(teePath)
+		// Session dedup still needs the capture file; cleanupDedupCapture
+		// removes it after the dedup step has archived what it needs.
+		if !keepRawCapture {
+			_ = os.Remove(teePath)
+		}
 		return ""
 	}
 	if rawCombined == "" {
@@ -590,6 +612,7 @@ const rawPreviewBytes = defaultTinyOutputBypassBytes * 2
 
 func buildRunOptions(inv Invocation, profile Profile, passthrough bool, streamReducer StreamReducer) runOptions {
 	options := runOptions{}
+	options.retainRawCapture = sessionDedupWantsRawCapture(inv, passthrough)
 	hasStreamReducer := streamReducer != nil
 	fullCapture := passthrough || inv.Verbose >= 3 || (!hasStreamReducer && profile.Render != nil) || profile.Capabilities.RequireFullCapture
 	if !fullCapture {

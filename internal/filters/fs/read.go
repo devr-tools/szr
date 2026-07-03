@@ -30,6 +30,9 @@ func summarizeReadFileResult(path string, data []byte, maxLines int) readFileSum
 		maxLines = 12
 	}
 
+	if filters.IsBinaryish(data) {
+		return summarizeBinaryFilePreview(data, maxLines)
+	}
 	if result, ok := summarizeLogFilePreview(path, data, maxLines); ok {
 		return result
 	}
@@ -549,6 +552,20 @@ type readFileSummaryResult struct {
 	Text             string
 	RawLineCount     int
 	PreviewLineCount int
+}
+
+// summarizeBinaryFilePreview renders binary-ish file content as a byte-count
+// headline plus its embedded printable strings; replaying control bytes
+// costs tokens while carrying zero signal. The line counts always report an
+// elision so the recovery path points at the full raw capture.
+func summarizeBinaryFilePreview(data []byte, maxLines int) readFileSummaryResult {
+	text := filters.SummarizeBinaryish(data, maxLines)
+	previewLines := len(filters.NonEmptyLines(text))
+	return readFileSummaryResult{
+		Text:             text,
+		RawLineCount:     previewLines + 1,
+		PreviewLineCount: previewLines,
+	}
 }
 
 func firstSentence(line string) string {

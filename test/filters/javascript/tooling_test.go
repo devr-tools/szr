@@ -58,6 +58,55 @@ func TestSummarizeJSToolingKeepsRegistry404PackageSpec(t *testing.T) {
 	}
 }
 
+// TestSummarizeJSToolingKeepsLinterFileHeaders pins the linter-output
+// needles: hyperlink-wrapped (OSC-8) and SGR-styled file headers must
+// survive stripping, stay grouped above their findings, and — with the
+// compression contract armed — every file header and error rule must fit the
+// self-capped render.
+func TestSummarizeJSToolingKeepsLinterFileHeaders(t *testing.T) {
+	link := func(url, text string) string {
+		return "\x1b]8;;" + url + "\x1b\\" + text + "\x1b]8;;\x1b\\"
+	}
+	input := strings.Join([]string{
+		"\x1b[4m" + link("file:///workspace/web/src/checkout.ts", "/workspace/web/src/checkout.ts") + "\x1b[24m",
+		"  \x1b[2m12:9\x1b[22m  \x1b[31merror\x1b[39m  'coupon' is assigned a value but never used  " + link("https://example.invalid/rules/no-unused-vars", "no-unused-vars"),
+		"  \x1b[2m88:14\x1b[22m  \x1b[31merror\x1b[39m  Unsafe member access .discuont on an `any` value  " + link("https://example.invalid/rules/no-unsafe-member-access", "@typescript-eslint/no-unsafe-member-access"),
+		"  \x1b[2m102:1\x1b[22m  \x1b[33mwarning\x1b[39m  Unexpected console statement  no-console",
+		"",
+		"\x1b[4m" + link("file:///workspace/web/src/cart/total.ts", "/workspace/web/src/cart/total.ts") + "\x1b[24m",
+		"  \x1b[2m7:3\x1b[22m  \x1b[31merror\x1b[39m  Expected '===' and instead saw '=='  eqeqeq",
+		"",
+		"\x1b[31m\x1b[1m✖ 4 problems (3 errors, 1 warning)\x1b[22m\x1b[39m",
+	}, "\n")
+
+	for _, tc := range []struct {
+		name    string
+		needles []string
+	}{
+		{name: "file headers", needles: []string{"/workspace/web/src/checkout.ts", "/workspace/web/src/cart/total.ts"}},
+		{name: "error rules", needles: []string{"no-unused-vars", "eqeqeq"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := jsfilter.SummarizeJSToolingUnderContract(input, 10, true)
+			for _, needle := range tc.needles {
+				if !strings.Contains(got, needle) {
+					t.Fatalf("expected needle %q in linter summary:\n%s", needle, got)
+				}
+			}
+			if strings.Contains(got, "\x1b") {
+				t.Fatalf("expected escape sequences to be stripped:\n%q", got)
+			}
+		})
+	}
+
+	got := jsfilter.SummarizeJSToolingUnderContract(input, 10, true)
+	header := strings.Index(got, "/workspace/web/src/checkout.ts")
+	finding := strings.Index(got, "no-unused-vars")
+	if header < 0 || finding < 0 || header > finding {
+		t.Fatalf("expected the file header above its findings:\n%s", got)
+	}
+}
+
 func TestSummarizeJSToolingKeepsNPMResolutionErrors(t *testing.T) {
 	input := strings.Join([]string{
 		"npm ERR! code E404",

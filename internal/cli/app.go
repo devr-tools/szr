@@ -185,6 +185,7 @@ func (a *App) runBuiltInCommand(ctx context.Context, flags globalFlags, rest []s
 		"json":          func() int { return a.runJSON(rest[1:]) },
 		"log":           func() int { return a.runLog(rest[1:]) },
 		"tee":           func() int { return a.runTee(rest[1:]) },
+		"expand":        func() int { return a.runExpand(rest[1:]) },
 	}
 	handler, ok := handlers[command]
 	if !ok {

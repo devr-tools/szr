@@ -21,9 +21,13 @@ type teeCapture struct {
 	finalPath string
 	file      *os.File
 	failed    bool
+	// retainOnSuccess keeps the finalized capture for successful exits too,
+	// so session dedup can hash and archive the full raw stream even when the
+	// in-memory capture stopped at the preview limit.
+	retainOnSuccess bool
 }
 
-func newTeeCapture(dir string, command []string, enabled bool) (*teeCapture, error) {
+func newTeeCapture(dir string, command []string, enabled bool, retainOnSuccess bool) (*teeCapture, error) {
 	if !enabled || dir == "" {
 		return nil, nil
 	}
@@ -34,9 +38,10 @@ func newTeeCapture(dir string, command []string, enabled bool) (*teeCapture, err
 	}
 
 	return &teeCapture{
-		tempPath:  file.Name(),
-		finalPath: filepath.Join(dir, teeFileName(command)),
-		file:      file,
+		tempPath:        file.Name(),
+		finalPath:       filepath.Join(dir, teeFileName(command)),
+		file:            file,
+		retainOnSuccess: retainOnSuccess,
 	}, nil
 }
 
@@ -75,6 +80,7 @@ func (t *teeCapture) Discard() {
 
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	t.retainOnSuccess = false
 	_, _ = t.finalizeLocked(0)
 }
 
@@ -89,7 +95,7 @@ func (t *teeCapture) finalizeLocked(exitCode int) (string, error) {
 		_ = os.Remove(t.tempPath)
 		return "", nil
 	}
-	if exitCode == 0 {
+	if exitCode == 0 && !t.retainOnSuccess {
 		_ = os.Remove(t.tempPath)
 		return "", nil
 	}

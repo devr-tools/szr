@@ -105,14 +105,32 @@ func (s *LineScanner) Finish(emit func(string)) {
 type textBuffer struct {
 	stripper ansiStripper
 	builder  strings.Builder
+	// keepANSI retains escape sequences instead of stripping them. Renderers
+	// that strip ANSI themselves and self-cap against the engine compression
+	// contract need the unstripped stream: the contract budgets against the
+	// raw byte cost, and a pre-stripped buffer makes ANSI-heavy output look
+	// several times smaller than what the contract will measure.
+	keepANSI bool
 }
 
 func (b *textBuffer) Consume(chunk []byte) {
+	if b.keepANSI {
+		b.consumeRaw(chunk)
+		return
+	}
 	b.stripper.Consume(chunk, func(c byte) {
 		if c != '\r' {
 			b.builder.WriteByte(c)
 		}
 	})
+}
+
+func (b *textBuffer) consumeRaw(chunk []byte) {
+	for _, c := range chunk {
+		if c != '\r' {
+			b.builder.WriteByte(c)
+		}
+	}
 }
 
 func (b *textBuffer) String() string {

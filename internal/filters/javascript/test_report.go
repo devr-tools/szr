@@ -36,11 +36,24 @@ type jsAssertionCase struct {
 }
 
 func SummarizeJSTest(input string, maxLines int) string {
+	return SummarizeJSTestUnderContract(input, maxLines, false)
+}
+
+// SummarizeJSTestUnderContract renders the test summary; when contract is
+// true the plain-text path self-caps to the predicted engine
+// compression-contract allowance (measured on the unstripped input, which is
+// what the contract budgets against) so failing spec names never lose a
+// downstream density contest to assertion details.
+func SummarizeJSTestUnderContract(input string, maxLines int, contract bool) string {
 	clean := StripANSI(input)
 	if report, ok := parseJSTestReport(clean); ok {
 		return summarizeJSTestReport(report, maxLines)
 	}
-	return summarizeJSTestText(clean, maxLines)
+	allowance := 0
+	if contract {
+		allowance = shared.PredictedTokenAllowance(input, maxLines)
+	}
+	return summarizeJSTestText(clean, maxLines, allowance)
 }
 
 func parseJSTestReport(input string) (jsTestReport, bool) {

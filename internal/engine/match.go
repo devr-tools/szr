@@ -29,6 +29,9 @@ func fallbackProfile() Profile {
 			if combined == "" {
 				return ""
 			}
+			if filters.IsBinaryish([]byte(combined)) {
+				return filters.SummarizeBinaryish([]byte(combined), fallbackMaxLines)
+			}
 			if exec.ExitCode != 0 {
 				if rendered := filters.InterestingErrorLines(combined, fallbackMaxLines); strings.TrimSpace(rendered) != "" && rendered != "ok" {
 					return rendered

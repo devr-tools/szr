@@ -1,5 +1,7 @@
 package engine
 
+import "strings"
+
 type renderedDisplayFinalizer struct {
 	profile             Profile
 	exitCode            int
@@ -14,6 +16,7 @@ type renderedDisplayFinalizer struct {
 	compressionContract bool
 	guardSmallOutput    bool
 	ultraCompact        bool
+	captureComplete     bool
 }
 
 func (f renderedDisplayFinalizer) finalize() string {
@@ -22,6 +25,13 @@ func (f renderedDisplayFinalizer) finalize() string {
 	// tee/recovery references when it decides tiny raw output is cheaper.
 	f.rendered = finalizeSmallOutputPreference(f.profile, f.exitCode, f.rendered, f.rawCombined, f.guardSmallOutput, f.ultraCompact)
 	if f.passthrough {
+		return f.rendered
+	}
+	// A successful display that already IS the complete raw output omits
+	// nothing; a recovery pointer would spend tokens on pure redundancy.
+	// Only a complete capture can prove that - a preview-limited buffer
+	// matching the display says nothing about the full stream.
+	if f.exitCode == 0 && f.captureComplete && strings.TrimSpace(f.rendered) == strings.TrimSpace(f.rawCombined) {
 		return f.rendered
 	}
 	suffixes := displayArtifactSuffixes(f.plan, f.artifactPath, f.compactArtifactRefs)

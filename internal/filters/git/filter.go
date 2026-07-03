@@ -490,6 +490,7 @@ type gitDiffPatchFile struct {
 	OldPath      string
 	NewPath      string
 	Lines        []string
+	Snippets     []string
 }
 
 func NewGitDiffReducer(maxLines, maxBytes int) *GitDiffReducer {
@@ -641,6 +642,7 @@ func (r *GitDiffReducer) recordLine(line string) {
 		return
 	}
 	r.recordPatchDelta(line)
+	r.recordAddedSnippet(line)
 	r.captureVerbatimLine(line)
 	if isDiffSummaryLine(line) {
 		r.recordSummaryTotals(line)
@@ -711,6 +713,29 @@ func classifyDiffDelta(line string) int {
 	default:
 		return 0
 	}
+}
+
+// gitDiffSnippet* bound the added-line snippets retained per file for
+// inventory anchors: the first couple of changed lines are what make a file
+// recognizable when the diff is too large to replay its hunks.
+const (
+	gitDiffSnippetMax     = 2
+	gitDiffSnippetClipLen = 80
+)
+
+// recordAddedSnippet retains the first added content lines of each file as
+// inventory anchors. Unlike verbatim capture this survives large diffs on
+// purpose — the inventory render needs a recognizable snippet per file
+// precisely when the diff is too big to replay.
+func (r *GitDiffReducer) recordAddedSnippet(line string) {
+	if r.currentPatch == nil || len(r.currentPatch.Snippets) >= gitDiffSnippetMax || classifyDiffDelta(line) != 1 {
+		return
+	}
+	content := strings.TrimSpace(strings.TrimPrefix(line, "+"))
+	if content == "" || strings.HasPrefix(content, "+") {
+		return
+	}
+	r.currentPatch.Snippets = append(r.currentPatch.Snippets, "+"+shared.Clip(content, gitDiffSnippetClipLen))
 }
 
 // captureVerbatimLine retains the changed (+/-) lines of a still-small diff

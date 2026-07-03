@@ -507,4 +507,20 @@ var builtinSpecs = []Spec{
 		MinTokenSavings: 49,
 		MinQualityScore: 90,
 	},
+	{
+		Name:        "jq-uniform-array",
+		Class:       "json-query",
+		Description: "jq output of 60 uniform API list objects that should render as a tabular JSON preview keeping the anomalous needle row.",
+		ProfileName: "json-query",
+		Command:     []string{"jq", ".", "issues.json"},
+		Display:     []string{"jq", ".", "issues.json"},
+		StdoutFile:  "testdata/jq_uniform_array.json",
+		ExpectedContains: []string{
+			"array len=60 uniform objects, cols: id|title|state|created_at|author|comments|number",
+			`#47 9047|"PAY-4471 duplicate charge on retry | needs finance review"|spam_flagged|2026-05-20T10:47:00Z|dave|5|48`,
+			"more rows",
+		},
+		MinTokenSavings: 80,
+		MinQualityScore: 90,
+	},
 }
