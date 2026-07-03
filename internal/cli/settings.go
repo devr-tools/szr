@@ -146,6 +146,12 @@ func (a *App) settingsActions() map[string]settingsAction {
 				return enabledLabel(cfg.Advanced.CompactArtifactRefs)
 			})
 		},
+		"15": func(app *App, reader *bufio.Reader, stdout, stderr io.Writer) (int, bool) {
+			return app.updateBooleanSetting(reader, stdout, stderr, "retention verifier", app.config.Advanced.RetentionVerifier, "settings: retention verifier unchanged", func(cfg *config.Config, value bool) string {
+				cfg.Advanced.RetentionVerifier = value
+				return enabledLabel(cfg.Advanced.RetentionVerifier)
+			})
+		},
 	}
 }
 
@@ -229,6 +235,7 @@ func (a *App) printSettingsMenu(w io.Writer, cfg config.Config, configFile strin
 	printSettingsRow(w, "12", "semantic compaction", enabledLabel(cfg.Advanced.SemanticCompaction))
 	printSettingsRow(w, "13", "compression contract", enabledLabel(cfg.Advanced.CompressionContract))
 	printSettingsRow(w, "14", "compact artifact refs", enabledLabel(cfg.Advanced.CompactArtifactRefs))
+	printSettingsRow(w, "15", "retention verifier", enabledLabel(cfg.Advanced.RetentionVerifier))
 	fmt.Fprintln(w, strings.Repeat("-", 54))
 	printSettingsRow(w, "q", "save and exit", "")
 	fmt.Fprint(w, "> ")

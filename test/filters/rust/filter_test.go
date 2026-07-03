@@ -81,6 +81,96 @@ func TestSummarizeCargoBuildFoldsRepeatedHints(t *testing.T) {
 	}
 }
 
+func TestSummarizeCargoBuildKeepsEveryErrorCode(t *testing.T) {
+	input := strings.Join([]string{
+		"   Compiling autocfg v1.4.0",
+		"   Compiling libc v0.2.169",
+		"   Compiling billing-core v0.3.2 (/workspace/billing/core)",
+		"error[E0308]: mismatched types",
+		"   --> src/parser.rs:142:22",
+		"    |",
+		"142 |     let total: u64 = entries.iter().map(|e| e.amount).sum::<i64>();",
+		"help: you can convert an `i64` to a `u64` and panic if the converted value doesn't fit",
+		"error[E0599]: no method named `finalise` found for struct `InvoiceBuilder` in the current scope",
+		"   --> src/invoice.rs:214:30",
+		"help: there is a method `finalize` with a similar name",
+		"error[E0382]: borrow of moved value: `line_items`",
+		"   --> src/invoice.rs:221:16",
+		"Some errors have detailed explanations: E0308, E0382, E0599.",
+		"error: could not compile `billing-core` (lib) due to 3 previous errors",
+	}, "\n")
+
+	got := rustfilter.SummarizeCargoBuild(input, 12)
+	for _, want := range []string{
+		"error[E0308]: mismatched types",
+		"error[E0599]: no method named `finalise` found for struct `InvoiceBuilder`",
+		"error[E0382]: borrow of moved value: `line_items`",
+		"--> src/parser.rs:142:22",
+		"--> src/invoice.rs:214:30",
+		"--> src/invoice.rs:221:16",
+		"error: could not compile `billing-core` (lib) due to 3 previous errors",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in cargo build summary:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "Compiling autocfg") {
+		t.Fatalf("expected compile progress noise to be dropped:\n%s", got)
+	}
+}
+
+func TestSummarizeCargoBuildHeadersSurviveTightBudget(t *testing.T) {
+	input := strings.Join([]string{
+		"error[E0599]: no method named `finalise` found for struct `InvoiceBuilder` in the current scope",
+		"   --> src/invoice.rs:214:30",
+		"help: there is a method `finalize` with a similar name",
+		"error[E0382]: borrow of moved value: `line_items`",
+		"   --> src/invoice.rs:221:16",
+		"error[E0308]: mismatched types",
+		"   --> src/parser.rs:142:22",
+		"error: could not compile `billing-core` (lib) due to 3 previous errors",
+	}, "\n")
+
+	got := rustfilter.SummarizeCargoBuild(input, 4)
+	for _, want := range []string{"error[E0599]", "error[E0382]", "error[E0308]"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q to survive the tight budget:\n%s", want, got)
+		}
+	}
+}
+
+func TestSummarizeCargoClippyKeepsLintNames(t *testing.T) {
+	input := strings.Join([]string{
+		"    Checking billing-core v0.3.2 (/workspace/billing/core)",
+		"warning: redundant clone",
+		"  --> src/lib.rs:88:27",
+		"   |",
+		"88 |     emit(event.payload.clone());",
+		"   |                           ^^^^^^^^ help: remove this",
+		"   |",
+		"   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#redundant_clone",
+		"   = note: `#[warn(clippy::redundant_clone)]` on by default",
+		"warning: this `if` statement can be collapsed",
+		"   --> src/reconcile.rs:41:5",
+		"    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#collapsible_if",
+		"warning: `billing-core` (lib) generated 2 warnings (run `cargo clippy --fix --lib -p billing-core` to apply 1 suggestion)",
+		"    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.18s",
+	}, "\n")
+
+	got := rustfilter.SummarizeCargoBuild(input, 12)
+	for _, want := range []string{
+		"warning: redundant clone [clippy::redundant_clone]",
+		"warning: this `if` statement can be collapsed [clippy::collapsible_if]",
+		"--> src/lib.rs:88:27",
+		"88 |     emit(event.payload.clone());",
+		"warning: `billing-core` (lib) generated 2 warnings",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in clippy summary:\n%s", want, got)
+		}
+	}
+}
+
 func TestRustRecoveryInfo(t *testing.T) {
 	testInput := strings.Join([]string{
 		"test tests::math::subtracts ... FAILED",

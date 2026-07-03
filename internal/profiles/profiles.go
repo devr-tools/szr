@@ -9,6 +9,7 @@ import (
 	cloudlogsprofiles "github.com/devr-tools/szr/internal/profiles/cloudlogs"
 	containerprofiles "github.com/devr-tools/szr/internal/profiles/container"
 	cppprofiles "github.com/devr-tools/szr/internal/profiles/cpp"
+	dotnetprofiles "github.com/devr-tools/szr/internal/profiles/dotnet"
 	gitprofiles "github.com/devr-tools/szr/internal/profiles/git"
 	githubprofiles "github.com/devr-tools/szr/internal/profiles/github"
 	httpapiprofiles "github.com/devr-tools/szr/internal/profiles/httpapi"
@@ -29,6 +30,7 @@ func Builtins(maxLines int) []engine.Profile {
 	list = append(list, gitprofiles.Profiles(maxLines)...)
 	list = append(list, buildprofiles.Profiles(maxLines)...)
 	list = append(list, cppprofiles.Profiles(maxLines)...)
+	list = append(list, dotnetprofiles.Profiles(maxLines)...)
 	list = append(list, patchprofiles.Profiles(maxLines)...)
 	list = append(list, rustprofiles.Profiles(maxLines)...)
 	list = append(list, pythonprofiles.Profiles(maxLines)...)

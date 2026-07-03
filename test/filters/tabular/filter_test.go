@@ -1,6 +1,7 @@
 package tabular_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -39,6 +40,38 @@ func TestSummarizeWideTableDUFallback(t *testing.T) {
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected %q in du summary:\n%s", want, got)
+		}
+	}
+}
+
+// TestSummarizeWideTableKeepsAnomalousRows pins the anomaly rule for wide
+// tables: the row with a minority value in a low-cardinality column (a
+// crashing pod among running ones) must survive positional truncation.
+func TestSummarizeWideTableKeepsAnomalousRows(t *testing.T) {
+	t.Parallel()
+
+	lines := []string{"NAME          READY   STATUS             RESTARTS   AGE"}
+	for i := 0; i < 14; i++ {
+		status := "Running"
+		ready := "1/1"
+		restarts := "0"
+		if i == 11 {
+			status = "CrashLoopBackOff"
+			ready = "0/1"
+			restarts = "37"
+		}
+		lines = append(lines, fmt.Sprintf("api-%02d        %s     %-18s %-10s 4d", i, ready, status, restarts))
+	}
+
+	got := tabularfilter.SummarizeWideTable(strings.Join(lines, "\n"), 6)
+	for _, want := range []string{
+		"rows: 14",
+		"api-11",
+		"status=CrashLoopBackOff",
+		"more rows",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in anomaly-aware tabular summary:\n%s", want, got)
 		}
 	}
 }

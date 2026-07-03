@@ -118,6 +118,16 @@ func normalizeBudgetSuggestionOptions(opts BudgetSuggestionOptions) BudgetSugges
 	return opts
 }
 
+// suggestionMaxLoosenFailureRate blocks loosen recommendations for
+// fingerprints whose runs almost always exit nonzero. A fallback-heavy or
+// aggressive-compression signal on such a fingerprint says "this command
+// errors", not "the budget is tight", so loosening would only surface more
+// error output. History records carry just the numeric ExitCode, so
+// benign-by-design failures (for example grep exiting 1 on no match)
+// cannot be told apart from real ones; this rate threshold is the
+// pragmatic filter.
+const suggestionMaxLoosenFailureRate = 80.0
+
 func buildBudgetSuggestion(acc *budgetSuggestionAccumulator) (BudgetSuggestion, float64, bool) {
 	averageSavings := acc.savedPct / float64(acc.samples)
 	fallbackRate := percent(acc.fallbacks, acc.samples)
@@ -144,7 +154,7 @@ func buildBudgetSuggestion(acc *budgetSuggestionAccumulator) (BudgetSuggestion, 
 	profile := dominantConfidence(acc.profileCounts)
 
 	switch {
-	case fallbackRate >= 50:
+	case fallbackRate >= 50 && failureRate <= suggestionMaxLoosenFailureRate:
 		scale := 1.25
 		if fallbackRate >= 75 {
 			scale = 1.5
@@ -152,7 +162,7 @@ func buildBudgetSuggestion(acc *budgetSuggestionAccumulator) (BudgetSuggestion, 
 		targetTokens := maxInt(scaleIntCeil(p95Filtered, int(scale*100), 100), maxInt(medianFiltered+8, 24))
 		targetBytes := maxInt(scaleIntCeil(p95Bytes, int(scale*100), 100), maxInt(medianBytes+32, 96))
 		return finalizeBudgetSuggestion(acc, profile, evidence, BudgetSuggestionLoosen, BudgetSuggestionFallbackHeavy, scale, targetTokens, targetBytes), fallbackRate + failureRate/4, true
-	case averageSavings >= 92 && medianRaw >= 80 && medianFiltered <= 20:
+	case averageSavings >= 92 && medianRaw >= 80 && medianFiltered <= 20 && failureRate <= suggestionMaxLoosenFailureRate:
 		scale := 1.5
 		targetTokens := maxInt(scaleIntCeil(p95Filtered, 3, 2), maxInt(medianRaw/6, 24))
 		targetBytes := maxInt(scaleIntCeil(p95Bytes, 3, 2), maxInt(targetTokens*4, 96))

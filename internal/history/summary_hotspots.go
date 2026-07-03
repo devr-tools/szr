@@ -43,16 +43,28 @@ func summarizeCommandHotspots(commandHotspots map[string]*summaryCommandHotspotA
 	return list
 }
 
+// poorSavingsThresholdPct caps entry into the "poor savings fingerprints"
+// table. Fingerprints averaging at or above this savings rate are healthy
+// and must never be listed as poor, regardless of how much volume they
+// carry. Negative averages (output grew) always qualify.
+const poorSavingsThresholdPct = 40.0
+
 func summarizeFingerprints(fingerprintStats map[string]*summaryFingerprintAccumulator, limit int) []FingerprintStat {
-	type scoredFingerprint struct {
-		stat     FingerprintStat
-		severity float64
+	type poorFingerprint struct {
+		stat FingerprintStat
+		// residual is the token volume still emitted after filtering.
+		// Poor performers are ranked by it so the biggest remaining
+		// context cost surfaces first.
+		residual int
 	}
-	scored := make([]scoredFingerprint, 0, len(fingerprintStats))
+	poor := make([]poorFingerprint, 0, len(fingerprintStats))
 	for _, fingerprint := range fingerprintStats {
 		fingerprint.stat.AveragePct /= float64(fingerprint.stat.Commands)
 		fingerprint.stat.DurationP50MS = percentile(fingerprint.durations, 50)
 		fingerprint.stat.DurationP95MS = percentile(fingerprint.durations, 95)
+		if fingerprint.stat.AveragePct >= poorSavingsThresholdPct {
+			continue
+		}
 		if fingerprint.stat.Commands < 2 && fingerprint.stat.AveragePct >= 0 {
 			continue
 		}
@@ -62,28 +74,28 @@ func summarizeFingerprints(fingerprintStats map[string]*summaryFingerprintAccumu
 		if fingerprint.stat.Commands < 2 && fingerprint.rawTokens < 24 && fingerprint.stat.AveragePct > -25 {
 			continue
 		}
-		scored = append(scored, scoredFingerprint{
+		poor = append(poor, poorFingerprint{
 			stat:     fingerprint.stat,
-			severity: fingerprintHotspotSeverity(fingerprint.stat, fingerprint.rawTokens, fingerprint.filtered),
+			residual: fingerprint.filtered,
 		})
 	}
-	sort.Slice(scored, func(i, j int) bool {
-		if scored[i].severity == scored[j].severity {
-			if scored[i].stat.AveragePct == scored[j].stat.AveragePct {
-				if scored[i].stat.Commands == scored[j].stat.Commands {
-					return scored[i].stat.Command < scored[j].stat.Command
+	sort.Slice(poor, func(i, j int) bool {
+		if poor[i].residual == poor[j].residual {
+			if poor[i].stat.AveragePct == poor[j].stat.AveragePct {
+				if poor[i].stat.Commands == poor[j].stat.Commands {
+					return poor[i].stat.Command < poor[j].stat.Command
 				}
-				return scored[i].stat.Commands > scored[j].stat.Commands
+				return poor[i].stat.Commands > poor[j].stat.Commands
 			}
-			return scored[i].stat.AveragePct < scored[j].stat.AveragePct
+			return poor[i].stat.AveragePct < poor[j].stat.AveragePct
 		}
-		return scored[i].severity > scored[j].severity
+		return poor[i].residual > poor[j].residual
 	})
-	if limit > 0 && len(scored) > limit {
-		scored = scored[:limit]
+	if limit > 0 && len(poor) > limit {
+		poor = poor[:limit]
 	}
-	list := make([]FingerprintStat, 0, len(scored))
-	for _, item := range scored {
+	list := make([]FingerprintStat, 0, len(poor))
+	for _, item := range poor {
 		list = append(list, item.stat)
 	}
 	return list

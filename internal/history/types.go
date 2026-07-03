@@ -22,6 +22,8 @@ type Record struct {
 	SavingsPct         float64   `json:"savings_pct"`
 	FallbackUsed       bool      `json:"fallback_used,omitempty"`
 	Passthrough        bool      `json:"passthrough,omitempty"`
+	VerifierRepairs    int       `json:"verifier_repairs,omitempty"`
+	VerifierSkipped    bool      `json:"verifier_skipped,omitempty"`
 	TeePath            string    `json:"tee_path,omitempty"`
 }
 

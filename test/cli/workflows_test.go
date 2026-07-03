@@ -20,6 +20,12 @@ func TestRecommendAndHotspotsCommands(t *testing.T) {
 	testutil.EnsurePaths(t, paths)
 	store := history.New(paths.HistoryFile)
 	for i := 0; i < 4; i++ {
+		// Only the first run fails: budget (loosen) suggestions are
+		// suppressed for fingerprints that fail on (nearly) every run.
+		exitCode := 0
+		if i == 0 {
+			exitCode = 1
+		}
 		if err := store.Append(history.Record{
 			Timestamp:          time.Date(2026, 5, 21, 10+i, 0, 0, 0, time.UTC),
 			Command:            "terraform plan",
@@ -27,7 +33,7 @@ func TestRecommendAndHotspotsCommands(t *testing.T) {
 			Profile:            "passthrough",
 			ProfileConfidence:  "low",
 			DurationMS:         int64(15 + i),
-			ExitCode:           1,
+			ExitCode:           exitCode,
 			RawTokens:          200,
 			FilteredTokens:     12,
 			SavedTokens:        188,

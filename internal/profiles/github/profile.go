@@ -23,6 +23,9 @@ func Profiles(maxLines int) []engine.Profile {
 				return isGHCommand(inv.Display, "pr", "view")
 			},
 			Prepare: func(inv engine.Invocation) []string {
+				if isGitLabCLI(inv.Command) {
+					return prepareGitLabJSONOutput(inv.Command)
+				}
 				if profilekit.ContainsAny(inv.Command, "--json", "--template", "--comments", "--web") || profilekit.ContainsPrefix(inv.Command, "--json=") || profilekit.ContainsPrefix(inv.Command, "--template=") {
 					return inv.Command
 				}
@@ -71,6 +74,35 @@ func Profiles(maxLines int) []engine.Profile {
 			Explain: []string{
 				"Matches `gh pr checks` and folds the check table into status counts with only blocking rows listed.",
 				"Keeps full URLs for failing, cancelled, and pending checks and dedupes repeated `--watch` repaints into the final state.",
+			},
+		},
+		{
+			Name:             "gh-item-list",
+			Description:      "Summarizes gh and glab pull request, merge request, and issue lists into per-item state and title lines.",
+			Confidence:       engine.ConfidenceMedium,
+			StreamPreference: engine.StreamStdoutOnly,
+			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 10)),
+			LatencyBudget:    profilekit.LatencyBudget(30),
+			Match: func(inv engine.Invocation) bool {
+				return isRepoItemListCommand(inv.Display)
+			},
+			Prepare: func(inv engine.Invocation) []string {
+				return prepareRepoItemListCommand(inv.Command)
+			},
+			Render: func(_ engine.Invocation, exec engine.Execution) string {
+				return ghfilter.SummarizeItemList(exec.Stdout, maxLines)
+			},
+			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
+				return newBufferedStdoutReducer(func(input string) string {
+					return ghfilter.SummarizeItemList(input, budget.MaxLines)
+				}, func(input string) (string, string, bool) {
+					return ghfilter.ItemListRecoveryInfo(input, budget.MaxLines)
+				})
+			},
+			ParseBytes: profilekit.ParseStdout,
+			Explain: []string{
+				"Matches `gh pr list`, `gh issue list`, `glab mr list`, and `glab issue list`, requesting JSON output when the user did not already choose a formatter.",
+				"Renders one bounded line per item (number, state, title, branches) and always keeps minority-state items visible instead of truncating positionally.",
 			},
 		},
 		{
@@ -186,6 +218,36 @@ func Profiles(maxLines int) []engine.Profile {
 			},
 		},
 	}
+}
+
+// isRepoItemListCommand matches PR/MR/issue list invocations from the GitHub
+// and GitLab CLIs (ghCommand normalizes glab's `mr` head to `pr`).
+func isRepoItemListCommand(args []string) bool {
+	_, _, head, sub, ok := ghCommand(args)
+	if !ok || (head != "pr" && head != "issue") {
+		return false
+	}
+	return sub == "list" || sub == "ls"
+}
+
+func prepareRepoItemListCommand(command []string) []string {
+	_, _, head, _, ok := ghCommand(command)
+	if !ok {
+		return command
+	}
+	if isGitLabCLI(command) {
+		return prepareGitLabJSONOutput(command)
+	}
+	args := command[1:]
+	if containsAny(args, "--json", "--template", "--web") ||
+		containsAnyPrefix(args, "--json=", "--template=") {
+		return command
+	}
+	fields := "number,title,state,isDraft,headRefName,baseRefName"
+	if head == "issue" {
+		fields = "number,title,state"
+	}
+	return append(command, "--json", fields)
 }
 
 func isGHAPICommand(args []string) bool {

@@ -7,8 +7,11 @@ import (
 	shared "github.com/devr-tools/szr/internal/filters"
 )
 
+// ghCommand parses a GitHub CLI or GitLab CLI invocation into its head and
+// subcommand. GitLab's `mr` surface mirrors GitHub's `pr` surface, so the
+// head is normalized (mr -> pr) and one set of matchers serves both CLIs.
 func ghCommand(args []string) (int, int, string, string, bool) {
-	if len(args) == 0 || args[0] != "gh" {
+	if len(args) == 0 || (args[0] != "gh" && args[0] != "glab") {
 		return -1, -1, "", "", false
 	}
 	firstIdx := -1
@@ -23,7 +26,26 @@ func ghCommand(args []string) (int, int, string, string, bool) {
 	if firstIdx == -1 || firstIdx+1 >= len(args) {
 		return -1, -1, "", "", false
 	}
-	return firstIdx, firstIdx + 1, args[firstIdx], args[firstIdx+1], true
+	head := args[firstIdx]
+	if args[0] == "glab" && head == "mr" {
+		head = "pr"
+	}
+	return firstIdx, firstIdx + 1, head, args[firstIdx+1], true
+}
+
+func isGitLabCLI(args []string) bool {
+	return len(args) > 0 && args[0] == "glab"
+}
+
+// prepareGitLabJSONOutput moves a GitLab CLI command into JSON mode unless
+// the user already chose an output format.
+func prepareGitLabJSONOutput(command []string) []string {
+	args := command[1:]
+	if containsAny(args, "-F", "--output", "--web") ||
+		containsAnyPrefix(args, "--output=", "-F=") {
+		return command
+	}
+	return append(command, "--output", "json")
 }
 
 func isGHCommand(args []string, head, sub string) bool {

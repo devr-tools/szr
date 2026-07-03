@@ -3,6 +3,7 @@ package tabular
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 
 	shared "github.com/devr-tools/szr/internal/filters"
@@ -149,15 +150,126 @@ func normalizeHeaders(headers []string) []string {
 }
 
 func renderTableSummary(table parsedTable, maxLines int) tabularSummaryResult {
-	lines := []string{fmt.Sprintf("rows: %d columns: %s", len(table.rows), strings.Join(table.headers, ", "))}
-	for _, row := range table.rows {
-		lines = append(lines, shared.Clip(summarizeRow(table.headers, row), 160))
+	header := fmt.Sprintf("rows: %d columns: %s", len(table.rows), strings.Join(table.headers, ", "))
+	kept, omitted := selectTableRows(table, maxLines)
+	lines := append([]string{header}, kept...)
+	if omitted > 0 {
+		lines = append(lines, fmt.Sprintf("... +%d more rows", omitted))
 	}
-	result := tabularSummaryResult{Text: shared.JoinLimitedLines(lines, maxLines)}
-	if len(lines) > maxLines {
-		result.OmittedCount = len(lines) - maxLines
+	return tabularSummaryResult{
+		Text:         strings.Join(lines, "\n"),
+		OmittedCount: omitted,
 	}
-	return result
+}
+
+// selectTableRows keeps every row when the budget allows, and otherwise
+// anomalous rows (rare values in low-cardinality columns such as STATUS or
+// STATE) plus leading rows. In wide tables the odd row out is the payload, so
+// positional truncation must never be what drops it.
+func selectTableRows(table parsedTable, maxLines int) ([]string, int) {
+	limit := maxLines - 1
+	if limit < 1 {
+		limit = 1
+	}
+	if len(table.rows) <= limit {
+		return summarizeRows(table, nil), 0
+	}
+	keep := keepIndices(anomalousTableRowIndices(table.rows), len(table.rows), limit)
+	return summarizeRows(table, keep), len(table.rows) - len(keep)
+}
+
+// keepIndices marks up to limit indices as kept: the anomalous ones first,
+// then leading indices as positional fill.
+func keepIndices(anomalies []int, total, limit int) map[int]bool {
+	keep := map[int]bool{}
+	for _, idx := range anomalies {
+		if len(keep) >= limit {
+			break
+		}
+		keep[idx] = true
+	}
+	for i := 0; i < total && len(keep) < limit; i++ {
+		keep[i] = true
+	}
+	return keep
+}
+
+func summarizeRows(table parsedTable, keep map[int]bool) []string {
+	out := make([]string, 0, len(table.rows))
+	for i, row := range table.rows {
+		if keep != nil && !keep[i] {
+			continue
+		}
+		out = append(out, shared.Clip(summarizeRow(table.headers, row), 160))
+	}
+	return out
+}
+
+const tableAnomalyMinRows = 8
+
+// anomalousTableRowIndices reports rows carrying rare values (at most 5% of
+// rows) in low-cardinality columns, rarest first. ID-, name-, and
+// timestamp-shaped columns are naturally skipped because nearly every value
+// is distinct.
+func anomalousTableRowIndices(rows [][]string) []int {
+	if len(rows) < tableAnomalyMinRows {
+		return nil
+	}
+	threshold := len(rows) / 20
+	if threshold < 1 {
+		threshold = 1
+	}
+	rarity := map[int]int{}
+	for col := 0; col < len(rows[0]); col++ {
+		markRareTableColumn(rows, col, threshold, rarity)
+	}
+	return sortIndicesByRarity(rarity)
+}
+
+func sortIndicesByRarity(rarity map[int]int) []int {
+	out := make([]int, 0, len(rarity))
+	for idx := range rarity {
+		out = append(out, idx)
+	}
+	sort.Slice(out, func(a, b int) bool {
+		if rarity[out[a]] == rarity[out[b]] {
+			return out[a] < out[b]
+		}
+		return rarity[out[a]] < rarity[out[b]]
+	})
+	return out
+}
+
+func markRareTableColumn(rows [][]string, col, threshold int, rarity map[int]int) {
+	counts := tableColumnCounts(rows, col)
+	if len(counts) < 2 || len(counts) > 8 {
+		return
+	}
+	for i, row := range rows {
+		if col >= len(row) || row[col] == "" {
+			continue
+		}
+		recordTableRarity(rarity, i, counts[row[col]], threshold)
+	}
+}
+
+func tableColumnCounts(rows [][]string, col int) map[string]int {
+	counts := map[string]int{}
+	for _, row := range rows {
+		if col < len(row) && row[col] != "" {
+			counts[row[col]]++
+		}
+	}
+	return counts
+}
+
+func recordTableRarity(rarity map[int]int, idx, count, threshold int) {
+	if count > threshold {
+		return
+	}
+	if existing, ok := rarity[idx]; !ok || count < existing {
+		rarity[idx] = count
+	}
 }
 
 func summarizeRow(headers []string, row []string) string {

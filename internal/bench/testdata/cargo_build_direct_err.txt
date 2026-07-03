@@ -1,0 +1,37 @@
+   Compiling autocfg v1.4.0
+   Compiling libc v0.2.169
+   Compiling cfg-if v1.0.0
+   Compiling once_cell v1.20.2
+   Compiling log v0.4.25
+   Compiling bitflags v2.8.0
+   Compiling smallvec v1.13.2
+   Compiling hashbrown v0.15.2
+   Compiling indexmap v2.7.0
+   Compiling toml v0.8.19
+   Compiling billing-core v0.3.2 (/workspace/billing/core)
+error[E0599]: no method named `finalise` found for struct `InvoiceBuilder` in the current scope
+   --> src/invoice.rs:214:30
+    |
+214 |     let invoice = builder.finalise()?;
+    |                           ^^^^^^^^
+    |
+help: there is a method `finalize` with a similar name
+    |
+214 |     let invoice = builder.finalize()?;
+    |                           ~~~~~~~~
+
+error[E0382]: borrow of moved value: `line_items`
+   --> src/invoice.rs:221:16
+    |
+109 |     let line_items = collect_items(input)?;
+    |         ---------- move occurs because `line_items` has type `Vec<LineItem>`, which does not implement the `Copy` trait
+...
+214 |     let invoice = builder.finalise()?;
+    |                   ------- value moved here
+...
+221 |     audit_trail(&line_items);
+    |                  ^^^^^^^^^^ value borrowed here after move
+
+Some errors have detailed explanations: E0382, E0599.
+For more information about an error, try `rustc --explain E0382`.
+error: could not compile `billing-core` (lib) due to 2 previous errors

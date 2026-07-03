@@ -1,0 +1,10 @@
+Lockfile is up to date, resolution step is skipped
+Progress: resolved 1, reused 0, downloaded 0, added 0
+ ERR_PNPM_FETCH_404  GET https://registry.npmjs.org/@acme%2Fdesign-tokens: Not Found - 404
+
+This error happened while installing a direct dependency of /workspace/storefront
+
+@acme/design-tokens is not in the npm registry, or you have no permission to fetch it.
+
+No authorization header was set for the request.
+Progress: resolved 19, reused 16, downloaded 0, added 0

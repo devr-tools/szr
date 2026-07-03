@@ -1,0 +1,41 @@
+> storefront@2.3.1 test /workspace/storefront
+> vitest run
+
+ RUN  v3.0.4 /workspace/storefront
+
+ ✓ src/lib/__tests__/currency.test.ts (11 tests) 7ms
+ ✓ src/lib/__tests__/slugify.test.ts (5 tests) 4ms
+ ✓ src/api/__tests__/session.test.ts (9 tests) 15ms
+ ❯ src/cart/__tests__/CartSummary.test.tsx (6 tests | 2 failed) 184ms
+   ✓ Cart > lists line items
+   ✓ Cart > updates quantity
+   × Cart > renders empty cart total
+   × Cart > applies discount code
+   ✓ Cart > removes line item
+   ✓ Cart > persists to storage
+ ✓ src/checkout/__tests__/AddressForm.test.tsx (12 tests) 31ms
+
+ FAIL  src/cart/__tests__/CartSummary.test.tsx > Cart > renders empty cart total
+AssertionError: expected '$0.01' to be '$0.00' // Object.is equality
+
+Expected: "$0.00"
+Received: "$0.01"
+
+ ❯ src/cart/__tests__/CartSummary.test.tsx:31:29
+     29|   it('renders empty cart total', () => {
+     30|     render(<CartSummary items={[]} />)
+     31|     expect(totalText()).toBe('$0.00')
+       |                             ^
+     32|   })
+
+ FAIL  src/cart/__tests__/CartSummary.test.tsx > Cart > applies discount code
+AssertionError: expected 1240 to be 1116 // Object.is equality
+
+ ❯ src/cart/__tests__/CartSummary.test.tsx:48:33
+
+ Test Files  1 failed | 4 passed (5)
+      Tests  2 failed | 41 passed (43)
+   Start at  14:02:11
+   Duration  2.87s (transform 421ms, setup 187ms, collect 903ms, tests 811ms)
+
+ ELIFECYCLE  Test failed. See above for more details.
