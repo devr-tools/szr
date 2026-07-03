@@ -10,10 +10,24 @@ import (
 	"github.com/devr-tools/szr/internal/filters"
 )
 
-// RunLS renders the builtin directory tree. The second return value reports
+// RunLS renders the builtin directory tree for argv shapes the builtin
+// supports and reports an error otherwise.
+//
+// Deprecated: use TryRunLS, which reports whether the builtin handled the
+// command so the caller can delegate unsupported argv to the native binary.
+func RunLS(rt Runtime, args []string) int {
+	code, handled := TryRunLS(rt, args)
+	if !handled {
+		fmt.Fprintln(rt.Stderr, "szr: ls: unsupported arguments for builtin execution")
+		return 2
+	}
+	return code
+}
+
+// TryRunLS renders the builtin directory tree. The second return value reports
 // whether the builtin handled the command; when it is false the caller must
 // delegate the original argv to the native ls binary (e.g. `ls -la`).
-func RunLS(rt Runtime, args []string) (int, bool) {
+func TryRunLS(rt Runtime, args []string) (int, bool) {
 	if !lsBuiltinSupports(args) {
 		return 0, false
 	}

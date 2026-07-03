@@ -9,7 +9,7 @@ import (
 )
 
 func (a *App) runLS(ctx context.Context, flags globalFlags, args []string) int {
-	if code, handled := localcmd.RunLS(localRuntime(a), args); handled {
+	if code, handled := localcmd.TryRunLS(localRuntime(a), args); handled {
 		return code
 	}
 	return a.runNativeFallback(ctx, flags, "ls", args)
@@ -20,14 +20,14 @@ func (a *App) runRead(cfg config.Config, args []string) int {
 }
 
 func (a *App) runGrep(ctx context.Context, flags globalFlags, args []string) int {
-	if code, handled := localcmd.RunGrep(localRuntime(a), a.configForFlags(flags), args); handled {
+	if code, handled := localcmd.TryRunGrep(localRuntime(a), a.configForFlags(flags), args); handled {
 		return code
 	}
 	return a.runNativeFallback(ctx, flags, "grep", args)
 }
 
 func (a *App) runFind(ctx context.Context, flags globalFlags, args []string) int {
-	if code, handled := localcmd.RunFind(localRuntime(a), a.configForFlags(flags), args); handled {
+	if code, handled := localcmd.TryRunFind(localRuntime(a), a.configForFlags(flags), args); handled {
 		return code
 	}
 	return a.runNativeFallback(ctx, flags, "find", args)

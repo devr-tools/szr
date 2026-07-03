@@ -14,11 +14,25 @@ import (
 	"github.com/devr-tools/szr/internal/filters"
 )
 
-// RunGrep executes the builtin grep-to-ripgrep rewrite. The second return
+// RunGrep executes the builtin grep-to-ripgrep rewrite for argv shapes the
+// builtin supports and reports an error otherwise.
+//
+// Deprecated: use TryRunGrep, which reports whether the builtin handled the
+// command so the caller can delegate unsupported argv to the native binary.
+func RunGrep(rt Runtime, cfg config.Config, args []string) int {
+	code, handled := TryRunGrep(rt, cfg, args)
+	if !handled {
+		fmt.Fprintln(rt.Stderr, "szr: grep: unsupported arguments for builtin execution")
+		return 2
+	}
+	return code
+}
+
+// TryRunGrep executes the builtin grep-to-ripgrep rewrite. The second return
 // value reports whether the builtin handled the command; when it is false the
 // caller must delegate the original argv to the native binary via the engine
 // so raw semantics and exit codes are preserved.
-func RunGrep(rt Runtime, cfg config.Config, args []string) (int, bool) {
+func TryRunGrep(rt Runtime, cfg config.Config, args []string) (int, bool) {
 	if len(args) == 0 {
 		fmt.Fprintln(rt.Stderr, "szr: grep requires a pattern")
 		return 2, true
@@ -95,10 +109,24 @@ func splitGrepArgs(args []string) (string, string, []string) {
 	return pattern, searchPath, extra
 }
 
-// RunFind executes the builtin find emulation. The second return value
+// RunFind executes the builtin find emulation for argv shapes the builtin
+// supports and reports an error otherwise.
+//
+// Deprecated: use TryRunFind, which reports whether the builtin handled the
+// command so the caller can delegate unsupported argv to the native binary.
+func RunFind(rt Runtime, cfg config.Config, args []string) int {
+	code, handled := TryRunFind(rt, cfg, args)
+	if !handled {
+		fmt.Fprintln(rt.Stderr, "szr: find: unsupported arguments for builtin execution")
+		return 2
+	}
+	return code
+}
+
+// TryRunFind executes the builtin find emulation. The second return value
 // reports whether the builtin handled the command; when it is false the
 // caller must delegate the original argv to the native find binary.
-func RunFind(rt Runtime, cfg config.Config, args []string) (int, bool) {
+func TryRunFind(rt Runtime, cfg config.Config, args []string) (int, bool) {
 	opts, status := parseFindOptions(rt, args)
 	if status == findDelegate {
 		return 0, false
