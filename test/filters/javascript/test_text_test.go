@@ -1,10 +1,12 @@
 package javascript_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
 	jsfilter "github.com/devr-tools/szr/internal/filters/javascript"
+	"github.com/devr-tools/szr/internal/history"
 )
 
 func TestSummarizeJSTestTextFallback(t *testing.T) {
@@ -146,6 +148,50 @@ func TestSummarizeJSTestTextMochaFailures(t *testing.T) {
 	}
 	if strings.Contains(summary, "✓ lists line items") {
 		t.Fatalf("expected mocha pass noise to be dropped:\n%s", summary)
+	}
+}
+
+// TestSummarizeJSTestTextUnderContractKeepsEveryFailName pins the
+// self-capped render: when the raw output is large enough to arm the engine
+// compression contract, the summary must fit the predicted allowance while
+// every failing spec name and the failing file stay verbatim — a generic
+// downstream token capper would trade a spec name for a denser detail line.
+func TestSummarizeJSTestTextUnderContractKeepsEveryFailName(t *testing.T) {
+	lines := []string{
+		"> storefront@2.3.1 test /workspace/storefront",
+		"> vitest run",
+	}
+	for i := 0; i < 24; i++ {
+		lines = append(lines, fmt.Sprintf(" ✓ src/lib/__tests__/module%02d.test.ts (11 tests) 7ms", i))
+	}
+	lines = append(lines,
+		" ❯ src/cart/__tests__/Cart.test.tsx (7 tests | 2 failed) 213ms",
+		"   × Cart > renders empty cart total",
+		"   × Cart > applies discount code",
+		" FAIL  src/cart/__tests__/Cart.test.tsx > Cart > renders empty cart total",
+		"AssertionError: expected '$0.01' to be '$0.00' // Object.is equality",
+		"Expected: \"$0.00\"",
+		"Received: \"$0.01\"",
+		" FAIL  src/cart/__tests__/Cart.test.tsx > Cart > applies discount code",
+		"AssertionError: expected 890 to be 801 // Object.is equality",
+		" Test Files  1 failed | 4 passed (5)",
+		"      Tests  2 failed | 53 passed (55)",
+	)
+	input := strings.Join(lines, "\n")
+
+	summary := jsfilter.SummarizeJSTestUnderContract(input, 12, true)
+	for _, needle := range []string{
+		"renders empty cart total",
+		"applies discount code",
+		"Cart.test.tsx",
+	} {
+		if !strings.Contains(summary, needle) {
+			t.Fatalf("expected needle %q in self-capped summary:\n%s", needle, summary)
+		}
+	}
+	allowed := (history.EstimateTokens(input) + 4) / 5
+	if got := history.EstimateTokens(summary); got > allowed {
+		t.Fatalf("expected self-capped summary within the contract allowance (%d), got %d tokens:\n%s", allowed, got, summary)
 	}
 }
 

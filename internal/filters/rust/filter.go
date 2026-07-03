@@ -158,11 +158,25 @@ func splitCargoDetails(details []string) ([]string, []string, []string) {
 }
 
 func SummarizeCargoBuild(input string, maxLines int) string {
-	return summarizeCargoBuildResult(input, maxLines).Text
+	return SummarizeCargoBuildUnderContract(input, maxLines, false)
+}
+
+// SummarizeCargoBuildUnderContract renders the build/clippy summary; when
+// contract is true the render self-caps to the predicted engine
+// compression-contract allowance so every diagnostic header and lint slug
+// survives downstream verbatim.
+func SummarizeCargoBuildUnderContract(input string, maxLines int, contract bool) string {
+	return summarizeCargoBuildResult(input, maxLines, contract).Text
 }
 
 func CargoBuildRecoveryInfo(input string, maxLines int) (string, string, bool) {
-	result := summarizeCargoBuildResult(input, maxLines)
+	return CargoBuildRecoveryInfoUnderContract(input, maxLines, false)
+}
+
+// CargoBuildRecoveryInfoUnderContract mirrors SummarizeCargoBuildUnderContract
+// for the recovery plan.
+func CargoBuildRecoveryInfoUnderContract(input string, maxLines int, contract bool) (string, string, bool) {
+	result := summarizeCargoBuildResult(input, maxLines, contract)
 	if result.OmittedCount <= 0 {
 		return shared.NoRecovery()
 	}
@@ -181,7 +195,7 @@ type cargoDiagnosticBlock struct {
 	hints  []string
 }
 
-func summarizeCargoBuildResult(input string, maxLines int) rustSummaryResult {
+func summarizeCargoBuildResult(input string, maxLines int, contract bool) rustSummaryResult {
 	if maxLines <= 0 {
 		maxLines = 12
 	}
@@ -191,43 +205,69 @@ func summarizeCargoBuildResult(input string, maxLines int) rustSummaryResult {
 		return rustSummaryResult{Text: "ok"}
 	}
 
-	blocks := []cargoDiagnosticBlock{}
-	summaries := []string{}
-	progress := []string{}
-	loose := []string{}
-	inBlock := false
+	collector, summaries, loose := collectCargoBuild(lines)
+	if len(collector.blocks) == 0 && len(loose) == 0 {
+		return fallbackCargoBuildSummary(input, summaries, collector.progress, maxLines)
+	}
+	return renderCargoBuildBlocks(collector.blocks, loose, summaries, len(collector.progress), maxLines, cargoBuildAllowance(input, maxLines, contract))
+}
+
+// collectCargoBuild classifies the output lines and returns the collector
+// with its deduplicated, prioritized summaries and loose details.
+func collectCargoBuild(lines []string) (*cargoBuildCollector, []string, []string) {
+	collector := &cargoBuildCollector{}
 	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		switch {
-		case isCargoBuildSummaryLine(trimmed):
-			summaries = append(summaries, clip(trimmed, 160))
-			inBlock = false
-		case strings.HasPrefix(trimmed, "Compiling "), strings.HasPrefix(trimmed, "Checking "), strings.HasPrefix(trimmed, "Downloaded "):
-			progress = append(progress, clip(trimmed, 160))
-			inBlock = false
-		case isCargoDiagnosticHeader(trimmed):
-			blocks = append(blocks, cargoDiagnosticBlock{header: clip(trimmed, 160)})
-			inBlock = true
-		case inBlock:
-			collectCargoBlockLine(&blocks[len(blocks)-1], trimmed)
-		case isCargoInterestingDetail(trimmed):
-			loose = append(loose, clip(trimmed, 160))
-		}
+		collector.ingest(strings.TrimSpace(line))
 	}
+	summaries := prioritizeCargoSummaries(uniqueStrings(shared.FoldConsecutiveLines(collector.summaries)))
+	loose := uniqueStrings(shared.FoldConsecutiveLines(collector.loose))
+	return collector, summaries, loose
+}
 
-	summaries = prioritizeCargoSummaries(uniqueStrings(shared.FoldConsecutiveLines(summaries)))
-	loose = uniqueStrings(shared.FoldConsecutiveLines(loose))
-
-	if len(blocks) == 0 && len(loose) == 0 {
-		combined := append([]string{}, summaries...)
-		combined = append(combined, progress...)
-		if len(combined) > 0 {
-			return summarizeRustLines(combined, maxLines)
-		}
-		return rustSummaryResult{Text: shared.CompactLines(input, maxLines)}
+// cargoBuildAllowance predicts the compression-contract token allowance for
+// an armed contract and disables the self-cap otherwise.
+func cargoBuildAllowance(input string, maxLines int, contract bool) int {
+	if !contract {
+		return 0
 	}
+	return shared.PredictedTokenAllowance(input, maxLines)
+}
 
-	return renderCargoBuildBlocks(blocks, loose, summaries, len(progress), maxLines)
+func fallbackCargoBuildSummary(input string, summaries, progress []string, maxLines int) rustSummaryResult {
+	combined := append([]string{}, summaries...)
+	combined = append(combined, progress...)
+	if len(combined) > 0 {
+		return summarizeRustLines(combined, maxLines)
+	}
+	return rustSummaryResult{Text: shared.CompactLines(input, maxLines)}
+}
+
+// cargoBuildCollector groups output lines into diagnostic blocks, compile
+// summaries, progress noise, and loose interesting details.
+type cargoBuildCollector struct {
+	blocks    []cargoDiagnosticBlock
+	summaries []string
+	progress  []string
+	loose     []string
+	inBlock   bool
+}
+
+func (c *cargoBuildCollector) ingest(trimmed string) {
+	switch {
+	case isCargoBuildSummaryLine(trimmed):
+		c.summaries = append(c.summaries, clip(trimmed, 160))
+		c.inBlock = false
+	case strings.HasPrefix(trimmed, "Compiling "), strings.HasPrefix(trimmed, "Checking "), strings.HasPrefix(trimmed, "Downloaded "):
+		c.progress = append(c.progress, clip(trimmed, 160))
+		c.inBlock = false
+	case isCargoDiagnosticHeader(trimmed):
+		c.blocks = append(c.blocks, cargoDiagnosticBlock{header: clip(trimmed, 160)})
+		c.inBlock = true
+	case c.inBlock:
+		collectCargoBlockLine(&c.blocks[len(c.blocks)-1], trimmed)
+	case isCargoInterestingDetail(trimmed):
+		c.loose = append(c.loose, clip(trimmed, 160))
+	}
 }
 
 func collectCargoBlockLine(block *cargoDiagnosticBlock, trimmed string) {
@@ -249,38 +289,76 @@ func collectCargoBlockLine(block *cargoDiagnosticBlock, trimmed string) {
 	}
 }
 
+// Selection tiers for cargo diagnostics: every diagnostic header (with its
+// lint slug annotation) is irreducible, the leading compile summaries close
+// the render, then spans, offending source lines, hints, and loose details
+// fill what remains.
+const (
+	cargoTierHeader = iota
+	cargoTierSummary
+	cargoTierSpan
+	cargoTierSource
+	cargoTierHint
+	cargoTierLoose
+	cargoTierExtraHint
+	cargoTierExtraSummary
+)
+
 // renderCargoBuildBlocks emits grouped diagnostics with tiered inclusion:
 // every header always survives, then spans, offending source lines, and
 // hints fill the remaining budget in that order, followed by the compile
-// summary lines.
-func renderCargoBuildBlocks(blocks []cargoDiagnosticBlock, loose, summaries []string, progressCount, maxLines int) rustSummaryResult {
+// summary lines. The render self-caps to the predicted compression-contract
+// allowance so every diagnostic header and lint slug reaches the display
+// verbatim instead of gambling on the generic downstream token capper.
+func renderCargoBuildBlocks(blocks []cargoDiagnosticBlock, loose, summaries []string, progressCount, maxLines, allowance int) rustSummaryResult {
 	total := len(loose) + len(summaries) + progressCount + normalizeCargoBlocks(blocks)
-	budget := cargoBlockBudget(len(blocks), len(summaries), maxLines)
-
-	// Every line selected so far counts against the block budget; loose
-	// details may fill what remains of it before summaries take the tail.
-	include, _ := selectCargoBlockLines(blocks, budget)
-	out := []string{}
-	for i := range blocks {
-		out = append(out, include[i]...)
+	candidates := cargoBuildPriorityLines(blocks, loose, summaries)
+	selected, omitted := shared.FitPriorityLines(candidates, maxLines, allowance)
+	return rustSummaryResult{
+		Text:         strings.Join(selected, "\n"),
+		OmittedCount: omitted + total - len(candidates),
 	}
-	out = appendWithinLimit(out, loose, minInt(budget, maxLines))
-	out = appendWithinLimit(out, summaries, maxLines)
-
-	result := rustSummaryResult{Text: joinLimitedLines(out, maxLines)}
-	if total > len(out) {
-		result.OmittedCount = total - len(out)
-	}
-	return result
 }
 
-// appendWithinLimit appends lines until out reaches limit.
-func appendWithinLimit(out, lines []string, limit int) []string {
-	for _, line := range lines {
-		if len(out) >= limit {
-			break
+// cargoBuildPriorityLines lays out each block's lines (header, spans,
+// offending source, hints) in display order, followed by loose details and
+// the compile summaries, tiered so every block's header survives before any
+// block earns a second line.
+func cargoBuildPriorityLines(blocks []cargoDiagnosticBlock, loose, summaries []string) []shared.PriorityLine {
+	out := make([]shared.PriorityLine, 0, len(blocks)*3+len(loose)+len(summaries))
+	for i := range blocks {
+		out = append(out, cargoBlockPriorityLines(blocks[i])...)
+	}
+	for _, line := range loose {
+		out = append(out, shared.PriorityLine{Text: line, Tier: cargoTierLoose})
+	}
+	for i, line := range summaries {
+		tier := cargoTierExtraSummary
+		if i < 2 {
+			tier = cargoTierSummary
 		}
-		out = append(out, line)
+		out = append(out, shared.PriorityLine{Text: line, Tier: tier})
+	}
+	return out
+}
+
+// cargoBlockPriorityLines lays out one diagnostic block in display order:
+// header, spans, offending source line, then hints (first hint ahead of the
+// per-block extras).
+func cargoBlockPriorityLines(block cargoDiagnosticBlock) []shared.PriorityLine {
+	out := []shared.PriorityLine{{Text: block.header, Tier: cargoTierHeader}}
+	for _, span := range block.spans {
+		out = append(out, shared.PriorityLine{Text: span, Tier: cargoTierSpan})
+	}
+	if block.source != "" {
+		out = append(out, shared.PriorityLine{Text: block.source, Tier: cargoTierSource})
+	}
+	for j, hint := range block.hints {
+		tier := cargoTierExtraHint
+		if j == 0 {
+			tier = cargoTierHint
+		}
+		out = append(out, shared.PriorityLine{Text: hint, Tier: tier})
 	}
 	return out
 }
@@ -301,68 +379,6 @@ func normalizeCargoBlocks(blocks []cargoDiagnosticBlock) int {
 		}
 	}
 	return total
-}
-
-func cargoBlockBudget(blockCount, summaryCount, maxLines int) int {
-	reserve := minInt(summaryCount, 2)
-	budget := maxLines - reserve
-	if budget < blockCount {
-		budget = blockCount
-	}
-	return budget
-}
-
-// selectCargoBlockLines picks grouped lines per block in priority tiers so
-// every header survives before any block gets a second line.
-func selectCargoBlockLines(blocks []cargoDiagnosticBlock, budget int) ([][]string, int) {
-	include := make([][]string, len(blocks))
-	used := 0
-	for i := range blocks {
-		include[i] = []string{blocks[i].header}
-		used++
-	}
-	for _, pick := range cargoBlockTiers(blocks) {
-		for i := range blocks {
-			if used >= budget {
-				return include, used
-			}
-			if lines := pick(i); len(lines) > 0 {
-				include[i] = append(include[i], lines[0])
-				used++
-			}
-		}
-	}
-	return appendCargoExtraHints(blocks, include, used, budget)
-}
-
-// cargoBlockTiers orders each block's candidate lines: primary span first,
-// then the offending source line, then the first hint.
-func cargoBlockTiers(blocks []cargoDiagnosticBlock) []func(i int) []string {
-	return []func(i int) []string{
-		func(i int) []string { return blocks[i].spans },
-		func(i int) []string {
-			if blocks[i].source == "" {
-				return nil
-			}
-			return []string{blocks[i].source}
-		},
-		func(i int) []string { return blocks[i].hints },
-	}
-}
-
-// appendCargoExtraHints adds each block's remaining hints once every block
-// already received its tiered lines.
-func appendCargoExtraHints(blocks []cargoDiagnosticBlock, include [][]string, used, budget int) ([][]string, int) {
-	for i := range blocks {
-		for _, hint := range blocks[i].hints[minInt(1, len(blocks[i].hints)):] {
-			if used >= budget {
-				return include, used
-			}
-			include[i] = append(include[i], hint)
-			used++
-		}
-	}
-	return include, used
 }
 
 func isCargoBuildSummaryLine(line string) bool {

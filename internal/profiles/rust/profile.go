@@ -54,14 +54,19 @@ func Profiles(maxLines int) []engine.Profile {
 			Prepare: func(inv engine.Invocation) []string {
 				return ensureCargoQuiet(ensureCargoMessageFormat(inv.Command))
 			},
-			Render: func(_ engine.Invocation, exec engine.Execution) string {
-				return rustfilter.SummarizeCargoBuild(exec.Stderr+"\n"+exec.Stdout, maxLines)
+			Render: func(inv engine.Invocation, exec engine.Execution) string {
+				return rustfilter.SummarizeCargoBuildUnderContract(exec.Stderr+"\n"+exec.Stdout, maxLines, inv.Advanced.CompressionContract)
 			},
-			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return shared.NewBufferedTextReducerWithRecovery(true, true, func(input string) string {
-					return rustfilter.SummarizeCargoBuild(input, budget.MaxLines)
+			StreamRender: func(inv engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
+				// The raw (unstripped) buffer keeps the summarizer's
+				// compression-contract prediction aligned with the raw
+				// stream the contract budgets against; the filter strips
+				// ANSI itself.
+				contract := inv.Advanced.CompressionContract
+				return shared.NewBufferedRawTextReducer(true, true, func(input string) string {
+					return rustfilter.SummarizeCargoBuildUnderContract(input, budget.MaxLines, contract)
 				}, func(input string) (string, string, bool) {
-					return rustfilter.CargoBuildRecoveryInfo(input, budget.MaxLines)
+					return rustfilter.CargoBuildRecoveryInfoUnderContract(input, budget.MaxLines, contract)
 				})
 			},
 			ParseBytes: profilekit.ParseStderrFirst,

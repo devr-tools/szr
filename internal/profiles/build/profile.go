@@ -25,18 +25,23 @@ func Profiles(maxLines int) []engine.Profile {
 				}
 				return prepareBuildSystemCommand(inv.Command)
 			},
-			Render: func(_ engine.Invocation, exec engine.Execution) string {
-				return buildfilter.SummarizeBuildSystem(exec.Stdout+"\n"+exec.Stderr, maxLines)
+			Render: func(inv engine.Invocation, exec engine.Execution) string {
+				return buildfilter.SummarizeBuildSystemUnderContract(exec.Stdout+"\n"+exec.Stderr, maxLines, inv.Advanced.CompressionContract)
 			},
-			StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return shared.NewBufferedTextReducerWithRecovery(
+			StreamRender: func(inv engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
+				// The raw (unstripped) buffer keeps the summarizer's
+				// compression-contract prediction aligned with the raw
+				// stream the contract budgets against; the filter strips
+				// ANSI itself.
+				contract := inv.Advanced.CompressionContract
+				return shared.NewBufferedRawTextReducer(
 					true,
 					true,
 					func(input string) string {
-						return buildfilter.SummarizeBuildSystem(input, budget.MaxLines)
+						return buildfilter.SummarizeBuildSystemUnderContract(input, budget.MaxLines, contract)
 					},
 					func(input string) (string, string, bool) {
-						return buildfilter.BuildSystemRecoveryInfo(input, budget.MaxLines)
+						return buildfilter.BuildSystemRecoveryInfoUnderContract(input, budget.MaxLines, contract)
 					},
 				)
 			},

@@ -1,10 +1,12 @@
 package build_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
 	buildfilter "github.com/devr-tools/szr/internal/filters/build"
+	"github.com/devr-tools/szr/internal/history"
 )
 
 func TestSummarizeBuildSystem(t *testing.T) {
@@ -143,6 +145,64 @@ func TestSummarizeBuildSystemFailureDetails(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestSummarizeBuildSystemUnderContractKeepsAssertionDetails pins the JVM
+// test-runner needles under the armed compression contract: every failing
+// test's header and its assertion payload (the "expected/but was" line) must
+// reach the display verbatim, ahead of suite counters and advisory noise,
+// while the render fits the contract allowance.
+func TestSummarizeBuildSystemUnderContractKeepsAssertionDetails(t *testing.T) {
+	lines := []string{
+		"[INFO] Scanning for projects...",
+		"[INFO] Building billing-suite 1.0.0-SNAPSHOT",
+		"[INFO] --- surefire:3.5.5:test (default-test) @ billing-suite ---",
+	}
+	for i := 0; i < 20; i++ {
+		lines = append(lines, fmt.Sprintf("[INFO] Running com.acme.billing.Suite%02dTest", i))
+	}
+	lines = append(lines,
+		"[ERROR] Tests run: 3, Failures: 1, Errors: 1, Skipped: 0, Time elapsed: 0.108 s <<< FAILURE! -- in com.acme.billing.CalcTest",
+		"[ERROR] com.acme.billing.CalcTest.failOne -- Time elapsed: 0.050 s <<< FAILURE!",
+		"org.opentest4j.AssertionFailedError: failOne: addition should equal five ==> expected: <5> but was: <4>",
+		"\tat org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)",
+		"[ERROR] Tests run: 1, Failures: 0, Errors: 1, Skipped: 0, Time elapsed: 0.006 s <<< FAILURE! -- in com.acme.billing.BoomTest",
+		"[ERROR] com.acme.billing.BoomTest.boom -- Time elapsed: 0.004 s <<< ERROR!",
+		"java.lang.IllegalStateException: boom: induced error",
+		"[ERROR] Tests run: 4, Failures: 1, Errors: 2, Skipped: 0",
+		"[INFO] BUILD FAILURE",
+		"[ERROR] -> [Help 1]",
+		"[ERROR] Re-run Maven using the -X switch to enable full debug logging.",
+	)
+	input := strings.Join(lines, "\n")
+
+	for _, tc := range []struct {
+		name    string
+		needles []string
+	}{
+		{name: "failing test names", needles: []string{"CalcTest.failOne", "BoomTest.boom"}},
+		{name: "assertion payload", needles: []string{"expected: <5> but was: <4>"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := buildfilter.SummarizeBuildSystemUnderContract(input, 12, true)
+			for _, needle := range tc.needles {
+				if !strings.Contains(got, needle) {
+					t.Fatalf("expected needle %q in self-capped build summary:\n%s", needle, got)
+				}
+			}
+			if strings.Contains(got, "-> [Help 1]") {
+				t.Fatalf("expected advisory noise to be dropped:\n%s", got)
+			}
+		})
+	}
+
+	allowed := (history.EstimateTokens(input) + 4) / 5
+	if allowed < 48 {
+		allowed = 48
+	}
+	if got := history.EstimateTokens(buildfilter.SummarizeBuildSystemUnderContract(input, 12, true)); got > allowed {
+		t.Fatalf("expected self-capped build summary within the contract allowance (%d), got %d tokens", allowed, got)
 	}
 }
 

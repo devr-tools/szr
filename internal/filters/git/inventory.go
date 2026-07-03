@@ -29,7 +29,49 @@ func (r *GitDiffReducer) renderPatchInventory() []string {
 		lines = append(lines, inventoryLine{text: formatPatchFileSummary(r.patchFiles[idx]), files: 1})
 	}
 	lines = append(lines, r.directoryGroupLines(topIndices)...)
-	return r.fitInventoryLines(lines)
+	fitted, dropped, leftover := r.fitInventoryLines(lines)
+	return r.appendInventorySnippets(fitted, topIndices, dropped, leftover)
+}
+
+// appendInventorySnippets spends leftover contract budget on added-line
+// anchors for the top-churn files, in churn order: the inventory names every
+// touched file, and the anchors make the highest-churn files' content
+// recognizable, so an agent hunting one changed line learns which file to
+// open without the full hunks. A negative leftover means the contract is
+// predicted to stay disarmed and the anchors are free.
+func (r *GitDiffReducer) appendInventorySnippets(fitted []string, topIndices []int, dropped, leftover int) []string {
+	if dropped > 0 {
+		return fitted
+	}
+	exhausted := false
+	for i, idx := range topIndices {
+		if exhausted || i >= len(fitted) {
+			break
+		}
+		fitted[i], leftover, exhausted = appendLineSnippets(fitted[i], r.patchFiles[idx].Snippets, leftover)
+	}
+	return fitted
+}
+
+// appendLineSnippets appends the snippets to one inventory line while they
+// fit the leftover budget (negative means unlimited). Returns the updated
+// line, the remaining budget, and whether the budget ran out.
+func appendLineSnippets(line string, snippets []string, leftover int) (string, int, bool) {
+	for _, snippet := range snippets {
+		if strings.Contains(line, snippet) {
+			continue
+		}
+		addition := "  " + snippet
+		cost := verbatimLineCost(addition)
+		if leftover >= 0 && cost > leftover {
+			return line, leftover, true
+		}
+		line += addition
+		if leftover >= 0 {
+			leftover -= cost
+		}
+	}
+	return line, leftover, false
 }
 
 // topChurnFileIndices returns the indices of the most-changed files, ordered
@@ -134,11 +176,12 @@ func baseName(label string) string {
 // within the allowance is never crushed downstream, so fitting here keeps
 // the filenames instead of letting a generic token capper pick survivors.
 // An allowance of 0 means the contract is predicted to stay disarmed and the
-// full inventory renders as-is.
-func (r *GitDiffReducer) fitInventoryLines(lines []inventoryLine) []string {
+// full inventory renders as-is (reported as a negative leftover). Returns
+// the fitted lines, the number of files dropped, and the unspent budget.
+func (r *GitDiffReducer) fitInventoryLines(lines []inventoryLine) ([]string, int, int) {
 	budget := r.inventoryTokenBudget()
 	if budget <= 0 {
-		return inventoryLineTexts(lines)
+		return inventoryLineTexts(lines), 0, -1
 	}
 	out := make([]string, 0, len(lines))
 	dropped := 0
@@ -154,7 +197,7 @@ func (r *GitDiffReducer) fitInventoryLines(lines []inventoryLine) []string {
 	if dropped > 0 {
 		out = append(out, fmt.Sprintf("... +%d more files", dropped))
 	}
-	return out
+	return out, dropped, budget
 }
 
 // inventoryTokenBudget derives the inventory's line budget from the predicted

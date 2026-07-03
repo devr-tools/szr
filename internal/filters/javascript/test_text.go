@@ -1,103 +1,128 @@
 package javascript
 
 import (
-	"fmt"
 	"strings"
+
+	shared "github.com/devr-tools/szr/internal/filters"
 )
 
 // summarizeJSTestText condenses plain-text runner output (vitest/jest text
 // reporters, mocha spec reporter, and package-manager wrapped runs) while
 // guaranteeing that every failing spec name survives ahead of assertion
-// details and summary counters.
-func summarizeJSTestText(input string, maxLines int) string {
-	failNames := []string{}
-	details := []string{}
-	summaries := []string{}
-
-	pendingHeader := ""
-	pendingParts := []string{}
-	flushPending := func(withParts bool) {
-		if pendingHeader == "" {
-			return
-		}
-		name := pendingHeader
-		if withParts && len(pendingParts) > 0 {
-			name = strings.TrimSuffix(pendingHeader+" "+strings.Join(pendingParts, " "), ":")
-		}
-		failNames = append(failNames, clip(strings.TrimSuffix(name, ":"), 160))
-		pendingHeader = ""
-		pendingParts = nil
-	}
-
+// details and summary counters. A positive allowance self-caps the render to
+// that token budget (see shared.PredictedTokenAllowance).
+func summarizeJSTestText(input string, maxLines, allowance int) string {
+	collector := &jsTestTextCollector{}
 	for _, line := range nonEmptyLines(input) {
-		trimmed := strings.TrimSpace(line)
-		classified := isJSFailingSpecLine(trimmed) || isMochaFailureHeader(trimmed) ||
-			isJSTestSummaryLine(trimmed) || isInterestingJSTestLine(trimmed)
-
-		if pendingHeader != "" && !classified {
-			switch {
-			case isJSTestNoiseLine(trimmed):
-				flushPending(false)
-			case strings.HasSuffix(trimmed, ":"):
-				pendingParts = append(pendingParts, trimmed)
-				flushPending(true)
-				continue
-			case len(pendingParts) < 3:
-				pendingParts = append(pendingParts, trimmed)
-				continue
-			default:
-				flushPending(false)
-			}
-		} else if pendingHeader != "" {
-			flushPending(false)
-		}
-
-		switch {
-		case isJSFailingSpecLine(trimmed):
-			failNames = append(failNames, clip(trimmed, 160))
-		case isMochaFailureHeader(trimmed):
-			if strings.HasSuffix(trimmed, ":") {
-				failNames = append(failNames, clip(strings.TrimSuffix(trimmed, ":"), 160))
-				continue
-			}
-			pendingHeader = trimmed
-		case isJSTestSummaryLine(trimmed):
-			summaries = append(summaries, clip(trimmed, 160))
-		case isInterestingJSTestLine(trimmed):
-			details = append(details, clip(trimmed, 160))
-		}
+		collector.ingest(strings.TrimSpace(line))
 	}
-	flushPending(false)
+	collector.flushPending(false)
 
-	failNames = uniqueStrings(failNames)
-	details = uniqueStrings(details)
-	summaries = prioritizeJSTestSummaries(uniqueStrings(summaries))
+	failNames := uniqueStrings(collector.failNames)
+	details := uniqueStrings(collector.details)
+	summaries := prioritizeJSTestSummaries(uniqueStrings(collector.summaries))
 
-	lines := append([]string{}, failNames...)
-	lines = append(lines, details...)
-	lines = append(lines, summaries...)
-	if len(lines) == 0 {
+	if len(failNames)+len(details)+len(summaries) == 0 {
 		return CompactLines(input, maxLines)
 	}
-	if len(lines) <= maxLines {
-		return strings.Join(lines, "\n")
+	return shared.FitPriorityLinesWithMarker(
+		jsTestPriorityLines(failNames, details, summaries),
+		maxLines,
+		allowance,
+	)
+}
+
+// jsTestTextCollector classifies plain-text runner lines into failing spec
+// names, assertion details, and run summaries; mocha's bare suite headers
+// are merged with the indented test-name lines that follow them.
+type jsTestTextCollector struct {
+	failNames     []string
+	details       []string
+	summaries     []string
+	pendingHeader string
+	pendingParts  []string
+}
+
+func (c *jsTestTextCollector) ingest(trimmed string) {
+	classified := isJSFailingSpecLine(trimmed) || isMochaFailureHeader(trimmed) ||
+		isJSTestSummaryLine(trimmed) || isInterestingJSTestLine(trimmed)
+	if c.pendingHeader != "" && c.mergePending(trimmed, classified) {
+		return
 	}
 
-	budget := maxLines
-	reserveSummary := len(summaries) > 0 && maxLines > 1
-	if reserveSummary {
-		budget--
+	switch {
+	case isJSFailingSpecLine(trimmed):
+		c.failNames = append(c.failNames, clip(trimmed, 160))
+	case isMochaFailureHeader(trimmed):
+		if strings.HasSuffix(trimmed, ":") {
+			c.failNames = append(c.failNames, clip(strings.TrimSuffix(trimmed, ":"), 160))
+			return
+		}
+		c.pendingHeader = trimmed
+	case isJSTestSummaryLine(trimmed):
+		c.summaries = append(c.summaries, clip(trimmed, 160))
+	case isInterestingJSTestLine(trimmed):
+		c.details = append(c.details, clip(trimmed, 160))
 	}
-	head := append([]string{}, failNames...)
-	head = append(head, details...)
-	if len(head) > budget {
-		head = head[:budget]
+}
+
+// mergePending folds a line into the pending mocha failure header and
+// reports whether the line was consumed by the merge.
+func (c *jsTestTextCollector) mergePending(trimmed string, classified bool) bool {
+	if classified {
+		c.flushPending(false)
+		return false
 	}
-	selected := head
-	if reserveSummary {
-		selected = append(selected, summaries[0])
+	switch {
+	case isJSTestNoiseLine(trimmed):
+		c.flushPending(false)
+		return false
+	case strings.HasSuffix(trimmed, ":"):
+		c.pendingParts = append(c.pendingParts, trimmed)
+		c.flushPending(true)
+		return true
+	case len(c.pendingParts) < 3:
+		c.pendingParts = append(c.pendingParts, trimmed)
+		return true
+	default:
+		c.flushPending(false)
+		return false
 	}
-	return strings.Join(selected, "\n") + fmt.Sprintf("\n... +%d more lines", len(lines)-len(selected))
+}
+
+func (c *jsTestTextCollector) flushPending(withParts bool) {
+	if c.pendingHeader == "" {
+		return
+	}
+	name := c.pendingHeader
+	if withParts && len(c.pendingParts) > 0 {
+		name = strings.TrimSuffix(c.pendingHeader+" "+strings.Join(c.pendingParts, " "), ":")
+	}
+	c.failNames = append(c.failNames, clip(strings.TrimSuffix(name, ":"), 160))
+	c.pendingHeader = ""
+	c.pendingParts = nil
+}
+
+// jsTestPriorityLines tiers the render candidates for budget fitting: every
+// failing spec name outranks the primary summary counters, which outrank
+// every assertion detail line. A dropped detail loses one clue; a dropped
+// fail name loses a whole failing test.
+func jsTestPriorityLines(failNames, details, summaries []string) []shared.PriorityLine {
+	out := make([]shared.PriorityLine, 0, len(failNames)+len(details)+len(summaries))
+	for _, line := range failNames {
+		out = append(out, shared.PriorityLine{Text: line, Tier: 0})
+	}
+	for _, line := range details {
+		out = append(out, shared.PriorityLine{Text: line, Tier: 2})
+	}
+	for i, line := range summaries {
+		tier := 3
+		if i == 0 {
+			tier = 1
+		}
+		out = append(out, shared.PriorityLine{Text: line, Tier: tier})
+	}
+	return out
 }
 
 // isJSFailingSpecLine recognizes lines that carry a failing spec's name in

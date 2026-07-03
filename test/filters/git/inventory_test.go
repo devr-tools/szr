@@ -58,6 +58,32 @@ func TestGitDiffManyFilesRendersFullInventory(t *testing.T) {
 	}
 }
 
+// TestGitDiffInventoryAnchorsTopChurnFiles pins the deep-diff needle: in a
+// diff too wide to replay, the top-churn file's inventory line must carry
+// added-line anchors so a changed constant deep in the diff stays
+// discoverable — the agent learns which file to open, not just that it
+// changed.
+func TestGitDiffInventoryAnchorsTopChurnFiles(t *testing.T) {
+	t.Parallel()
+
+	reducer := gitfilter.NewGitDiffReducer(9, 0)
+	got := reducer.Reduce(buildManyFileDiff(300))
+
+	for _, needle := range []string{
+		"pkg/api/f137.go",
+		"+const keyRotationWindow0 = 0",
+	} {
+		if !strings.Contains(got, needle) {
+			t.Fatalf("expected inventory anchor needle %q in render:\n%s", needle, got)
+		}
+	}
+	// Snippet capture is capped per file: the first added lines anchor the
+	// file, the rest stay behind the recovery artifact.
+	if strings.Count(got, "+const keyRotationWindow") != 1 {
+		t.Fatalf("expected exactly one added-line anchor for the needle file:\n%s", got)
+	}
+}
+
 // TestGitDiffFewFilesKeepsPerFileSummaries pins that diffs within the
 // summary budget keep the richer per-file summary lines instead of switching
 // to the grouped inventory.

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	rustfilter "github.com/devr-tools/szr/internal/filters/rust"
+	"github.com/devr-tools/szr/internal/history"
 )
 
 func TestSummarizeCargoTest(t *testing.T) {
@@ -168,6 +169,55 @@ func TestSummarizeCargoClippyKeepsLintNames(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected %q in clippy summary:\n%s", want, got)
 		}
+	}
+}
+
+// TestSummarizeCargoClippyUnderContractKeepsEveryLintSlug pins the clippy
+// needles under the armed compression contract: every warning header (with
+// its lint slug annotation) must reach the display verbatim, including
+// second-and-later warning blocks and the flagged identifier, while the
+// whole render fits the contract allowance.
+func TestSummarizeCargoClippyUnderContractKeepsEveryLintSlug(t *testing.T) {
+	input := strings.Join([]string{
+		"    Checking ledger-core v0.7.1 (/workspace/ledger/core)",
+		"warning: redundant clone",
+		"  --> src/lib.rs:88:27",
+		"   |",
+		"88 |     emit(event.payload.clone());",
+		"   |                           ^^^^^^^^ help: remove this",
+		"   |",
+		"   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#redundant_clone",
+		"   = note: `#[warn(clippy::redundant_clone)]` on by default",
+		"warning: this `if` statement can be collapsed",
+		"   --> src/reconcile.rs:41:5",
+		"41  | /     if enabled {",
+		"42  | |         if entry.balanced() {",
+		"43  | |             apply(entry);",
+		"44  | |         }",
+		"45  | |     }",
+		"    | |_____^",
+		"    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#collapsible_if",
+		"warning: unused variable: `cursor`",
+		"   --> src/reconcile.rs:77:9",
+		"    |",
+		"77  |     let cursor = table.scan();",
+		"    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_cursor`",
+		"warning: `ledger-core` (lib) generated 3 warnings (run `cargo clippy --fix --lib -p ledger-core` to apply 1 suggestion)",
+		"    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.42s",
+	}, "\n")
+
+	got := rustfilter.SummarizeCargoBuildUnderContract(input, 10, true)
+	for _, needle := range []string{"redundant_clone", "collapsible_if", "cursor"} {
+		if !strings.Contains(got, needle) {
+			t.Fatalf("expected lint needle %q in self-capped clippy summary:\n%s", needle, got)
+		}
+	}
+	allowed := (history.EstimateTokens(input) + 4) / 5
+	if allowed < 48 {
+		allowed = 48
+	}
+	if got := history.EstimateTokens(got); got > allowed {
+		t.Fatalf("expected self-capped clippy summary within the contract allowance (%d), got %d tokens", allowed, got)
 	}
 }
 
