@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.14.0](https://github.com/devr-tools/szr/compare/v0.13.0...v0.14.0) (2026-07-03)
+
+
+### Features
+
+* **engine:** session dedup with reference expansion ([4c375cf](https://github.com/devr-tools/szr/commit/4c375cf4d4a97c84dd7616c6a2205a7c3600b3c7))
+* **filters:** tabular rendering for uniform JSON arrays ([2dcf4f8](https://github.com/devr-tools/szr/commit/2dcf4f83846fd8409ba2f2f275a46e76e90522f0))
+* **filters:** tier-priority self-capping and binary-aware fallback rendering ([6e5fe24](https://github.com/devr-tools/szr/commit/6e5fe242ed65755dad1f9a05fdb177972d2b55e4))
+* session dedup with reference expansion, tabular JSON, and fidelity depth ([5213cc2](https://github.com/devr-tools/szr/commit/5213cc2661718e819037b2c6ded4e84fcc83d3f5))
+
+
+### Bug Fixes
+
+* **engine:** honest small-output summaries and hotspot selection ([1d64b09](https://github.com/devr-tools/szr/commit/1d64b091b10b8d0505ae0b260986abeb8283e91c))
+
 ## [0.13.0](https://github.com/devr-tools/szr/compare/v0.12.1...v0.13.0) (2026-07-03)
 
 
