@@ -108,6 +108,10 @@ jobs:
     uses: ./.github/workflows/release.yml
     permissions:
       contents: write
+      # release.yml's publish-npm/publish-pypi jobs declare id-token: write for
+      # OIDC. GitHub validates a called workflow's permissions statically (even
+      # for jobs gated off on the prerelease path), so the caller must grant it.
+      id-token: write
     with:
       tag: ${{ needs.prepare-prerelease.outputs.tag }}
       prerelease: true
