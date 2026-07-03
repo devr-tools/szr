@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.13.0](https://github.com/devr-tools/szr/compare/v0.12.1...v0.13.0) (2026-07-03)
+
+
+### Features
+
+* **engine:** retention verifier repairs renders that drop critical facts ([7eb537c](https://github.com/devr-tools/szr/commit/7eb537caafbfb2f882f2b8ccf4d48c3e9b4b53e2))
+* **filters:** anomaly-aware lists, full diff inventories, and deeper build detail ([00d35fa](https://github.com/devr-tools/szr/commit/00d35faf66f3e8fb0f5453127c08da6634ee111e))
+* **filters:** keep failing-test identifiers and error codes in runner renders ([ec31750](https://github.com/devr-tools/szr/commit/ec317507ae1984513fb95d3aeb701779e6deca15))
+* retention verifier and fidelity-depth improvements across renders ([7b4d106](https://github.com/devr-tools/szr/commit/7b4d1067142b164de2e8461816fad463084608cb))
+
+
+### Bug Fixes
+
+* **cli:** spread surfaces genuinely poor savings and skips always-failing loosen advice ([522f315](https://github.com/devr-tools/szr/commit/522f315c0fabab84ed0060f77cc36b0203d3a3eb))
+
 ## [0.12.1](https://github.com/devr-tools/szr/compare/v0.12.0...v0.12.1) (2026-07-03)
 
 
