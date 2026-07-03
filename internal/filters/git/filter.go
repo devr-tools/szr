@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	shared "github.com/devr-tools/szr/internal/filters"
+	"github.com/devr-tools/szr/internal/history"
 )
 
 func SummarizeGitStatus(input string) string {
@@ -169,15 +170,23 @@ func (r *GitStatusReducer) compactSummary() string {
 }
 
 type GitLogReducer struct {
-	scanner     scanner
-	maxEntries  int
-	bytesParsed int
-	total       int
-	entries     []gitLogEntry
+	scanner           scanner
+	maxEntries        int
+	bytesParsed       int
+	total             int
+	entries           []gitLogEntry
+	fullFormat        bool
+	pendingHash       string
+	pendingHasSubject bool
 }
 
-func NewGitLogReducer(maxLines, _ int) *GitLogReducer {
-	maxEntries := 2
+func NewGitLogReducer(maxLines, maxBytes int) *GitLogReducer {
+	return NewGitLogReducerWithEntries(maxLines, maxBytes, 0)
+}
+
+// NewGitLogReducerWithEntries keeps up to maxEntries commit lines visible so
+// explicit user counts (for example `git log -5`) survive summarization.
+func NewGitLogReducerWithEntries(_, _, maxEntries int) *GitLogReducer {
 	if maxEntries <= 0 {
 		maxEntries = 2
 	}
@@ -235,8 +244,33 @@ func (r *GitLogReducer) consume(chunk []byte) {
 }
 
 func (r *GitLogReducer) recordLine(line string) {
+	if hash, ok := gitCommitHeaderHash(line); ok {
+		r.fullFormat = true
+		r.total++
+		r.pendingHash = hash
+		r.pendingHasSubject = false
+		return
+	}
+	if r.fullFormat {
+		r.recordFullFormatLine(line)
+		return
+	}
 	r.total++
 	hash, subject := splitGitCommit(line)
+	r.appendLogEntry(hash, subject)
+}
+
+// recordFullFormatLine extracts the subject of the pending default-format
+// commit: the first indented message line after a `commit <hash>` header.
+func (r *GitLogReducer) recordFullFormatLine(line string) {
+	if r.pendingHasSubject || !strings.HasPrefix(line, "    ") {
+		return
+	}
+	r.pendingHasSubject = true
+	r.appendLogEntry(r.pendingHash, strings.TrimSpace(line))
+}
+
+func (r *GitLogReducer) appendLogEntry(hash, subject string) {
 	if len(r.entries) > 0 && r.entries[len(r.entries)-1].Subject == subject {
 		r.entries[len(r.entries)-1].Count++
 		return
@@ -248,6 +282,35 @@ func (r *GitLogReducer) recordLine(line string) {
 			Count:   1,
 		})
 	}
+}
+
+func gitCommitHeaderHash(line string) (string, bool) {
+	if !strings.HasPrefix(line, "commit ") {
+		return "", false
+	}
+	fields := strings.Fields(strings.TrimPrefix(line, "commit "))
+	if len(fields) == 0 {
+		return "", false
+	}
+	hash := fields[0]
+	if len(hash) < 7 || !isHexString(hash) {
+		return "", false
+	}
+	if len(hash) > 7 {
+		hash = hash[:7]
+	}
+	return hash, true
+}
+
+func isHexString(value string) bool {
+	for _, r := range value {
+		switch {
+		case r >= '0' && r <= '9', r >= 'a' && r <= 'f', r >= 'A' && r <= 'F':
+		default:
+			return false
+		}
+	}
+	return value != ""
 }
 
 func appendPreview(paths []string, path string, max int) []string {
@@ -369,6 +432,16 @@ func bucketLabel(path string) string {
 	return path
 }
 
+// Small diffs render their changed lines verbatim instead of a stats-only
+// summary: the +/- content of a 15-line diff is the payload the agent asked
+// for, and eliding it to hunk counts destroys it for trivial savings. The
+// caps bound the mode to genuinely small diffs (rendered lines including one
+// header per file, and bytes of retained content).
+const (
+	gitDiffVerbatimMaxLines = 40
+	gitDiffVerbatimMaxBytes = 2048
+)
+
 type GitDiffReducer struct {
 	scanner               scanner
 	maxSummary            int
@@ -385,6 +458,9 @@ type GitDiffReducer struct {
 	largeFileThreshold    int
 	largeSummaryTopN      int
 	aggressiveSummaryTopN int
+	verbatimDisabled      bool
+	verbatimLines         int
+	verbatimBytes         int
 }
 
 type GitDiffReducerOptions struct {
@@ -397,16 +473,18 @@ type GitDiffReducerOptions struct {
 }
 
 type gitDiffPatchFile struct {
-	Path      string
-	Hunks     int
-	Anchors   []string
-	Additions int
-	Deletions int
-	IsNew     bool
-	IsDeleted bool
-	IsRenamed bool
-	OldPath   string
-	NewPath   string
+	Path         string
+	Hunks        int
+	Anchors      []string
+	Additions    int
+	Deletions    int
+	IsNew        bool
+	IsDeleted    bool
+	IsRenamed    bool
+	IsConflicted bool
+	OldPath      string
+	NewPath      string
+	Lines        []string
 }
 
 func NewGitDiffReducer(maxLines, maxBytes int) *GitDiffReducer {
@@ -443,6 +521,7 @@ func NewGitDiffReducerWithOptions(opts GitDiffReducerOptions) *GitDiffReducer {
 		largeFileThreshold:    opts.LargeFileThreshold,
 		largeSummaryTopN:      opts.LargeSummaryTopN,
 		aggressiveSummaryTopN: opts.AggressiveSummaryTopN,
+		verbatimDisabled:      opts.Aggressive,
 	}
 }
 
@@ -471,6 +550,9 @@ func (r *GitDiffReducer) Result() string {
 		return header + "\n" + strings.Join(r.renderCondensedSummary(), "\n")
 	}
 	if len(r.summary) == 0 && len(r.patchFiles) > 0 {
+		if r.verbatimRenderable() {
+			return header + "\n" + strings.Join(r.renderVerbatimPatch(verbatimLineCost(header)), "\n")
+		}
 		return header + "\n" + strings.Join(r.renderPatchSummary(), "\n")
 	}
 	if len(r.summary) == 0 {
@@ -497,6 +579,9 @@ func (r *GitDiffReducer) Preview() string {
 	}
 	if len(r.summary) == 0 {
 		if len(r.patchFiles) > 0 {
+			if r.verbatimRenderable() {
+				return header + "\n" + strings.Join(r.renderVerbatimPatch(verbatimLineCost(header)), "\n")
+			}
 			return header + "\n" + strings.Join(r.renderPatchSummary(), "\n")
 		}
 		return header
@@ -508,6 +593,8 @@ func (r *GitDiffReducer) RecoveryInfo() (string, string, bool) {
 	switch {
 	case r.fileCount == 0 && len(r.patchFiles) == 0 && len(r.summary) == 0:
 		return shared.NoRecovery()
+	case len(r.patchFiles) > 0 && len(r.summary) == 0 && r.verbatimRenderable():
+		return shared.FullOutputRecovery("omitted diff context lines")
 	case len(r.patchFiles) > 0:
 		return shared.FullOutputRecovery("omitted full diff hunks")
 	case len(r.statEntries) > len(r.summary):
@@ -533,6 +620,9 @@ func (r *GitDiffReducer) recordLine(line string) {
 	if strings.HasPrefix(line, "diff --git ") {
 		r.fileCount++
 		r.startPatchFile(line)
+	} else if path, ok := combinedDiffPath(line); ok {
+		r.fileCount++
+		r.startCombinedPatchFile(path)
 	}
 	if r.handlePatchMetadata(line) {
 		return
@@ -540,11 +630,12 @@ func (r *GitDiffReducer) recordLine(line string) {
 	if isDiffFilenameMarker(line) {
 		return
 	}
-	if strings.HasPrefix(line, "@@ ") {
+	if strings.HasPrefix(line, "@@ ") || strings.HasPrefix(line, "@@@ ") {
 		r.recordPatchAnchor(line)
 		return
 	}
 	r.recordPatchDelta(line)
+	r.captureVerbatimLine(line)
 	if isDiffSummaryLine(line) {
 		r.recordSummaryTotals(line)
 		if entry, ok := parseDiffStatEntry(line); ok {
@@ -616,6 +707,215 @@ func classifyDiffDelta(line string) int {
 	}
 }
 
+// captureVerbatimLine retains the changed (+/-) lines of a still-small diff
+// so the render can replay them verbatim. Context lines, index/---/+++ noise,
+// and hunk headers never reach this point. Once the diff exceeds the verbatim
+// caps all retained lines are dropped and the reducer stays in summary mode.
+func (r *GitDiffReducer) captureVerbatimLine(line string) {
+	if r.verbatimDisabled || r.currentPatch == nil || !isVerbatimDiffLine(line, r.currentPatch.IsConflicted) {
+		return
+	}
+	if !r.consumeVerbatimBudget(line) {
+		return
+	}
+	r.currentPatch.Lines = append(r.currentPatch.Lines, line)
+}
+
+// consumeVerbatimBudget charges one rendered line against the verbatim caps
+// and disables verbatim mode (releasing retained lines) when they are
+// exceeded.
+func (r *GitDiffReducer) consumeVerbatimBudget(line string) bool {
+	r.verbatimLines++
+	r.verbatimBytes += len(line) + 1
+	if r.verbatimLines > gitDiffVerbatimMaxLines || r.verbatimBytes > gitDiffVerbatimMaxBytes {
+		r.disableVerbatim()
+		return false
+	}
+	return true
+}
+
+func (r *GitDiffReducer) disableVerbatim() {
+	r.verbatimDisabled = true
+	for i := range r.patchFiles {
+		r.patchFiles[i].Lines = nil
+	}
+}
+
+// isVerbatimDiffLine reports whether a patch content line carries changed
+// content worth replaying. Plain diffs mark changes with a single leading
+// +/-; combined (conflict) diffs use two marker columns, so any line whose
+// second column marks a change is kept as well.
+func isVerbatimDiffLine(line string, conflicted bool) bool {
+	if classifyDiffDelta(line) != 0 {
+		return true
+	}
+	if !conflicted || len(line) < 2 {
+		return false
+	}
+	first, second := line[0], line[1]
+	return (first == ' ' || first == '+' || first == '-') && (second == '+' || second == '-')
+}
+
+func (r *GitDiffReducer) verbatimRenderable() bool {
+	return !r.verbatimDisabled
+}
+
+// renderVerbatimPatch renders each file as its summary header followed by
+// its +/- lines verbatim (headerTokens is the token cost of the `files=...`
+// line emitted above the returned lines).
+//
+// When the engine compression contract is disarmed (small raw output) the
+// full render is returned as-is, headers included with hunk counts and
+// anchors. When the contract would cap the display, the render self-caps to
+// the predicted allowance instead: the reducer knows what matters in a diff
+// — every filename first, then as many changed lines as fit — while the
+// generic token capper does not, so fitting the allowance here keeps the
+// contract from crushing filenames in favor of identifier-dense content
+// lines.
+func (r *GitDiffReducer) renderVerbatimPatch(headerTokens int) []string {
+	full := make([]string, 0, len(r.patchFiles)+r.verbatimLines)
+	fullCost := 0
+	for _, file := range r.patchFiles {
+		header := formatPatchFileSummary(file)
+		full = append(full, header)
+		fullCost += verbatimLineCost(header)
+		for _, line := range file.Lines {
+			full = append(full, line)
+			fullCost += verbatimLineCost(line)
+		}
+	}
+	allowance := r.verbatimTokenAllowance()
+	if allowance == 0 {
+		return full
+	}
+	budget := allowance - headerTokens
+	if fullCost <= budget {
+		return full
+	}
+	return r.renderVerbatimPatchCapped(budget)
+}
+
+// renderVerbatimPatchCapped fits the verbatim render into the remaining
+// token budget: label-only file headers first (hunk counts, churn, and
+// anchors are substitutes for the content that follows and would crowd out
+// filenames), then the cheapest changed lines first — under a hard token cap
+// more surviving lines cover more of the diff — with a bare "..." marker
+// when lines had to be dropped.
+func (r *GitDiffReducer) renderVerbatimPatchCapped(budget int) []string {
+	headers := make([]string, len(r.patchFiles))
+	cost := 0
+	for i, file := range r.patchFiles {
+		headers[i] = patchFileLabel(file)
+		cost += verbatimLineCost(headers[i])
+	}
+	kept, dropped := r.selectVerbatimLines(budget - cost)
+	out := make([]string, 0, len(r.patchFiles)+r.verbatimLines+1)
+	for i, file := range r.patchFiles {
+		out = append(out, headers[i])
+		for j, line := range file.Lines {
+			if kept[i][j] {
+				out = append(out, line)
+			}
+		}
+	}
+	if dropped > 0 {
+		out = append(out, "...")
+	}
+	return out
+}
+
+const (
+	// gitDiffVerbatimContractRawTokens is a conservative proxy for the
+	// engine compression contract's 200-raw-token arming threshold. The
+	// reducer only sees bytes, and the contract's lexical token estimate can
+	// exceed the byte-based one, so the proxy arms a little early rather
+	// than ever predicting "disarmed" for an armed display.
+	gitDiffVerbatimContractRawTokens = 150
+	// gitDiffVerbatimSuffixReserve leaves room for the recovery/tee suffix
+	// the display finalizer appends inside the same contract allowance.
+	gitDiffVerbatimSuffixReserve = 16
+	// gitDiffVerbatimMinTokens mirrors the contract's 48-token usable floor.
+	gitDiffVerbatimMinTokens = 48
+)
+
+// verbatimTokenAllowance predicts the engine compression contract's
+// retained-token budget (1/5 of the raw tokens with a usable floor, minus
+// the recovery-suffix reserve) using the bytes this reducer parsed as the
+// raw-size signal. Returns 0 when the contract is predicted to stay
+// disarmed, meaning the verbatim render needs no self-cap. The byte-based
+// raw estimate never exceeds the contract's own, so a render within this
+// allowance is never crushed downstream.
+func (r *GitDiffReducer) verbatimTokenAllowance() int {
+	rawTokens := (r.bytesParsed + 3) / 4
+	if rawTokens < gitDiffVerbatimContractRawTokens {
+		return 0
+	}
+	allowed := (rawTokens + 4) / 5
+	if allowed < gitDiffVerbatimMinTokens {
+		allowed = gitDiffVerbatimMinTokens
+	}
+	return allowed - gitDiffVerbatimSuffixReserve
+}
+
+// verbatimLineCost prices one rendered line, including its newline, so the
+// per-line sum is a safe upper bound for the whole-render token estimate the
+// compression contract measures.
+func verbatimLineCost(line string) int {
+	return history.EstimateTokens(line + "\n")
+}
+
+type verbatimLineCandidate struct{ file, idx, cost int }
+
+// selectVerbatimLines keeps every changed line when they fit the remaining
+// budget, and otherwise the cheapest lines first. Returns kept flags per
+// file plus the number of dropped lines.
+func (r *GitDiffReducer) selectVerbatimLines(budget int) ([][]bool, int) {
+	kept := make([][]bool, len(r.patchFiles))
+	for i, file := range r.patchFiles {
+		kept[i] = make([]bool, len(file.Lines))
+	}
+	candidates, total := r.verbatimLineCandidates()
+	if total <= budget {
+		for _, item := range candidates {
+			kept[item.file][item.idx] = true
+		}
+		return kept, 0
+	}
+	return kept, keepCheapestVerbatimLines(kept, candidates, budget-1) // -1 reserves the trailing "..." marker
+}
+
+// keepCheapestVerbatimLines marks the cheapest candidates that fit the
+// budget as kept — under a hard token cap more surviving lines cover more of
+// the diff — and returns how many were dropped.
+func keepCheapestVerbatimLines(kept [][]bool, candidates []verbatimLineCandidate, budget int) int {
+	sort.SliceStable(candidates, func(a, b int) bool {
+		return candidates[a].cost < candidates[b].cost
+	})
+	dropped := 0
+	for _, item := range candidates {
+		if item.cost > budget {
+			dropped++
+			continue
+		}
+		kept[item.file][item.idx] = true
+		budget -= item.cost
+	}
+	return dropped
+}
+
+func (r *GitDiffReducer) verbatimLineCandidates() ([]verbatimLineCandidate, int) {
+	candidates := make([]verbatimLineCandidate, 0, r.verbatimLines)
+	total := 0
+	for i, file := range r.patchFiles {
+		for j, line := range file.Lines {
+			cost := verbatimLineCost(line)
+			total += cost
+			candidates = append(candidates, verbatimLineCandidate{file: i, idx: j, cost: cost})
+		}
+	}
+	return candidates, total
+}
+
 func isDiffSummaryLine(line string) bool {
 	return strings.Contains(line, "|") || strings.Contains(line, "files changed") || strings.Contains(line, "file changed")
 }
@@ -640,6 +940,36 @@ func (r *GitDiffReducer) startPatchFile(line string) {
 	}
 	r.patchFiles = append(r.patchFiles, file)
 	r.currentPatch = &r.patchFiles[len(r.patchFiles)-1]
+	if !r.verbatimDisabled {
+		// Each file costs one rendered header line in verbatim mode.
+		r.consumeVerbatimBudget(path)
+	}
+}
+
+// combinedDiffPath recognizes combined-diff headers (`diff --cc <path>` and
+// `diff --combined <path>`) that git emits for unmerged, conflicted paths.
+func combinedDiffPath(line string) (string, bool) {
+	for _, prefix := range []string{"diff --cc ", "diff --combined "} {
+		if strings.HasPrefix(line, prefix) {
+			if path := strings.TrimSpace(strings.TrimPrefix(line, prefix)); path != "" {
+				return path, true
+			}
+		}
+	}
+	return "", false
+}
+
+func (r *GitDiffReducer) startCombinedPatchFile(path string) {
+	file := gitDiffPatchFile{
+		Path:         path,
+		IsConflicted: true,
+		Anchors:      make([]string, 0, 3),
+	}
+	r.patchFiles = append(r.patchFiles, file)
+	r.currentPatch = &r.patchFiles[len(r.patchFiles)-1]
+	if !r.verbatimDisabled {
+		r.consumeVerbatimBudget(path)
+	}
 }
 
 func (r *GitDiffReducer) recordPatchAnchor(line string) {
@@ -691,9 +1021,11 @@ func (r *GitDiffReducer) renderPatchSummary() []string {
 	return out
 }
 
-func formatPatchFileSummary(file gitDiffPatchFile) string {
+func patchFileLabel(file gitDiffPatchFile) string {
 	label := file.Path
 	switch {
+	case file.IsConflicted:
+		label = label + " [conflict]"
 	case file.IsRenamed && file.OldPath != "" && file.NewPath != "":
 		label = file.OldPath + " -> " + file.NewPath
 	case file.IsDeleted:
@@ -701,7 +1033,11 @@ func formatPatchFileSummary(file gitDiffPatchFile) string {
 	case file.IsNew:
 		label = label + " [new]"
 	}
-	parts := []string{label}
+	return label
+}
+
+func formatPatchFileSummary(file gitDiffPatchFile) string {
+	parts := []string{patchFileLabel(file)}
 	if file.Hunks > 0 {
 		parts = append(parts, fmt.Sprintf("hunks=%d", file.Hunks))
 	}

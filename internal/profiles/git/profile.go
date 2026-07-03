@@ -1,6 +1,7 @@
 package git
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/devr-tools/szr/internal/config"
@@ -17,11 +18,21 @@ func Profiles(maxLines int) []engine.Profile {
 	}, func(budget engine.OutputBudget) engine.StreamReducer {
 		return gitfilter.NewGitStatusReducer(budget.MaxLines, budget.MaxBytes)
 	})
-	logSummary := profilekit.StdoutSummary(maxLines, 11, 15, engine.StreamStdoutOnly, func(stdout string) string {
-		return gitfilter.SummarizeGitLog(shared.StripANSI(stdout))
-	}, func(budget engine.OutputBudget) engine.StreamReducer {
-		return gitfilter.NewGitLogReducer(budget.MaxLines, budget.MaxBytes)
-	})
+	logBudget := profilekit.OutputBudget(profilekit.AtLeast(maxLines, 11))
+	logSummary := profilekit.SummaryConfig{
+		StreamPreference: engine.StreamStdoutOnly,
+		Budget:           logBudget,
+		LatencyBudget:    15,
+		Render: func(inv engine.Invocation, exec engine.Execution) string {
+			reducer := newGitLogReducer(inv, logBudget)
+			reducer.ConsumeStdout([]byte(shared.StripANSI(exec.Stdout)))
+			return reducer.Result()
+		},
+		StreamRender: func(inv engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
+			return newGitLogReducer(inv, budget)
+		},
+		ParseBytes: profilekit.ParseStdout,
+	}
 
 	list := []engine.Profile{
 		gitShowProfile(maxLines),
@@ -99,21 +110,23 @@ func Profiles(maxLines int) []engine.Profile {
 				if inv.Classification.Command.Git.LogFormatRequested {
 					return inv.Command
 				}
+				if _, ok := gitLogRequestedCount(inv.Command); ok {
+					return inv.Command
+				}
 				return append(inv.Command, "--oneline", "-n", "20")
 			},
 			Explain: []string{
-				"Injects `--oneline -n 20` for plain `git log` calls.",
-				"Keeps the preview shallow so the LLM sees commit shape instead of full message bodies.",
+				"Injects `--oneline -n 20` only when `git log` was called without an explicit count or format flag.",
+				"Explicit `-<n>`, `-n`, `--max-count`, and format flags always win; the summary then keeps up to the requested number of commits.",
 			},
 		}, logSummary),
 		{
 			Name:        "git-diff",
-			Description: "Summarizes file churn and preserves `--stat` style detail.",
+			Description: "Summarizes diff output into per-file churn with full filenames.",
 			Confidence:  engine.ConfidenceHigh,
 			Capabilities: engine.ProfileCapabilities{
-				StructuredMode:            engine.StructuredModePreferred,
-				InjectsPrepareArgs:        true,
-				SupportsAggressivePrepare: true,
+				StructuredMode:     engine.StructuredModePreferred,
+				InjectsPrepareArgs: true,
 			},
 			StreamPreference: engine.StreamStdoutOnly,
 			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 9)),
@@ -125,19 +138,7 @@ func Profiles(maxLines int) []engine.Profile {
 				if inv.Classification.Command.Git.DiffNoPatchRequested {
 					return inv.Command
 				}
-				if !inv.Advanced.AggressivePrepareRewrites {
-					if inv.Classification.Command.Git.DiffFormatRequested {
-						return ensureGitDiffNoiseFlags(inv.Command)
-					}
-					return ensureGitDiffNoiseFlags(append(inv.Command, "--stat=96,20", "--compact-summary"))
-				}
-				if inv.Classification.Command.Git.DiffFormatRequested {
-					return ensureGitDiffNoiseFlags(inv.Command)
-				}
-				if isAggressiveGitDiff(inv) {
-					return ensureGitDiffNoiseFlags(append(inv.Command, "--stat=56,8", "--compact-summary"))
-				}
-				return ensureGitDiffNoiseFlags(append(inv.Command, "--stat=72,12", "--compact-summary"))
+				return ensureGitDiffNoiseFlags(inv.Command)
 			},
 			Render: func(inv engine.Invocation, exec engine.Execution) string {
 				return newGitDiffReducer(inv, maxLines, 0).Reduce(shared.StripANSI(exec.Stdout))
@@ -147,8 +148,8 @@ func Profiles(maxLines int) []engine.Profile {
 			},
 			ParseBytes: profilekit.ParseStdout,
 			Explain: []string{
-				"Biases `git diff` toward stat output instead of full hunks, with narrower stat widths in aggressive mode.",
-				"Totals additions and deletions, then keeps the highest-churn files when the diff touches many paths.",
+				"Runs the user's diff arguments unchanged (plus `--no-color --no-ext-diff`) and summarizes the captured patch at render time.",
+				"Keeps full file names with per-file hunk and +/- counts, marks conflicted paths, and keeps the highest-churn files when the diff touches many paths.",
 			},
 		},
 	}
@@ -186,7 +187,7 @@ func gitShowProfile(maxLines int) engine.Profile {
 		ParseBytes: profilekit.ParseStdout,
 		Explain: []string{
 			"Matches repeated `git show` inspection patterns from local history, including summary-oriented commit previews and `REV:path` blob reads.",
-			"Normalizes summary-style `git show` invocations toward concise headers and suppresses patch noise when the user already asked for stat or name-only output.",
+			"Compacts the commit header with `--format=oneline` for summary-style invocations while leaving user-requested stat/name-only output intact.",
 		},
 	}
 }
@@ -299,6 +300,65 @@ func gitSuccessPathStreamRender(kind string) func(engine.Invocation, engine.Outp
 	}
 }
 
+func newGitLogReducer(inv engine.Invocation, budget engine.OutputBudget) *gitfilter.GitLogReducer {
+	maxEntries := 0
+	if count, ok := gitLogRequestedCount(inv.Command); ok {
+		maxEntries = count
+	} else if count, ok := gitLogRequestedCount(inv.Display); ok {
+		maxEntries = count
+	}
+	if limit := budget.MaxLines - 1; limit > 0 && maxEntries > limit {
+		maxEntries = limit
+	}
+	return gitfilter.NewGitLogReducerWithEntries(budget.MaxLines, budget.MaxBytes, maxEntries)
+}
+
+// gitLogRequestedCount reports an explicit commit count requested by the user
+// via `-<n>`, `-n <n>`, `-n<n>`, `--max-count <n>`, or `--max-count=<n>`.
+func gitLogRequestedCount(command []string) (int, bool) {
+	canonical := engine.CanonicalArgsForClassification(command)
+	if len(canonical) < 3 || canonical[0] != "git" || canonical[1] != "log" {
+		return 0, false
+	}
+	rest := canonical[2:]
+	for i := 0; i < len(rest); i++ {
+		arg := rest[i]
+		if arg == "--" {
+			break
+		}
+		if count, ok := parseGitLogCountArg(arg, rest, i); ok {
+			return count, true
+		}
+	}
+	return 0, false
+}
+
+func parseGitLogCountArg(arg string, rest []string, index int) (int, bool) {
+	switch {
+	case arg == "-n" || arg == "--max-count":
+		if index+1 < len(rest) {
+			return parseNonNegativeInt(rest[index+1])
+		}
+		return 0, false
+	case strings.HasPrefix(arg, "--max-count="):
+		return parseNonNegativeInt(strings.TrimPrefix(arg, "--max-count="))
+	case strings.HasPrefix(arg, "-n") && len(arg) > 2:
+		return parseNonNegativeInt(arg[2:])
+	case len(arg) > 1 && arg[0] == '-':
+		return parseNonNegativeInt(arg[1:])
+	default:
+		return 0, false
+	}
+}
+
+func parseNonNegativeInt(value string) (int, bool) {
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed < 0 || strings.HasPrefix(value, "+") || strings.HasPrefix(value, "-") {
+		return 0, false
+	}
+	return parsed, true
+}
+
 func newGitDiffReducer(inv engine.Invocation, maxLines int, maxBytes int) *gitfilter.GitDiffReducer {
 	return gitfilter.NewGitDiffReducerWithOptions(gitfilter.GitDiffReducerOptions{
 		MaxLines:              maxLines,
@@ -345,9 +405,8 @@ func prepareGitShowCommand(command []string) []string {
 	if !gitShowSummaryRequested(command) {
 		return out
 	}
-	if !profilekit.ContainsAny(command[1:], "--no-patch", "-s") {
-		out = append(out, "--no-patch")
-	}
+	// Never append --no-patch here: it would suppress the summary output the
+	// user explicitly requested (for example `git show --stat`).
 	if !gitShowPrettyRequested(command) {
 		out = append(out, "--format=oneline")
 	}

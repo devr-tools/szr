@@ -1,6 +1,7 @@
 package git_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -44,6 +45,33 @@ func testGitLogSummary(t *testing.T) {
 	if got := gitfilter.SummarizeGitLog("a1 save\na2 save\na3 feat\n"); got != "3 commits\na1 save (x2)\na3 feat" {
 		t.Fatalf("expected repeated git subjects to fold, got %q", got)
 	}
+
+	fullFormat := strings.Join([]string{
+		"commit 0472258b6eacef6a79c7758134b036a960b88722",
+		"Author: Arena <arena@example.com>",
+		"Date:   Thu Jul 2 18:12:21 2026 -0400",
+		"",
+		"    fix: correct arena fixture failures",
+		"",
+		"commit 64c323b9ad5010255314394cae6ac21ed63b720b",
+		"Author: Arena <arena@example.com>",
+		"Date:   Thu Jul 2 18:11:10 2026 -0400",
+		"",
+		"    chore: arena revision 80",
+		"",
+		"commit 67933300925e3119044f97bbe5c008845dfe8382",
+		"Author: Arena <arena@example.com>",
+		"Date:   Thu Jul 2 18:11:10 2026 -0400",
+		"",
+		"    chore: arena revision 79",
+		"",
+	}, "\n")
+	if got := gitfilter.SummarizeGitLog(fullFormat); got != "3 commits\n0472258 fix: correct arena fixture failures\n64c323b chore: arena revision 80\n... +1 more commits" {
+		t.Fatalf("expected default-format git log to fold per commit, got %q", got)
+	}
+	expanded := gitfilter.NewGitLogReducerWithEntries(11, 0, 3)
+	expanded.ConsumeStdout([]byte(fullFormat))
+	assertContainsAll(t, expanded.Result(), "3 commits", "0472258 fix: correct arena fixture failures", "64c323b chore: arena revision 80", "6793330 chore: arena revision 79")
 }
 
 func testGitDiffSummary(t *testing.T) {
@@ -94,6 +122,116 @@ func testGitReducers(t *testing.T) {
 	assertGitStatusReducer(t)
 	assertGitLogReducer(t)
 	assertGitDiffReducers(t)
+}
+
+// TestGitDiffVerbatimSmallDiff pins the small-diff fidelity mode: a diff
+// whose changed lines fit the verbatim caps replays every +/- line under its
+// file header instead of collapsing to stats-only anchors.
+func TestGitDiffVerbatimSmallDiff(t *testing.T) {
+	t.Parallel()
+
+	small := strings.Join([]string{
+		"diff --git a/calc/history.go.txt b/calc/history.go.txt",
+		"index 32dcca2..fffff18 100644",
+		"--- a/calc/history.go.txt",
+		"+++ b/calc/history.go.txt",
+		"@@ -74,3 +74,7 @@",
+		" // rev 74",
+		"+// rev 77",
+		"+// rev 80",
+		"diff --git a/src/deep.go b/src/deep.go",
+		"index c9dbc9a..52c0fd3 100644",
+		"--- a/src/deep.go",
+		"+++ b/src/deep.go",
+		"@@ -1 +1,3 @@",
+		"-deep marker",
+		"+package deep",
+	}, "\n")
+	reducer := gitfilter.NewGitDiffReducer(12, 0)
+	got := reducer.Reduce(small)
+	assertContainsAll(t, got,
+		"files=2 +3 -1",
+		"calc/history.go.txt  hunks=1  +2 -0",
+		"+// rev 77",
+		"+// rev 80",
+		"src/deep.go  hunks=1  +1 -1",
+		"-deep marker",
+		"+package deep",
+	)
+	if strings.Contains(got, "// rev 74") {
+		t.Fatalf("expected context lines to stay omitted, got %q", got)
+	}
+	if strings.Contains(got, "index 32dcca2") || strings.Contains(got, "+++ b/") {
+		t.Fatalf("expected index/filename noise to stay omitted, got %q", got)
+	}
+	if kind, summary, requireRawCapture := reducer.RecoveryInfo(); kind != "full-output" || summary != "omitted diff context lines" || !requireRawCapture {
+		t.Fatalf("unexpected small-diff recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+}
+
+// TestGitDiffVerbatimSelfCapsUnderCompressionContract pins the self-capping
+// mode: when the raw diff is big enough to arm the engine compression
+// contract, the verbatim render fits itself into the predicted allowance —
+// every filename stays (label-only headers), the cheapest changed lines
+// survive first, and a bare "..." marks the dropped remainder.
+func TestGitDiffVerbatimSelfCapsUnderCompressionContract(t *testing.T) {
+	t.Parallel()
+
+	var builder strings.Builder
+	long := strings.Repeat("x", 60)
+	for _, file := range []string{"alpha/first.go", "beta/second.go", "gamma/third.go"} {
+		fmt.Fprintf(&builder, "diff --git a/%s b/%s\n", file, file)
+		fmt.Fprintf(&builder, "index 1234567..89abcde 100644\n--- a/%s\n+++ b/%s\n", file, file)
+		builder.WriteString("@@ -1,8 +1,8 @@ func anchor() {\n")
+		for i := 0; i < 3; i++ {
+			fmt.Fprintf(&builder, " context line %d padding padding padding padding\n", i)
+		}
+		builder.WriteString("+short\n")
+		fmt.Fprintf(&builder, "+long change %s\n", long)
+	}
+	input := builder.String()
+	if len(input) < 600 {
+		t.Fatalf("fixture must arm the contract proxy, got %d bytes", len(input))
+	}
+
+	reducer := gitfilter.NewGitDiffReducer(12, 0)
+	got := reducer.Reduce(input)
+	assertContainsAll(t, got, "files=3 +6 -0", "alpha/first.go", "beta/second.go", "gamma/third.go", "+short", "\n...")
+	if strings.Contains(got, "hunks=") || strings.Contains(got, "func anchor() {") {
+		t.Fatalf("expected label-only headers in self-capped render, got %q", got)
+	}
+	if strings.Contains(got, long) {
+		t.Fatalf("expected expensive changed lines to be dropped first, got %q", got)
+	}
+}
+
+// TestGitDiffVerbatimCapsDisableOnLargeDiff pins the fallback: once a diff
+// exceeds the verbatim line budget the reducer releases the retained lines
+// and renders the existing stat/anchor summary.
+func TestGitDiffVerbatimCapsDisableOnLargeDiff(t *testing.T) {
+	t.Parallel()
+
+	var builder strings.Builder
+	builder.WriteString("diff --git a/big.go b/big.go\n")
+	builder.WriteString("@@ -1,50 +1,50 @@ func big() {\n")
+	for i := 0; i < 50; i++ {
+		fmt.Fprintf(&builder, "+line %d added to overflow the verbatim budget\n", i)
+	}
+	reducer := gitfilter.NewGitDiffReducer(12, 0)
+	got := reducer.Reduce(builder.String())
+	assertContainsAll(t, got, "files=1 +50 -0", "big.go  hunks=1  +50 -0  func big() {")
+	if strings.Contains(got, "+line 0 added") {
+		t.Fatalf("expected large diff to drop verbatim lines, got %q", got)
+	}
+	if kind, summary, requireRawCapture := reducer.RecoveryInfo(); kind != "full-output" || summary != "omitted full diff hunks" || !requireRawCapture {
+		t.Fatalf("unexpected large-diff recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+
+	aggressive := gitfilter.NewGitDiffReducerWithOptions(gitfilter.GitDiffReducerOptions{MaxLines: 12, Aggressive: true})
+	compact := aggressive.Reduce("diff --git a/a.go b/a.go\n@@ -1 +1 @@ func demo() {\n+foo\n-bar\n")
+	if strings.Contains(compact, "+foo") {
+		t.Fatalf("expected aggressive mode to skip verbatim hunks, got %q", compact)
+	}
 }
 
 func assertGitStatusReducer(t *testing.T) {
@@ -160,6 +298,10 @@ func assertGitDiffReducers(t *testing.T) {
 	if got := stderrReducer.Result(); !strings.Contains(got, "b.go | 1 +") {
 		t.Fatalf("expected stderr diff reducer to summarize stderr chunks, got %q", got)
 	}
+
+	conflictReducer := gitfilter.NewGitDiffReducer(4, 0)
+	conflictReducer.ConsumeStdout([]byte("diff --cc conflicted.txt\nindex 065e9d1,8209b71..0000000\n--- a/conflicted.txt\n+++ b/conflicted.txt\n@@@ -1,1 -1,1 +1,5 @@@\n++<<<<<<< HEAD\n +main change\n++=======\n+ side change\n++>>>>>>> side\n"))
+	assertContainsAll(t, conflictReducer.Result(), "files=1", "conflicted.txt [conflict]", "hunks=1")
 
 	fallbackReducer := gitfilter.NewGitDiffReducer(4, 0)
 	fallbackReducer.ConsumeStdout([]byte("plain line\nanother line\n"))
