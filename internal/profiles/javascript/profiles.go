@@ -11,6 +11,7 @@ func Profiles(maxLines int) []engine.Profile {
 	toolingSummary := profilekit.CombinedBufferedContractSummary(maxLines, 10, 30, engine.StreamStdoutFirst, jsfilter.SummarizeJSToolingUnderContract)
 
 	return []engine.Profile{
+		nodeEvalProfile(maxLines),
 		profilekit.WithSummary(engine.Profile{
 			Name:        "bun-test",
 			Description: "Summarizes `bun test` output around failed suites and assertions.",

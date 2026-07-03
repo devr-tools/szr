@@ -63,6 +63,7 @@ func (e *Engine) prepareInvocation(inv Invocation) (Invocation, []PreferenceDeci
 			Explain:          preferenceExplainLines(preference),
 		})
 	}
+	effective = unwrapShellInvocation(effective)
 	return classifyInvocation(effective), decisions
 }
 

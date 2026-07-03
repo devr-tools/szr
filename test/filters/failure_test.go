@@ -108,6 +108,11 @@ func TestDiagnosticAnchorExtendedExtensions(t *testing.T) {
 		{"warning: unused variable at lib/tasks/report.kts:3", "lib/tasks/report.kts:3"},
 		{"** (RuntimeError) lib/my_app/worker.ex:9", "lib/my_app/worker.ex:9"},
 		{"deploy.sh:12: command not found", "deploy.sh:12:"},
+		{"    at [eval]:1:7", "[eval]:1:7"},
+		{"    at Object.<anonymous> ([eval]:2:13)", "[eval]:2:13"},
+		{"    at [stdin]:3:1", "[stdin]:3:1"},
+		{"    at handler (/srv/app/dist/server.mjs:14:9)", "/srv/app/dist/server.mjs:14:9"},
+		{"see [eval]: nothing anchored here", ""},
 	}
 	for _, tc := range cases {
 		if got := filters.DiagnosticAnchor(tc.line); got != tc.want {

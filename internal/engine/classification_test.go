@@ -35,6 +35,47 @@ func TestClassifyCanonicalizesAbsoluteGrepAndGitOptions(t *testing.T) {
 	}
 }
 
+func TestClassifyUnwrapsShellWrappers(t *testing.T) {
+	inv := Classify(Invocation{
+		Command: []string{"/bin/zsh", "-lc", "source ~/.env && git status"},
+		Display: []string{"bash", "-l", "-c", "cd /srv/app; npm test"},
+	})
+
+	if inv.Classification.Command.Head != "git" || inv.Classification.Command.Subcommand != "status" {
+		t.Fatalf("expected zsh -lc wrapper to classify as git status, got %#v", inv.Classification.Command)
+	}
+	if inv.Classification.Display.Head != "npm" || !inv.Classification.Display.JavaScript.IsPackageManagerTest {
+		t.Fatalf("expected bash -l -c wrapper to classify as npm test, got %#v", inv.Classification.Display)
+	}
+
+	compound := Classify(Invocation{Command: []string{"zsh", "-lc", "git diff | head -5"}})
+	if compound.Classification.Command.Head != "zsh" {
+		t.Fatalf("expected compound wrapper to stay unclassified, got %#v", compound.Classification.Command)
+	}
+}
+
+func TestClassifyDetectsNodeEval(t *testing.T) {
+	direct := Classify(Invocation{Command: []string{"node", "-e", "console.log(1)"}})
+	if !direct.Classification.Command.JavaScript.IsNodeEval {
+		t.Fatalf("expected node -e to classify as node eval, got %#v", direct.Classification.Command.JavaScript)
+	}
+
+	printFlag := Classify(Invocation{Command: []string{"/usr/local/bin/node", "--print", "1+1"}})
+	if !printFlag.Classification.Command.JavaScript.IsNodeEval {
+		t.Fatalf("expected node --print to classify as node eval, got %#v", printFlag.Classification.Command.JavaScript)
+	}
+
+	wrapped := Classify(Invocation{Command: []string{"zsh", "-lc", "source /dev/null && node -e 'throw 1'"}})
+	if !wrapped.Classification.Command.JavaScript.IsNodeEval {
+		t.Fatalf("expected wrapped node -e to classify as node eval, got %#v", wrapped.Classification.Command.JavaScript)
+	}
+
+	script := Classify(Invocation{Command: []string{"node", "script.js", "-e"}})
+	if script.Classification.Command.JavaScript.IsNodeEval {
+		t.Fatalf("expected node script run to stay non-eval, got %#v", script.Classification.Command.JavaScript)
+	}
+}
+
 func TestClassifyCanonicalizesNpxWrappedCommands(t *testing.T) {
 	inv := Classify(Invocation{
 		Display: []string{"npx", "--yes", "tsc", "--noEmit"},

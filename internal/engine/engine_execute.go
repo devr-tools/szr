@@ -29,7 +29,7 @@ func (e *Engine) ExecuteStreaming(
 
 	preparedInv, profile, command, budget, streamReducer, options, profileConfidence := e.prepareStreamingExecution(inv, passthrough, onPartial)
 	runResult, execResult, fastPath, rawCombined, rawBytesRead, rawTokens, duration, err := e.runStreamingCommand(ctx, inv, command, profile, streamReducer, options)
-	commandRewritten := commandWasRewritten(preparedInv.Command, command)
+	commandRewritten := commandWasRewritten(executionBaselineCommand(preparedInv), command)
 	rendered, fallbackUsed, recoveryPlan := renderStreamingOutput(profile, preparedInv, execResult, streamReducer, budget, rawCombined, rawTokens, passthrough, fastPath, rawBytesRead, runResult.captureTruncated, commandRewritten, runResult.teePath)
 	teePath := e.ensureStreamingArtifactPath(runResult.teePath, execResult.ExitCode, rawCombined, command, profile, fallbackUsed, recoveryPlan, passthrough, options.retainRawCapture)
 	rendered = renderedDisplayFinalizer{
@@ -103,6 +103,12 @@ func (e *Engine) prepareStreamingExecution(
 	command := preparedInv.Command
 	if profile.Prepare != nil {
 		command = profile.Prepare(preparedInv)
+	}
+	if preparedInv.ShellWrap != nil {
+		// Matching ran against the unwrapped inner command; execution must
+		// run the user's wrapper argv, with Prepare rewrites translated back
+		// into the command string only when that is lossless.
+		command = preparedInv.ShellWrap.execCommand(preparedInv.Command, command)
 	}
 	budget, _ := ResolveBudgetWithAdapter(profile, preparedInv, e.config.MaxPreviewLines, e.budgetAdapter)
 	streamReducer := streamingReducer(profile, preparedInv, budget, passthrough)
@@ -208,6 +214,16 @@ func renderStreamingOutput(
 		rendered = preferRawSmallOutputForProfile(profile, rendered, rawCombined, execResult.ExitCode)
 	}
 	return rendered, fallbackUsed, recoveryPlan
+}
+
+// executionBaselineCommand is the argv the user's command would have
+// executed without any profile Prepare rewrite: the original wrapper argv
+// for unwrapped shell invocations, the prepared command otherwise.
+func executionBaselineCommand(inv Invocation) []string {
+	if inv.ShellWrap != nil {
+		return inv.ShellWrap.Original
+	}
+	return inv.Command
 }
 
 func commandWasRewritten(original []string, prepared []string) bool {
