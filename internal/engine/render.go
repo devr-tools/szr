@@ -15,13 +15,14 @@ type renderResult struct {
 }
 
 type RenderedExecution struct {
-	Text           string
-	RawCombined    string
-	BytesParsed    int
-	BytesEmitted   int
-	RawTokens      int
-	FilteredTokens int
-	FallbackUsed   bool
+	Text            string
+	RawCombined     string
+	BytesParsed     int
+	BytesEmitted    int
+	RawTokens       int
+	FilteredTokens  int
+	FallbackUsed    bool
+	VerifierRepairs int
 }
 
 func renderProfile(profile Profile, inv Invocation, exec Execution, fallbackLines int, passthrough bool) renderResult {
@@ -92,14 +93,25 @@ func RenderExecution(profile Profile, inv Invocation, exec Execution, fallbackLi
 	if shouldGuardSmallOutput(profile, passthrough) && !inv.UltraCompact {
 		text = preferRawSmallOutputForProfile(profile, text, rawCombined, exec.ExitCode)
 	}
+	text, verification := applyRetentionVerifier(retentionVerifyInput{
+		rendered:    text,
+		rawCombined: rawCombined,
+		rawTokens:   rawTokens,
+		exitCode:    exec.ExitCode,
+		profile:     profile,
+		budget:      budget,
+		inv:         inv,
+		passthrough: passthrough,
+	})
 	return RenderedExecution{
-		Text:           text,
-		RawCombined:    rawCombined,
-		BytesParsed:    rendered.bytesParsed,
-		BytesEmitted:   len(text),
-		RawTokens:      rawTokens,
-		FilteredTokens: history.EstimateTokens(text),
-		FallbackUsed:   rendered.fallbackUsed,
+		Text:            text,
+		RawCombined:     rawCombined,
+		BytesParsed:     rendered.bytesParsed,
+		BytesEmitted:    len(text),
+		RawTokens:       rawTokens,
+		FilteredTokens:  history.EstimateTokens(text),
+		FallbackUsed:    rendered.fallbackUsed,
+		VerifierRepairs: verification.repairs,
 	}
 }
 

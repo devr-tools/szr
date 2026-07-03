@@ -47,11 +47,26 @@ func (e *Engine) ExecuteStreaming(
 		guardSmallOutput:    shouldGuardSmallOutput(profile, passthrough) && !runResult.captureTruncated,
 		ultraCompact:        preparedInv.UltraCompact,
 	}.finalize()
+	rendered, verification := applyRetentionVerifier(retentionVerifyInput{
+		rendered:          rendered,
+		rawCombined:       rawCombined,
+		rawTokens:         rawTokens,
+		artifactPath:      teePath,
+		captureIncomplete: streamingCaptureIncomplete(runResult),
+		exitCode:          execResult.ExitCode,
+		profile:           profile,
+		budget:            budget,
+		inv:               preparedInv,
+		passthrough:       passthrough,
+		fastPathBypass:    fastPath.BypassCompression,
+	})
 	bytesParsed := streamingBytesParsed(streamReducer, profile, execResult, rawBytesRead)
 	bytesEmitted := len(rendered)
 	record := buildStreamingHistoryRecord(inv, profile, profileConfidence, duration, execResult.ExitCode, rawBytesRead, bytesParsed, bytesEmitted, rawTokens, fallbackUsed, passthrough, teePath, rendered)
+	record.VerifierRepairs = verification.repairs
+	record.VerifierSkipped = verification.skipped
 	e.appendStreamingHistory(record)
-	result := buildStreamingResult(profile, profileConfidence, rendered, rawCombined, execResult.ExitCode, teePath, duration, fallbackUsed, fastPath, rawBytesRead, bytesParsed, bytesEmitted)
+	result := buildStreamingResult(profile, profileConfidence, rendered, rawCombined, execResult.ExitCode, teePath, duration, fallbackUsed, fastPath, rawBytesRead, bytesParsed, bytesEmitted, verification)
 	publishFinalPartial(onPartial, result)
 	if err != nil {
 		return result, err
@@ -288,7 +303,17 @@ func preferTerseRenderForRewrittenCommand(
 		return rendered
 	}
 	compact := strings.TrimSpace(filters.CompactLines(rawCombined, rewrittenCommandTerseRenderMaxLines))
-	if compact == "" || history.EstimateTokens(compact) >= renderedTokens {
+	if compact == "" {
+		return rendered
+	}
+	// A compact view that had to omit lines is a lossy head-chop, not a
+	// faithful terse summary; it may never replace a real render. And a
+	// marginal size win does not justify discarding a structured render —
+	// only a drastic one (the "plain output would have been one line" case).
+	if strings.Contains(compact, "... +") {
+		return rendered
+	}
+	if history.EstimateTokens(compact)*3 >= renderedTokens {
 		return rendered
 	}
 	return compact
@@ -512,6 +537,7 @@ func buildStreamingResult(
 	rawBytesRead int,
 	bytesParsed int,
 	bytesEmitted int,
+	verification retentionOutcome,
 ) Result {
 	return Result{
 		ProfileName:       profile.Name,
@@ -527,7 +553,24 @@ func buildStreamingResult(
 		RawBytesRead:      rawBytesRead,
 		BytesParsed:       bytesParsed,
 		BytesEmitted:      bytesEmitted,
+		VerifierRepairs:   verification.repairs,
+		VerifierSkipped:   verification.skipped,
 	}
+}
+
+// streamingCaptureIncomplete reports whether the in-memory capture is an
+// honest stand-in for the raw stream. Preview-truncated buffers and streams
+// that were never buffered at all (stream-preference profiles disable the
+// non-preferred preview) both disqualify the capture as a verification
+// source.
+func streamingCaptureIncomplete(result runResult) bool {
+	if result.captureTruncated {
+		return true
+	}
+	if result.stdoutBytes > 0 && result.stdout == "" {
+		return true
+	}
+	return result.stderrBytes > 0 && result.stderr == ""
 }
 
 func publishFinalPartial(onPartial func(PartialResult), result Result) {

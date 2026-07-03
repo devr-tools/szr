@@ -39,6 +39,13 @@ type Result struct {
 	RawBytesRead      int
 	BytesParsed       int
 	BytesEmitted      int
+	// VerifierRepairs counts critical raw lines the retention verifier
+	// appended after the render dropped their identifying tokens.
+	VerifierRepairs int
+	// VerifierSkipped reports that retention verification could not run
+	// because the capture was incomplete and no artifact held the full raw
+	// stream.
+	VerifierSkipped bool
 }
 
 type Classification struct {

@@ -29,6 +29,7 @@ type Advanced struct {
 	SemanticCompaction        bool `json:"semantic_compaction"`
 	CompressionContract       bool `json:"compression_contract"`
 	CompactArtifactRefs       bool `json:"compact_artifact_refs"`
+	RetentionVerifier         bool `json:"retention_verifier"`
 }
 
 type UpdateCheck struct {
@@ -64,6 +65,11 @@ func Default() Config {
 			SemanticCompaction:  true,
 			CompressionContract: true,
 			CompactArtifactRefs: true,
+			// The retention verifier is szr's fidelity guarantee made
+			// mechanical: a render must never be less informative than the
+			// tokens it spends. On by default because it is the product's
+			// identity, not an optimization.
+			RetentionVerifier: true,
 		},
 		UpdateCheck: UpdateCheck{
 			Enabled:       false,
