@@ -30,6 +30,10 @@ func summarizeReadFileResult(path string, data []byte, maxLines int) readFileSum
 		maxLines = 12
 	}
 
+	if result, ok := summarizeLogFilePreview(path, data, maxLines); ok {
+		return result
+	}
+
 	ext := strings.ToLower(filepath.Ext(path))
 	switch ext {
 	case ".json":

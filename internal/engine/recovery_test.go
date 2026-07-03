@@ -31,7 +31,7 @@ func TestAppendRecoveryHint(t *testing.T) {
 }
 
 func TestFinalizeRenderedDisplayRespectsCompressionContract(t *testing.T) {
-	raw := strings.Repeat("token ", 80)
+	raw := strings.Repeat("token ", 400)
 	rendered := strings.Repeat("token ", 40)
 	budget := OutputBudget{MaxTokens: 16}
 
@@ -57,7 +57,7 @@ func TestFinalizeRenderedDisplayRespectsCompressionContract(t *testing.T) {
 }
 
 func TestFinalizeRenderedDisplayPreservesFailureAnchorsWhenMakingRoomForSuffix(t *testing.T) {
-	raw := strings.Repeat("token ", 80)
+	raw := strings.Repeat("token ", 400)
 	rendered := strings.Join([]string{
 		"summary", "noise", "noise", "noise", "noise", "noise", "noise",
 		"error", "cmd/build.go:42", "undefined", "BuildGraph", "rerun", "with", "--trace",

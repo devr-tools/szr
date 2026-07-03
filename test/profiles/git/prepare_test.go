@@ -43,10 +43,11 @@ func TestGitProfilesPrepare(t *testing.T) {
 	if !gitShow.Match(engine.Classify(engine.Invocation{Display: []string{"git", "-C", "/tmp/worktree", "show", "HEAD:internal/profiles/git/profile.go"}})) {
 		t.Fatal("expected git -C show blob read to match")
 	}
-	assertPreparedLengthAndArgs(t, "git show stat", gitShow.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "show", "--stat", "HEAD"}})), 8, []string{"--no-color", "--no-ext-diff", "--no-patch", "--format=oneline"})
-	assertPreparedLengthAndArgs(t, "git show name-only", gitShow.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "show", "--name-only", "HEAD"}})), 8, []string{"--no-color", "--no-ext-diff", "--no-patch", "--format=oneline"})
+	assertPreparedLengthAndArgs(t, "git show stat", gitShow.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "show", "--stat", "HEAD"}})), 7, []string{"--no-color", "--no-ext-diff", "--format=oneline"})
+	assertPreparedLengthAndArgs(t, "git show name-only", gitShow.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "show", "--name-only", "HEAD"}})), 7, []string{"--no-color", "--no-ext-diff", "--format=oneline"})
 	assertPreparedLengthAndArgs(t, "git show blob", gitShow.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "show", "HEAD:internal/profiles/git/profile.go"}})), 5, []string{"--no-color", "--no-ext-diff"})
-	assertPreparedLengthAndArgs(t, "git show explicit pretty", gitShow.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "show", "--stat", "--pretty=oneline", "HEAD"}})), 8, []string{"--no-color", "--no-ext-diff", "--no-patch"})
+	assertPreparedLengthAndArgs(t, "git show explicit pretty", gitShow.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "show", "--stat", "--pretty=oneline", "HEAD"}})), 7, []string{"--no-color", "--no-ext-diff"})
+	assertArgsAbsent(t, "git show stat", gitShow.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "show", "--stat", "HEAD"}})), "--no-patch")
 	assertPreparedLengthAndArgs(t, "git show path separator", gitShow.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "show", "--", "--stat"}})), 6, []string{"--no-color", "--no-ext-diff"})
 
 	gitStatus := testutil.FindProfile(t, list, "git-status")
@@ -78,6 +79,22 @@ func TestGitProfilesPrepare(t *testing.T) {
 	if len(gitLog.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "log", "--format=%H"}}))) != 3 {
 		t.Fatal("expected git-log to preserve explicit format")
 	}
+	for name, command := range map[string][]string{
+		"short count":       {"git", "log", "-5"},
+		"separate -n":       {"git", "log", "-n", "5"},
+		"attached -n":       {"git", "log", "-n5"},
+		"max-count":         {"git", "log", "--max-count", "5"},
+		"max-count equals":  {"git", "log", "--max-count=5"},
+		"count with target": {"git", "log", "-3", "main"},
+	} {
+		prepared := gitLog.Prepare(engine.Classify(engine.Invocation{Command: command}))
+		if len(prepared) != len(command) {
+			t.Fatalf("expected git log %s to pass through, got %#v", name, prepared)
+		}
+		assertArgsAbsent(t, "git log "+name, prepared, "--oneline")
+	}
+	preparedLog := gitLog.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "log"}}))
+	assertPreparedLengthAndArgs(t, "git log plain", preparedLog, 5, []string{"--oneline", "-n", "20"})
 
 	gitDiff := testutil.FindProfile(t, list, "git-diff")
 	if !gitDiff.Match(engine.Classify(engine.Invocation{Display: []string{"git", "diff"}})) {
@@ -86,10 +103,24 @@ func TestGitProfilesPrepare(t *testing.T) {
 	if !gitDiff.Match(engine.Classify(engine.Invocation{Display: []string{"git", "-C", "/tmp/worktree", "diff"}})) {
 		t.Fatal("expected git -C diff to match")
 	}
-	assertPreparedLengthAndArgs(t, "git diff standard", gitDiff.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "diff"}, Advanced: advanced})), 6, []string{"--stat=72,12", "--compact-summary", "--no-color", "--no-ext-diff"})
+	assertPreparedLengthAndArgs(t, "git diff standard", gitDiff.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "diff"}, Advanced: advanced})), 4, []string{"--no-color", "--no-ext-diff"})
 	assertPreparedLengthAndArgs(t, "git diff explicit stat", gitDiff.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "diff", "--stat"}, Advanced: advanced})), 5, []string{"--no-color", "--no-ext-diff"})
-	assertPreparedLengthAndArgs(t, "git diff aggressive", gitDiff.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "diff"}, ReasoningBudgetMode: "aggressive", Advanced: advanced})), 6, []string{"--stat=56,8"})
+	assertPreparedLengthAndArgs(t, "git diff range", gitDiff.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "diff", "HEAD~5"}, Advanced: advanced})), 5, []string{"--no-color", "--no-ext-diff"})
+	assertPreparedLengthAndArgs(t, "git diff aggressive", gitDiff.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "diff"}, ReasoningBudgetMode: "aggressive", Advanced: advanced})), 4, []string{"--no-color", "--no-ext-diff"})
 	assertPreparedLengthAndArgs(t, "git diff quiet", gitDiff.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "diff", "--quiet"}, Advanced: advanced})), 3, nil)
+	assertArgsAbsent(t, "git diff standard", gitDiff.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "diff"}, Advanced: advanced})), "--stat=96,20", "--stat=72,12", "--stat=56,8", "--compact-summary")
+	assertArgsAbsent(t, "git diff aggressive", gitDiff.Prepare(engine.Classify(engine.Invocation{Command: []string{"git", "diff"}, ReasoningBudgetMode: "aggressive", Advanced: advanced})), "--stat=96,20", "--stat=72,12", "--stat=56,8", "--compact-summary")
+}
+
+func assertArgsAbsent(t *testing.T, name string, got []string, unwanted ...string) {
+	t.Helper()
+	for _, arg := range got {
+		for _, needle := range unwanted {
+			if arg == needle {
+				t.Fatalf("expected %q to be absent from %s prepare: %#v", needle, name, got)
+			}
+		}
+	}
 }
 
 func assertPreparedLengthAndArgs(t *testing.T, name string, got []string, wantLen int, wants []string) {

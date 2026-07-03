@@ -90,16 +90,22 @@ func catReadProfile(maxLines int) engine.Profile {
 		},
 		StreamRender: func(inv engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
 			path := inv.Command[len(inv.Command)-1]
-			return filters.NewBufferedTextReducerWithRecovery(true, false, func(input string) string {
+			render := func(input string) string {
 				return fsfilter.SummarizeReadFile(path, []byte(input), budget.MaxLines)
-			}, func(input string) (string, string, bool) {
+			}
+			recovery := func(input string) (string, string, bool) {
 				return fsfilter.ReadFileRecoveryInfo(path, []byte(input), budget.MaxLines)
-			})
+			}
+			if fsfilter.IsLogPreviewPath(path) {
+				return filters.NewLogAwareReadReducer(budget.MaxLines, render, recovery)
+			}
+			return filters.NewBufferedTextReducerWithRecovery(true, false, render, recovery)
 		},
 		ParseBytes: profilekit.ParseStdout,
 		Explain: []string{
 			"Matches simple single-file `cat` usage without flags.",
 			"For code files, keeps imports, declarations, exported symbols, and TODO/FIXME while collapsing most bodies and comments.",
+			"For log-shaped files (.log/.out/.txt with timestamped or leveled lines), renders a severity histogram plus deduplicated messages with counts and time ranges; every distinct ERROR/FATAL message is always kept.",
 		},
 	}
 }

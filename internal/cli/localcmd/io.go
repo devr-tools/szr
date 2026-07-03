@@ -4,17 +4,50 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/devr-tools/szr/internal/config"
 	"github.com/devr-tools/szr/internal/filters"
 )
 
+// RunLS renders the builtin directory tree for argv shapes the builtin
+// supports and reports an error otherwise.
+//
+// Deprecated: use TryRunLS, which reports whether the builtin handled the
+// command so the caller can delegate unsupported argv to the native binary.
 func RunLS(rt Runtime, args []string) int {
+	code, handled := TryRunLS(rt, args)
+	if !handled {
+		fmt.Fprintln(rt.Stderr, "szr: ls: unsupported arguments for builtin execution")
+		return 2
+	}
+	return code
+}
+
+// TryRunLS renders the builtin directory tree. The second return value reports
+// whether the builtin handled the command; when it is false the caller must
+// delegate the original argv to the native ls binary (e.g. `ls -la`).
+func TryRunLS(rt Runtime, args []string) (int, bool) {
+	if !lsBuiltinSupports(args) {
+		return 0, false
+	}
+
 	root := "."
 	if len(args) > 0 {
 		root = args[0]
 	}
 
+	paths, err := collectTreePaths(root)
+	if err != nil {
+		fmt.Fprintf(rt.Stderr, "szr: %v\n", err)
+		return 1, true
+	}
+
+	fmt.Fprintln(rt.Stdout, filters.BuildTree(paths, root))
+	return 0, true
+}
+
+func collectTreePaths(root string) ([]string, error) {
 	var paths []string
 	err := filepathWalk(root, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil {
@@ -29,13 +62,21 @@ func RunLS(rt Runtime, args []string) int {
 		}
 		return nil
 	})
-	if err != nil {
-		fmt.Fprintf(rt.Stderr, "szr: %v\n", err)
-		return 1
-	}
+	return paths, err
+}
 
-	fmt.Fprintln(rt.Stdout, filters.BuildTree(paths, root))
-	return 0
+// lsBuiltinSupports reports whether the builtin tree view fully understands
+// the argv: at most one path and no flags.
+func lsBuiltinSupports(args []string) bool {
+	if len(args) > 1 {
+		return false
+	}
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "-") {
+			return false
+		}
+	}
+	return true
 }
 
 func RunRead(rt Runtime, cfg config.Config, args []string) int {

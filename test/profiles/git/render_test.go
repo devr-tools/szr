@@ -181,6 +181,64 @@ func assertGitLogRender(t *testing.T, gitLog engine.Profile) {
 	if gitLog.StreamPreference != engine.StreamStdoutOnly || gitLog.StreamRender == nil {
 		t.Fatalf("unexpected git-log stream metadata: %#v", gitLog)
 	}
+
+	// An explicit user count must keep every requested commit visible, and
+	// default-format output must be parsed per commit, not per line.
+	countInv := engine.Classify(engine.Invocation{Command: []string{"git", "log", "-5"}})
+	fullFormat := strings.Join([]string{
+		"commit 0472258b6eacef6a79c7758134b036a960b88722",
+		"Author: Arena <arena@example.com>",
+		"Date:   Thu Jul 2 18:12:21 2026 -0400",
+		"",
+		"    fix: correct arena fixture failures",
+		"",
+		"commit 64c323b9ad5010255314394cae6ac21ed63b720b",
+		"Author: Arena <arena@example.com>",
+		"Date:   Thu Jul 2 18:11:10 2026 -0400",
+		"",
+		"    chore: arena revision 80",
+		"",
+		"commit 67933300925e3119044f97bbe5c008845dfe8382",
+		"Author: Arena <arena@example.com>",
+		"Date:   Thu Jul 2 18:11:10 2026 -0400",
+		"",
+		"    chore: arena revision 79",
+		"",
+		"commit d760fc9c245ba6a5138b60894eb8c52d2ca9500d",
+		"Author: Arena <arena@example.com>",
+		"Date:   Thu Jul 2 18:11:09 2026 -0400",
+		"",
+		"    chore: arena revision 78",
+		"",
+		"commit b57e68937e116eedbb007ecff25b4991774ebfff",
+		"Author: Arena <arena@example.com>",
+		"Date:   Thu Jul 2 18:11:09 2026 -0400",
+		"",
+		"    chore: arena revision 77",
+		"",
+	}, "\n")
+	got := gitLog.Render(countInv, engine.Execution{Stdout: fullFormat})
+	assertRenderContainsAll(t, got,
+		"5 commits",
+		"0472258 fix: correct arena fixture failures",
+		"64c323b chore: arena revision 80",
+		"6793330 chore: arena revision 79",
+		"d760fc9 chore: arena revision 78",
+		"b57e689 chore: arena revision 77",
+	)
+	if strings.Contains(got, "more commits") {
+		t.Fatalf("expected no omitted commits for explicit count, got %q", got)
+	}
+	stream := gitLog.StreamRender(countInv, gitLog.Budget)
+	stream.ConsumeStdout([]byte(fullFormat))
+	if streamed := stream.Result(); streamed != got {
+		t.Fatalf("expected git-log stream render to match render, got %q vs %q", streamed, got)
+	}
+
+	// Without an explicit count the compact two-entry preview is preserved.
+	plainInv := engine.Classify(engine.Invocation{Command: []string{"git", "log"}, Display: []string{"git", "log"}})
+	compact := gitLog.Render(plainInv, engine.Execution{Stdout: "a1 one\na2 two\na3 three\na4 four\n"})
+	assertRenderContainsAll(t, compact, "4 commits", "a1 one", "a2 two", "... +2 more commits")
 }
 
 func assertGitDiffRender(t *testing.T, gitDiff engine.Profile) {
@@ -211,6 +269,48 @@ func assertGitDiffRender(t *testing.T, gitDiff engine.Profile) {
 	}
 	if gitDiff.StreamPreference != engine.StreamStdoutOnly || gitDiff.StreamRender == nil {
 		t.Fatalf("unexpected git-diff stream metadata: %#v", gitDiff)
+	}
+
+	// A plain diff summarized from full patch data must keep filenames whole
+	// (names longer than 8 characters must never be truncated).
+	longName := strings.Join([]string{
+		"diff --git a/calc/history_records.go b/calc/history_records.go",
+		"index f2e139f..51f99f2 100644",
+		"--- a/calc/history_records.go",
+		"+++ b/calc/history_records.go",
+		"@@ -20,3 +20,4 @@ func Describe(a int) string {",
+		"+// pending local change",
+	}, "\n")
+	inv := engine.Classify(engine.Invocation{Command: []string{"git", "diff"}})
+	smallDiffRender := gitDiff.Render(inv, engine.Execution{Stdout: longName})
+	assertRenderContainsAll(t, smallDiffRender,
+		"calc/history_records.go", "hunks=1", "+1 -0", "func Describe(a int) string {",
+		// Small diffs keep their changed lines verbatim: the content of a
+		// one-line change is the payload, not the churn stats.
+		"+// pending local change")
+	streamedSmall := gitDiff.StreamRender(inv, gitDiff.Budget)
+	streamedSmall.ConsumeStdout([]byte(longName))
+	if streamed := streamedSmall.Result(); streamed != smallDiffRender {
+		t.Fatalf("expected git-diff stream render to match render, got %q vs %q", streamed, smallDiffRender)
+	}
+
+	// Conflicted files from combined diffs keep their full name and are marked.
+	conflict := strings.Join([]string{
+		"diff --cc conflicted.txt",
+		"index 065e9d1,8209b71..0000000",
+		"--- a/conflicted.txt",
+		"+++ b/conflicted.txt",
+		"@@@ -1,1 -1,1 +1,5 @@@",
+		"++<<<<<<< HEAD",
+		" +main change",
+		"++=======",
+		"+ side change",
+		"++>>>>>>> side",
+	}, "\n")
+	conflictRender := gitDiff.Render(inv, engine.Execution{Stdout: conflict})
+	assertRenderContainsAll(t, conflictRender, "conflicted.txt [conflict]", "hunks=1")
+	if strings.Contains(conflictRender, "...icted.txt") {
+		t.Fatalf("expected conflicted filename to stay whole, got %q", conflictRender)
 	}
 }
 

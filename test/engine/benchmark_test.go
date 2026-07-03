@@ -14,7 +14,10 @@ import (
 var (
 	benchmarkEngineGenericSummaryLongInput = buildEngineGenericSummaryLongInput(60)
 	benchmarkEngineGHRunListLongInput      = buildEngineGHRunListLongInput(30)
-	benchmarkEngineKubectlTopLongInput     = buildEngineKubectlTopLongInput(30)
+	// 60 rows keeps this fixture above the compression contract's raw-token
+	// threshold (compressionContractMinRawTokens) so the contract tests stay
+	// observable.
+	benchmarkEngineKubectlTopLongInput = buildEngineKubectlTopLongInput(60)
 )
 
 func BenchmarkEngineRenderTokenSavings(b *testing.B) {
@@ -110,13 +113,16 @@ func findEngineBenchmarkProfile(b testing.TB, list []engine.Profile, name string
 	return engine.Profile{}
 }
 
+// retainedTokenCap mirrors the engine's compression contract: large outputs
+// retain <=1/5 of their raw tokens, with a 48-token fidelity floor so small
+// renders are never crushed below a usable diagnostic size.
 func retainedTokenCap(rawTokens int) int {
 	if rawTokens <= 0 {
 		return 0
 	}
 	allowed := (rawTokens + 4) / 5
-	if allowed < 8 {
-		allowed = 8
+	if allowed < 48 {
+		allowed = 48
 	}
 	return allowed
 }

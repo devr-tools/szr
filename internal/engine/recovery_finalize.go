@@ -32,8 +32,11 @@ func (f renderedDisplayFinalizer) finalize() string {
 	if !f.compressionContract || rawTokens < compressionContractMinRawTokens {
 		return appendDisplaySuffix(f.rendered, suffixes[0])
 	}
-	if final, ok := fitRenderedDisplaySuffix(f.rendered, suffixes, compressionContractAllowedTokens(rawTokens, f.budget)); ok {
+	allowedTokens := compressionContractAllowedTokens(rawTokens, f.budget)
+	if final, ok := fitRenderedDisplaySuffix(f.rendered, suffixes, allowedTokens); ok {
 		return final
 	}
-	return suffixes[len(suffixes)-1]
+	// Never emit a content-free display: keep the highest-value slice of the
+	// render even when the artifact suffix pushes the total past the cap.
+	return appendDisplaySuffix(hardCapTokens(f.rendered, allowedTokens), suffixes[len(suffixes)-1])
 }

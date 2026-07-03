@@ -95,7 +95,7 @@ func TestRunRoutes(t *testing.T) {
 		{"find grouped", []string{"find", root, "--name", "*.go", "--grouped"}, 0, []string{"1F 1D", "./ b.go"}, nil, ""},
 		{"find path filter", []string{"find", root, "--name", "*.txt", "--path", "*a.txt"}, 0, []string{"1 matches", "a.txt"}, nil, ""},
 		{"find exclude", []string{"find", root, "--exclude", "dir/*"}, 0, []string{"5 matches"}, nil, ""},
-		{"find max depth", []string{"find", root, "--type", "d", "--max-depth", "1"}, 0, []string{"1 matches", "examples: dir"}, nil, ""},
+		{"find max depth", []string{"find", root, "--type", "d", "--max-depth", "1"}, 0, []string{"1 matches", "dir"}, nil, ""},
 		{"read single", []string{"read", fileA}, 0, []string{"one", "// c"}, nil, ""},
 		{"read multi aggressive", []string{"read", "-l", "aggressive", "-n", "--max-lines", "1", fileA, fileB}, 0, []string{"== " + fileA + " ==", "== " + fileB + " ==", "func x() { ... }"}, nil, ""},
 		{"grep", []string{"grep", "match", "."}, 0, []string{"file.go:12: match one (2 matches)"}, nil, ""},

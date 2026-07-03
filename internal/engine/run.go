@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 )
 
@@ -195,10 +196,7 @@ func (r *synchronizedReducer) updateDoneLocked() {
 }
 
 func runCommand(ctx context.Context, args []string, cwd string, options runOptions) (runResult, error) {
-	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
-	cmd.Dir = cwd
-
-	stdoutPipe, stderrPipe, err := commandPipes(cmd)
+	cmd, stdoutPipe, stderrPipe, err := startCommandWithRetry(ctx, args, cwd)
 	if err != nil {
 		return runResult{}, err
 	}
@@ -208,13 +206,6 @@ func runCommand(ctx context.Context, args []string, cwd string, options runOptio
 		tee = nil
 	}
 	reducer := newSynchronizedReducer(options.reducer)
-
-	if err := cmd.Start(); err != nil {
-		if tee != nil {
-			tee.Discard()
-		}
-		return runResult{}, err
-	}
 
 	var stdout outputCollector
 	stdout.capture = options.captureStdout
@@ -253,6 +244,38 @@ func runCommand(ctx context.Context, args []string, cwd string, options runOptio
 		captureTruncated: stdout.truncated || stderr.truncated,
 	}
 	return finalizeRunCommandResult(result, streamErr, waitErr)
+}
+
+const (
+	startBusyRetryAttempts = 5
+	startBusyRetryDelay    = 10 * time.Millisecond
+)
+
+// startCommandWithRetry builds and starts the command, retrying on ETXTBSY.
+// A freshly written executable can be started while another thread's fork
+// still holds the (O_CLOEXEC) write descriptor open for the instant before
+// its own exec; the window closes within milliseconds. A failed Start closes
+// the parent pipe ends, so each attempt rebuilds the command and its pipes.
+func startCommandWithRetry(ctx context.Context, args []string, cwd string) (*exec.Cmd, io.ReadCloser, io.ReadCloser, error) {
+	var lastErr error
+	for attempt := 0; attempt < startBusyRetryAttempts; attempt++ {
+		cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+		cmd.Dir = cwd
+		stdoutPipe, stderrPipe, err := commandPipes(cmd)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		err = cmd.Start()
+		if err == nil {
+			return cmd, stdoutPipe, stderrPipe, nil
+		}
+		lastErr = err
+		if !isExecTextFileBusy(err) {
+			return nil, nil, nil, err
+		}
+		time.Sleep(startBusyRetryDelay)
+	}
+	return nil, nil, nil, lastErr
 }
 
 func commandPipes(cmd *exec.Cmd) (io.ReadCloser, io.ReadCloser, error) {
