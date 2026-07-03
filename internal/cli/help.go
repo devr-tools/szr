@@ -120,6 +120,7 @@ func (a *App) printCommands() {
 			{"szr rg <pattern> [path]", "Run ripgrep with szr-aware normalization."},
 			{"szr json <file>", "Render JSON structure as readable typed paths."},
 			{"szr log [file]", "Fold repeated log lines from stdin or a file."},
+			{"szr pipe [--hint <kind>]", "Summarize piped stdin by content; cannot see the producer's exit code."},
 			{"szr tee [--latest|<id>|--json]", "Inspect preserved full-output artifacts."},
 			{"szr tee find <query>", "Search preserved tee artifacts by id, command, or profile."},
 			{"szr tee prune [flags]", "Remove stale or missing tee artifacts and rewrite the index."},
