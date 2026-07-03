@@ -76,15 +76,41 @@ func summarizePRViewResult(input string, maxLines int) githubSummaryResult {
 		return githubSummaryResult{Text: shared.SummarizeGenericFailure(clean, maxLines)}
 	}
 
-	out := []string{
-		fmt.Sprintf("PR #%d %s state=%s draft=%t", pr.Number, pr.Title, strings.ToLower(pr.State), pr.IsDraft),
-		fmt.Sprintf("%s -> %s review=%s", pr.HeadRefName, pr.BaseRefName, orDefault(strings.ToLower(pr.ReviewDecision), "none")),
-		fmt.Sprintf("files: %d", len(pr.Files)),
+	// One dense headline first: it is the summary line the capping machinery
+	// preserves by convention, so the title must never live below the
+	// path-dense file lines that would otherwise outscore it.
+	out := []string{prViewHeadline(pr), fmt.Sprintf("files: %d", len(pr.Files))}
+	visible := len(pr.Files)
+	if capacity := maxLines - len(out); len(pr.Files) > capacity {
+		visible = capacity - 1
+		if visible < 0 {
+			visible = 0
+		}
 	}
-	for _, file := range pr.Files {
+	for _, file := range pr.Files[:visible] {
 		out = append(out, shared.Clip(fmt.Sprintf("%s +%d -%d", file.Path, file.Additions, file.Deletions), 160))
 	}
-	return summarizeGithubLines(out, maxLines)
+	hidden := len(pr.Files) - visible
+	if hidden > 0 {
+		out = append(out, fmt.Sprintf("+%d more files", hidden))
+	}
+	result := summarizeGithubLines(out, maxLines)
+	result.OmittedCount += hidden
+	return result
+}
+
+// prViewHeadline folds the PR identity into a single line:
+// `#45 OPEN <title> [draft] [review:...] head->base`.
+func prViewHeadline(pr PRView) string {
+	head := fmt.Sprintf("#%d %s %s", pr.Number, strings.ToUpper(orDefault(pr.State, "unknown")), pr.Title)
+	if pr.IsDraft {
+		head += " [draft]"
+	}
+	head += fmt.Sprintf(" [review:%s]", orDefault(strings.ToLower(pr.ReviewDecision), "none"))
+	if pr.HeadRefName != "" || pr.BaseRefName != "" {
+		head += fmt.Sprintf(" %s->%s", pr.HeadRefName, pr.BaseRefName)
+	}
+	return shared.Clip(head, 240)
 }
 
 func SummarizeGHPRView(input string, maxLines int) string {

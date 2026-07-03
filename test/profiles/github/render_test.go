@@ -16,10 +16,13 @@ func TestGHProfilesRender(t *testing.T) {
 	rendered := ghPR.Render(engine.Invocation{}, engine.Execution{
 		Stdout: `{"number":7,"title":"Add semantic kubectl reducers","state":"OPEN","isDraft":true,"headRefName":"feature/kube","baseRefName":"main","reviewDecision":"REVIEW_REQUIRED","files":[{"path":"internal/filters/kubernetes.go","additions":120,"deletions":0}]}`,
 	})
-	for _, want := range []string{"PR #7 Add semantic kubectl reducers state=open draft=true", "feature/kube -> main review=review_required", "internal/filters/kubernetes.go +120 -0"} {
+	for _, want := range []string{"#7 OPEN Add semantic kubectl reducers [draft] [review:review_required] feature/kube->main", "internal/filters/kubernetes.go +120 -0"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected %q in gh pr render output:\n%s", want, rendered)
 		}
+	}
+	if !strings.HasPrefix(rendered, "#7 OPEN") {
+		t.Fatalf("expected PR headline first in gh pr render output:\n%s", rendered)
 	}
 	if ghPR.StreamPreference != engine.StreamStdoutOnly || ghPR.StreamRender == nil {
 		t.Fatalf("unexpected gh pr stream metadata: %#v", ghPR)

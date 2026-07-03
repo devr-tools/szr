@@ -13,14 +13,44 @@ func TestSummarizeGHPRView(t *testing.T) {
 	input := `{"number":42,"title":"Tighten reducers","state":"OPEN","isDraft":false,"headRefName":"feature/reducers","baseRefName":"main","reviewDecision":"CHANGES_REQUESTED","files":[{"path":"internal/filters/github.go","additions":80,"deletions":0},{"path":"internal/profiles/github.go","additions":60,"deletions":0}]}`
 	got := ghfilter.SummarizeGHPRView(input, 5)
 	for _, want := range []string{
-		"PR #42 Tighten reducers state=open draft=false",
-		"feature/reducers -> main review=changes_requested",
+		"#42 OPEN Tighten reducers [review:changes_requested] feature/reducers->main",
 		"files: 2",
 		"internal/filters/github.go +80 -0",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected %q in gh pr view summary:\n%s", want, got)
 		}
+	}
+	if !strings.HasPrefix(got, "#42 OPEN Tighten reducers") {
+		t.Fatalf("expected PR headline as the first render line, got:\n%s", got)
+	}
+}
+
+// TestSummarizeGHPRViewCapsFileList pins the self-capping behavior: the file
+// list folds into "+N more files" within the line budget so the compression
+// contract never has to crush the render (and with it the title headline).
+func TestSummarizeGHPRViewCapsFileList(t *testing.T) {
+	t.Parallel()
+
+	input := `{"number":45,"title":"feat: summarize raw gh api JSON responses","state":"OPEN","isDraft":false,"headRefName":"feat-gh-api","baseRefName":"main","reviewDecision":"","files":[` +
+		`{"path":"internal/cli/spread.go","additions":15,"deletions":2},` +
+		`{"path":"internal/history/summary.go","additions":7,"deletions":2},` +
+		`{"path":"internal/history/types.go","additions":1,"deletions":0},` +
+		`{"path":"internal/profiles/ghapi/profile.go","additions":120,"deletions":0},` +
+		`{"path":"test/profiles/ghapi/render_test.go","additions":79,"deletions":2}]}`
+	got := ghfilter.SummarizeGHPRView(input, 5)
+	lines := strings.Split(got, "\n")
+	if len(lines) != 5 {
+		t.Fatalf("expected render to fit the 5-line budget, got %d lines:\n%s", len(lines), got)
+	}
+	if lines[0] != "#45 OPEN feat: summarize raw gh api JSON responses [review:none] feat-gh-api->main" {
+		t.Fatalf("unexpected PR headline: %q", lines[0])
+	}
+	if lines[1] != "files: 5" {
+		t.Fatalf("unexpected files count line: %q", lines[1])
+	}
+	if lines[len(lines)-1] != "+3 more files" {
+		t.Fatalf("expected trailing more-files marker, got %q", lines[len(lines)-1])
 	}
 }
 

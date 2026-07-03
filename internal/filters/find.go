@@ -38,6 +38,35 @@ var reducerOnlySearchNoiseDirs = []string{
 	"tmp",
 }
 
+// findVerbatimListFloor is the smallest match count that always renders as a
+// verbatim path list. A file list the agent explicitly asked for is the
+// payload, not noise: bucketing into extension/directory counts only pays for
+// itself when the list is genuinely long.
+const findVerbatimListFloor = 16
+
+// findVerbatimLimit reports the largest match count that is listed verbatim
+// (one path per line after a count header) instead of bucketed. It scales
+// with the line budget but never drops below findVerbatimListFloor.
+func findVerbatimLimit(maxLines int) int {
+	limit := maxLines - 1
+	if limit < findVerbatimListFloor {
+		limit = findVerbatimListFloor
+	}
+	return limit
+}
+
+// renderVerbatimFindList renders a small match list as a count header
+// followed by every path verbatim, keeping the noisy-path suppression note.
+func renderVerbatimFindList(paths []string, suppressed map[string]int) string {
+	lines := make([]string, 0, len(paths)+2)
+	lines = append(lines, fmt.Sprintf("%d matches", len(paths)))
+	lines = append(lines, paths...)
+	if line := summarizeSuppressedSearchBuckets(suppressed); line != "" {
+		lines = append(lines, line)
+	}
+	return strings.Join(lines, "\n")
+}
+
 func SummarizeFindPaths(paths []string, maxLines int) string {
 	return summarizeFindPathsWithStyle(paths, maxLines, FindSummaryStyleInventory)
 }
@@ -79,6 +108,9 @@ func summarizeFindPathsWithStyle(paths []string, maxLines int, style FindSummary
 	case FindSummaryStyleGrouped:
 		return renderGroupedFindSummary(normalized, dirCounts, extCounts, suppressed, maxLines)
 	default:
+		if len(normalized) <= findVerbatimLimit(maxLines) {
+			return renderVerbatimFindList(normalized, suppressed)
+		}
 		return renderFindSummary(normalized, dirCounts, extCounts, suppressed, maxLines)
 	}
 }
@@ -112,10 +144,10 @@ func NewFindReducer(maxLines int) *FindReducer {
 	if maxLines <= 0 {
 		maxLines = 8
 	}
-	sampleLimit := maxLines - 1
-	if sampleLimit < 1 {
-		sampleLimit = 1
-	}
+	// Retain enough paths to list a small result set verbatim; beyond the
+	// verbatim limit the render falls back to bucketed summarization, which
+	// only needs a couple of representative samples.
+	sampleLimit := findVerbatimLimit(maxLines)
 	return &FindReducer{
 		stderrReducer: NewCompactLineReducer(maxLines, 0),
 		maxLines:      maxLines,
@@ -195,6 +227,9 @@ func (r *FindReducer) render(preview bool) string {
 	}
 	if len(r.matches) == 0 {
 		return "no matches"
+	}
+	if r.totalMatches == len(r.matches) && r.totalMatches <= findVerbatimLimit(r.maxLines) {
+		return renderVerbatimFindList(r.matches, r.suppressed)
 	}
 	return renderFindSummary(r.matches, r.dirCounts, r.extCounts, r.suppressed, r.maxLines)
 }

@@ -102,15 +102,28 @@ func TestFindSummaries(t *testing.T) {
 	if got := filters.SummarizeFindPaths(nil, 4); got != "no matches" {
 		t.Fatalf("unexpected empty find summary: %q", got)
 	}
+	// Small match lists are the payload: every path is listed verbatim after
+	// a count header instead of being bucketed by extension/directory.
 	got := filters.SummarizeFindPaths([]string{"b.py", "a.py"}, 4)
-	for _, want := range []string{"2 matches | ext: .py (2)", "examples: a.py, b.py"} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("expected %q in find summary:\n%s", want, got)
+	if got != "2 matches\na.py\nb.py" {
+		t.Fatalf("expected verbatim small find list, got %q", got)
+	}
+	verbatim := filters.SummarizeFindPaths([]string{"a.py", "b.py", "c.py", "d.py"}, 3)
+	for _, want := range []string{"4 matches", "a.py", "d.py"} {
+		if !strings.Contains(verbatim, want) {
+			t.Fatalf("expected %q in verbatim find list:\n%s", want, verbatim)
 		}
 	}
-	truncated := filters.SummarizeFindPaths([]string{"a.py", "b.py", "c.py", "d.py"}, 3)
-	if !strings.Contains(truncated, "4 matches | ext: .py (4)") {
-		t.Fatalf("expected truncated find summary, got %q", truncated)
+	large := make([]string, 0, 20)
+	for i := 0; i < 20; i++ {
+		large = append(large, fmt.Sprintf("src/pkg/file%02d.py", i))
+	}
+	bucketed := filters.SummarizeFindPaths(large, 4)
+	if !strings.Contains(bucketed, "20 matches | ext: .py (20)") {
+		t.Fatalf("expected bucketed summary for long find list, got %q", bucketed)
+	}
+	if strings.Contains(bucketed, "src/pkg/file19.py") {
+		t.Fatalf("expected long find list to stay bucketed, got %q", bucketed)
 	}
 	suppressed := filters.SummarizeFindPaths([]string{"node_modules/a.js", "src/a.py"}, 4)
 	if !strings.Contains(suppressed, "suppressed noisy paths") {
@@ -193,18 +206,42 @@ func TestStreamingSearchReducers(t *testing.T) {
 		t.Fatalf("unexpected ripgrep recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
 	}
 
+	// A small match list is listed verbatim: nothing is omitted, so the
+	// reducer neither saturates nor plans recovery.
 	find := filters.NewFindReducer(4)
 	find.ConsumeStdout([]byte("/tmp/a.py\n/tmp/b.py\n/tmp/c.py\n/tmp/d.py\n/tmp/e.py\n"))
-	if !find.Done() {
-		t.Fatal("expected find reducer to report done after filling sample budget")
+	if find.Done() {
+		t.Fatal("did not expect find reducer to saturate on a small verbatim list")
 	}
-	if got := find.Result(); !strings.Contains(got, "examples: /tmp/a.py") {
-		t.Fatalf("expected find reducer compact examples, got %q", got)
+	got := find.Result()
+	for _, want := range []string{"5 matches", "/tmp/a.py", "/tmp/e.py"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in verbatim find reducer output:\n%s", want, got)
+		}
 	}
 	if preview, result := find.Preview(), find.Result(); preview != result {
 		t.Fatalf("expected stable find preview/result, preview=%q result=%q", preview, result)
 	}
-	if kind, summary, requireRawCapture := find.RecoveryInfo(); kind != filters.RecoveryKindFullOutput || summary != "omitted 2 additional matches" || !requireRawCapture {
+	if kind, summary, requireRawCapture := find.RecoveryInfo(); kind != "" || summary != "" || requireRawCapture {
+		t.Fatalf("unexpected find recovery info for verbatim list: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
+	}
+
+	// Past the verbatim limit the reducer saturates, buckets, and plans
+	// recovery for the omitted matches.
+	bulk := filters.NewFindReducer(4)
+	for i := 0; i < 20; i++ {
+		bulk.ConsumeStdout([]byte(fmt.Sprintf("/tmp/pkg/file%02d.py\n", i)))
+	}
+	if !bulk.Done() {
+		t.Fatal("expected find reducer to report done after exceeding verbatim retention")
+	}
+	bulkGot := bulk.Result()
+	for _, want := range []string{"20 matches | ext: .py (20)", "examples: /tmp/pkg/file00.py"} {
+		if !strings.Contains(bulkGot, want) {
+			t.Fatalf("expected %q in bucketed find reducer output:\n%s", want, bulkGot)
+		}
+	}
+	if kind, summary, requireRawCapture := bulk.RecoveryInfo(); kind != filters.RecoveryKindFullOutput || summary != "omitted 4 additional matches" || !requireRawCapture {
 		t.Fatalf("unexpected find recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
 	}
 }
@@ -235,7 +272,7 @@ func TestStreamingSearchReducersSuppressReducerOnlyNoise(t *testing.T) {
 	find := filters.NewFindReducer(4)
 	find.ConsumeStdout([]byte(".venv/bin/python\ntmp/build.log\nsrc/app.go\n"))
 	got = find.Result()
-	for _, want := range []string{"1 matches | ext: .go (1)", "examples: src/app.go"} {
+	for _, want := range []string{"1 matches", "src/app.go", "suppressed noisy paths: 2"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected %q in find reducer output:\n%s", want, got)
 		}
