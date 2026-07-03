@@ -73,7 +73,7 @@ func TestBenchCoverageEdges(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
 		t.Fatalf("decode bench all json: %v", err)
 	}
-	if len(payload) != 24 {
+	if len(payload) != 25 {
 		t.Fatalf("expected all benchmark fixtures, got %#v", payload)
 	}
 }
