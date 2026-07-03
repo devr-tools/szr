@@ -72,6 +72,10 @@ func TestSpreadReportsProxiedRunsSeparately(t *testing.T) {
 	if !strings.Contains(stdout, "proxied (unfiltered): 2 commands, 1.2K tokens - excluded from savings analysis") {
 		t.Fatalf("expected proxied summary line, got %q", stdout)
 	}
+	// Saved 80 of 100 filtered raw tokens; overall includes the 1200 proxied.
+	if !strings.Contains(stdout, "(80.0% of filtered; 6.2% overall)") {
+		t.Fatalf("expected filtered-vs-overall savings headline, got %q", stdout)
+	}
 	for _, unwanted := range []string{"szr proxy git", "git-diff", "git-log"} {
 		if strings.Contains(stdout, unwanted) {
 			t.Fatalf("expected proxied run %q to stay out of savings tables, got %q", unwanted, stdout)
@@ -91,5 +95,8 @@ func TestSpreadReportsProxiedRunsSeparately(t *testing.T) {
 	}
 	if payload.RawTokens != 1300 {
 		t.Fatalf("expected proxied tokens in total tallies, got %#v", payload)
+	}
+	if payload.FilteredSavingsPct < 79.9 || payload.FilteredSavingsPct > 80.1 {
+		t.Fatalf("expected filtered savings pct in json payload, got %#v", payload.FilteredSavingsPct)
 	}
 }
