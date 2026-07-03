@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.17.0](https://github.com/devr-tools/szr/compare/v0.16.0...v0.17.0) (2026-07-03)
+
+
+### Features
+
+* **packaging:** distribute szr via npm and PyPI ([23157e0](https://github.com/devr-tools/szr/commit/23157e0a0e9d6b211b03af1331dfeb530d29b5ac))
+* **packaging:** distribute szr via npm and PyPI ([942771c](https://github.com/devr-tools/szr/commit/942771ce53fc88fc502d42f315636d3b850586b4))
+
+
+### Bug Fixes
+
+* **cd:** grant id-token to the release.yml caller ([60be976](https://github.com/devr-tools/szr/commit/60be976b910b52869ab24738fc3793b38379f97b))
+* **cd:** grant id-token to the release.yml caller ([a8439fa](https://github.com/devr-tools/szr/commit/a8439fa7074ec863bb55665fb8659dddd81d7859))
+
 ## [0.16.0](https://github.com/devr-tools/szr/compare/v0.15.0...v0.16.0) (2026-07-03)
 
 
