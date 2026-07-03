@@ -22,6 +22,12 @@ func summarizeCommandHotspots(commandHotspots map[string]*summaryCommandHotspotA
 			hotspot.stat.FailureRate == 0 {
 			continue
 		}
+		// An improvement hotspot needs an actual improvement signal: poor
+		// compression or a fallback-heavy path. High-volume rows that
+		// already compress well are successes, not hotspots.
+		if hotspot.stat.AveragePct >= poorSavingsThresholdPct && hotspot.stat.FallbackRate < 50 {
+			continue
+		}
 		scored = append(scored, scoredHotspot{stat: hotspot.stat, severity: severity})
 	}
 	sort.Slice(scored, func(i, j int) bool {

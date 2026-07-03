@@ -399,9 +399,9 @@ func TestSummaryPrioritizesMaterialHotspotsOverTinyNoise(t *testing.T) {
 			Profile:            "git-diff",
 			DurationMS:         34,
 			RawTokens:          1200,
-			FilteredTokens:     420,
-			SavedTokens:        780,
-			SavingsPct:         65,
+			FilteredTokens:     900,
+			SavedTokens:        300,
+			SavingsPct:         25,
 		},
 		{
 			Command:            "szr git diff --stat",
@@ -409,9 +409,29 @@ func TestSummaryPrioritizesMaterialHotspotsOverTinyNoise(t *testing.T) {
 			Profile:            "git-diff",
 			DurationMS:         37,
 			RawTokens:          1000,
-			FilteredTokens:     410,
-			SavedTokens:        590,
-			SavingsPct:         59,
+			FilteredTokens:     720,
+			SavedTokens:        280,
+			SavingsPct:         28,
+		},
+		{
+			Command:            "szr go test ./...",
+			CommandFingerprint: history.Fingerprint("szr go test ./..."),
+			Profile:            "go-test-json",
+			DurationMS:         900,
+			RawTokens:          5000,
+			FilteredTokens:     300,
+			SavedTokens:        4700,
+			SavingsPct:         94,
+		},
+		{
+			Command:            "szr go test ./...",
+			CommandFingerprint: history.Fingerprint("szr go test ./..."),
+			Profile:            "go-test-json",
+			DurationMS:         880,
+			RawTokens:          5200,
+			FilteredTokens:     310,
+			SavedTokens:        4890,
+			SavingsPct:         94,
 		},
 	}
 
@@ -420,13 +440,22 @@ func TestSummaryPrioritizesMaterialHotspotsOverTinyNoise(t *testing.T) {
 		t.Fatalf("expected multiple command hotspots, got %#v", summary.CommandHotspots)
 	}
 	if got := summary.CommandHotspots[0].Command; got != "szr git diff" {
-		t.Fatalf("expected material diff hotspot to rank first, got %#v", summary.CommandHotspots)
+		t.Fatalf("expected material poor-savings hotspot to rank first, got %#v", summary.CommandHotspots)
 	}
-	// The diff fingerprint averages ~62% savings, which is healthy: it must
-	// not be reported as a poor-savings fingerprint, and the tiny negative
-	// single-run status record stays suppressed as noise.
-	if len(summary.FingerprintHotspots) != 0 {
-		t.Fatalf("expected healthy fingerprints to stay out of poor-savings table, got %#v", summary.FingerprintHotspots)
+	// A high-volume fingerprint that already compresses at 94% is a success:
+	// it must appear in neither the hotspot table nor poor-savings, no
+	// matter how many tokens it moves.
+	for _, hotspot := range summary.CommandHotspots {
+		if hotspot.Command == "szr go test" {
+			t.Fatalf("expected healthy high-savings command out of hotspots, got %#v", summary.CommandHotspots)
+		}
+	}
+	// The diff fingerprint averages ~26%: genuinely poor, so it belongs in
+	// the poor-savings table; the healthy test fingerprint must not.
+	for _, fingerprint := range summary.FingerprintHotspots {
+		if fingerprint.Command == "szr go test ./..." {
+			t.Fatalf("expected healthy fingerprint out of poor-savings table, got %#v", summary.FingerprintHotspots)
+		}
 	}
 }
 

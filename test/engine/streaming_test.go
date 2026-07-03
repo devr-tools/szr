@@ -279,8 +279,14 @@ func TestExecutePersistsRecoveryArtifactOnSuccessfulOmission(t *testing.T) {
 	if result.TeePath == "" {
 		t.Fatalf("expected recovery artifact tee path, got %#v", result)
 	}
-	if !strings.Contains(result.Display, "[recovery: omitted 2 additional matches; tee: ") {
-		t.Fatalf("expected recovery hint in display, got %q", result.Display)
+	// The tiny-output bypass shows the COMPLETE raw stream, so an
+	// "omitted 2 additional matches" hint would be false; the display must
+	// stay clean while the artifact remains available for recovery flows.
+	if strings.Contains(result.Display, "[recovery:") {
+		t.Fatalf("expected no recovery hint on a complete raw display, got %q", result.Display)
+	}
+	if strings.TrimSpace(result.Display) != "one\ntwo\nthree" {
+		t.Fatalf("expected complete raw display, got %q", result.Display)
 	}
 	teeData := string(testutil.MustReadFile(t, result.TeePath))
 	for _, want := range []string{"one", "two", "three"} {
