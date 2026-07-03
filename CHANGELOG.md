@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.12.1](https://github.com/devr-tools/szr/compare/v0.12.0...v0.12.1) (2026-07-03)
+
+
+### Bug Fixes
+
+* **engine:** post-render guards must stand down when capture is truncated ([fdc6af8](https://github.com/devr-tools/szr/commit/fdc6af84f534670c0791876f2e9bc59d85ef410e))
+* post-render guards must not compare against truncated capture ([575e7c8](https://github.com/devr-tools/szr/commit/575e7c8f8c5a6856f6160e9688199d2c14a53a75))
+
 ## [0.12.0](https://github.com/devr-tools/szr/compare/v0.11.0...v0.12.0) (2026-07-03)
 
 
