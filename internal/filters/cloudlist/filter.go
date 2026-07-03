@@ -3,6 +3,7 @@ package cloudlist
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	shared "github.com/devr-tools/szr/internal/filters"
@@ -65,15 +66,125 @@ func summarizeStructured(input string, maxLines int) (string, bool, int) {
 		return "", false, 0
 	}
 
-	out := []string{fmt.Sprintf("%s: %d", label, len(records))}
-	for _, record := range records {
-		out = append(out, shared.Clip(summarizeRecord(record), 160))
+	summaries := make([]string, len(records))
+	statuses := make([]string, len(records))
+	for i, record := range records {
+		summaries[i] = shared.Clip(summarizeRecord(record), 160)
+		statuses[i] = strings.ToLower(recordStatus(record))
 	}
-	omitted := 0
-	if len(out) > maxLines {
-		omitted = len(out) - maxLines
+
+	header := fmt.Sprintf("%s: %d", label, len(records))
+	if breakdown := statusBreakdown(statuses); breakdown != "" {
+		header += " (" + breakdown + ")"
 	}
-	return shared.JoinLimitedLines(out, maxLines), true, omitted
+
+	kept, omitted := selectRecordSummaries(summaries, statuses, maxLines)
+	out := append([]string{header}, kept...)
+	if omitted > 0 {
+		out = append(out, fmt.Sprintf("... +%d more %s", omitted, label))
+	}
+	return strings.Join(out, "\n"), true, omitted
+}
+
+// statusBreakdown folds the per-record statuses into a "running=7 stopped=1"
+// suffix (highest count first) so the state mix is visible even when not
+// every record line fits the budget.
+func statusBreakdown(statuses []string) string {
+	counts, order := statusCounts(statuses)
+	if len(order) < 2 {
+		return ""
+	}
+	sort.SliceStable(order, func(i, j int) bool { return counts[order[i]] > counts[order[j]] })
+	if len(order) > 4 {
+		order = order[:4]
+	}
+	parts := make([]string, 0, len(order))
+	for _, status := range order {
+		parts = append(parts, fmt.Sprintf("%s=%d", status, counts[status]))
+	}
+	return strings.Join(parts, " ")
+}
+
+func statusCounts(statuses []string) (map[string]int, []string) {
+	counts := map[string]int{}
+	order := []string{}
+	for _, status := range statuses {
+		if status == "" {
+			continue
+		}
+		if _, seen := counts[status]; !seen {
+			order = append(order, status)
+		}
+		counts[status]++
+	}
+	return counts, order
+}
+
+// selectRecordSummaries keeps every record line when the budget allows, and
+// otherwise minority-status records plus leading records. In inventory-style
+// lists the anomalous entries (stopped among running, failed among succeeded)
+// are the payload, so positional truncation must never be what drops them.
+func selectRecordSummaries(summaries, statuses []string, maxLines int) ([]string, int) {
+	limit := maxLines - 1
+	if limit < 1 {
+		limit = 1
+	}
+	if len(summaries) <= limit {
+		return summaries, 0
+	}
+	keep := keepIndices(minorityStatusIndices(statuses), len(summaries), limit)
+	out := filterByIndex(summaries, keep)
+	return out, len(summaries) - len(out)
+}
+
+// keepIndices marks up to limit indices as kept: the anomalous ones first,
+// then leading indices as positional fill.
+func keepIndices(anomalies []int, total, limit int) map[int]bool {
+	keep := map[int]bool{}
+	for _, idx := range anomalies {
+		if len(keep) >= limit {
+			break
+		}
+		keep[idx] = true
+	}
+	for i := 0; i < total && len(keep) < limit; i++ {
+		keep[i] = true
+	}
+	return keep
+}
+
+func filterByIndex(items []string, keep map[int]bool) []string {
+	out := make([]string, 0, len(keep))
+	for i, item := range items {
+		if keep[i] {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+// minorityStatusIndices reports the records whose status differs from the
+// dominant status, provided a dominant status exists (covers more than half
+// of the status-bearing records).
+func minorityStatusIndices(statuses []string) []int {
+	counts, _ := statusCounts(statuses)
+	dominant, dominantCount, total := "", 0, 0
+	for status, count := range counts {
+		total += count
+		if count > dominantCount {
+			dominant, dominantCount = status, count
+		}
+	}
+	if dominant == "" || dominantCount*2 <= total {
+		return nil
+	}
+	out := []int{}
+	for i, status := range statuses {
+		if status != "" && status != dominant {
+			out = append(out, i)
+		}
+	}
+	return out
 }
 
 func extractRecords(value any) (string, []map[string]any) {

@@ -133,6 +133,38 @@ func TestSummarizeComposeBuildFailure(t *testing.T) {
 	}
 }
 
+// TestSummarizeComposeBuildFailureKeepsErrorBlockDetail pins the retention
+// of BuildKit's dash-delimited error block: the compiler error inside it is
+// the actionable payload and carries no "error"-shaped keyword the generic
+// rules would catch on its own.
+func TestSummarizeComposeBuildFailureKeepsErrorBlockDetail(t *testing.T) {
+	input := strings.Join([]string{
+		"#6 [web 3/4] RUN npm run bundle",
+		`#6 ERROR: process "/bin/sh -c npm run bundle" did not complete successfully: exit code: 1`,
+		"------",
+		" > [web 3/4] RUN npm run bundle:",
+		"4.118 src/cart/summary.tsx(17,3): Type 'string' is not assignable to type 'number'.",
+		"4.204 command finished with exit code 1",
+		"------",
+		`failed to solve: process "/bin/sh -c npm run bundle" did not complete successfully: exit code: 1`,
+	}, "\n")
+
+	got := containerfilter.SummarizeComposeActivity(input, 10)
+	for _, want := range []string{
+		"#6 ERROR:",
+		"Type 'string' is not assignable to type 'number'.",
+		"command finished with exit code 1",
+		"failed to solve",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in compose build error block summary:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "------") {
+		t.Fatalf("expected block delimiters to be dropped:\n%s", got)
+	}
+}
+
 func TestDockerProgressRecoveryInfo(t *testing.T) {
 	input := strings.Join([]string{
 		" Container myapp-db-1  Started",

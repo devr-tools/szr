@@ -17,6 +17,28 @@ type PRView struct {
 	BaseRefName    string   `json:"baseRefName"`
 	ReviewDecision string   `json:"reviewDecision"`
 	Files          []PRFile `json:"files"`
+	// GitLab CLI JSON aliases for the same fields (merge requests).
+	IID          int    `json:"iid"`
+	Draft        bool   `json:"draft"`
+	SourceBranch string `json:"source_branch"`
+	TargetBranch string `json:"target_branch"`
+}
+
+// normalize folds the GitLab CLI field aliases into the canonical fields so
+// one render path serves both CLIs.
+func (pr *PRView) normalize() {
+	if pr.Number == 0 {
+		pr.Number = pr.IID
+	}
+	if pr.Draft {
+		pr.IsDraft = true
+	}
+	if pr.HeadRefName == "" {
+		pr.HeadRefName = pr.SourceBranch
+	}
+	if pr.BaseRefName == "" {
+		pr.BaseRefName = pr.TargetBranch
+	}
 }
 
 type PRFile struct {
@@ -72,7 +94,11 @@ func summarizePRViewResult(input string, maxLines int) githubSummaryResult {
 	}
 	clean := shared.StripANSI(input)
 	var pr PRView
-	if err := json.Unmarshal([]byte(strings.TrimSpace(clean)), &pr); err != nil || pr.Number == 0 {
+	if err := json.Unmarshal([]byte(strings.TrimSpace(clean)), &pr); err != nil {
+		return githubSummaryResult{Text: shared.SummarizeGenericFailure(clean, maxLines)}
+	}
+	pr.normalize()
+	if pr.Number == 0 {
 		return githubSummaryResult{Text: shared.SummarizeGenericFailure(clean, maxLines)}
 	}
 

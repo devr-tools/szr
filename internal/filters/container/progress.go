@@ -165,21 +165,30 @@ func ComposeActivityRecoveryInfo(input string, maxLines int) (string, string, bo
 }
 
 type composeActivityScan struct {
-	states        map[string]string
-	order         []string
-	startedEvents int
-	healthyEvents int
-	errorLines    []string
-	attach        []string
-	lastProgress  string
+	states           map[string]string
+	order            []string
+	startedEvents    int
+	healthyEvents    int
+	errorLines       []string
+	attach           []string
+	lastProgress     string
+	inErrorBlock     bool
+	errorBlockBudget int
 }
 
+// composeErrorBlockBudget bounds how many lines of BuildKit's dash-delimited
+// failure blocks are retained.
+const composeErrorBlockBudget = 8
+
 func newComposeActivityScan() *composeActivityScan {
-	return &composeActivityScan{states: map[string]string{}}
+	return &composeActivityScan{states: map[string]string{}, errorBlockBudget: composeErrorBlockBudget}
 }
 
 func (s *composeActivityScan) ingestLine(line string) {
 	trimmed := strings.TrimSpace(line)
+	if s.ingestErrorBlockLine(trimmed) {
+		return
+	}
 	if match := composeResourceStatePattern.FindStringSubmatch(trimmed); match != nil {
 		s.ingestResourceState(match)
 		return
@@ -199,6 +208,37 @@ func (s *composeActivityScan) ingestLine(line string) {
 	if source, message, ok := strings.Cut(line, " | "); ok {
 		s.ingestAttachLine(source, message)
 	}
+}
+
+// ingestErrorBlockLine keeps the lines inside BuildKit's dash-delimited
+// failure blocks: that echo of the failed step's output is where the actual
+// compiler or command error lives, and its detail lines rarely contain an
+// "error" keyword of their own.
+func (s *composeActivityScan) ingestErrorBlockLine(trimmed string) bool {
+	if isDashDelimiterLine(trimmed) {
+		s.inErrorBlock = !s.inErrorBlock
+		return true
+	}
+	if !s.inErrorBlock {
+		return false
+	}
+	if s.errorBlockBudget > 0 {
+		s.errorLines = append(s.errorLines, shared.Clip(trimmed, 160))
+		s.errorBlockBudget--
+	}
+	return true
+}
+
+func isDashDelimiterLine(trimmed string) bool {
+	if len(trimmed) < 4 {
+		return false
+	}
+	for _, r := range trimmed {
+		if r != '-' {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *composeActivityScan) ingestResourceState(match []string) {

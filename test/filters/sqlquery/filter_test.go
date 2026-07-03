@@ -1,6 +1,7 @@
 package sqlquery_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -62,6 +63,68 @@ func TestSummarizeSQLQueryJSONOutput(t *testing.T) {
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected %q in SQL JSON summary:\n%s", want, got)
+		}
+	}
+}
+
+// TestSummarizeSQLQueryKeepsAnomalousRows pins the anomaly rule for query
+// results: a row carrying a rare value in a low-cardinality column (the
+// status-shaped needle a SELECT is usually hunting for) must survive
+// truncation, and the exact row count must stay visible.
+func TestSummarizeSQLQueryKeepsAnomalousRows(t *testing.T) {
+	lines := []string{
+		"  id  |          email           |  plan   |  status  ",
+		"------+--------------------------+---------+----------",
+	}
+	for i := 0; i < 40; i++ {
+		status := "active"
+		if i == 31 {
+			status = "suspended"
+		}
+		email := fmt.Sprintf("member%03d@example.com", i)
+		if i == 31 {
+			email = "stale.billing@example.com"
+		}
+		plan := []string{"basic", "team", "scale"}[i%3]
+		lines = append(lines, fmt.Sprintf(" %4d | %-24s | %-7s | %s", 5000+i, email, plan, status))
+	}
+	lines = append(lines, "(40 rows)")
+
+	got := sqlfilter.SummarizeSQLQuery(strings.Join(lines, "\n"), 10)
+	for _, want := range []string{
+		"stale.billing@example.com",
+		"suspended",
+		"(40 rows)",
+		"more rows",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in anomaly-aware SQL summary:\n%s", want, got)
+		}
+	}
+}
+
+// TestSummarizeSQLQueryJSONKeepsAnomalousRecords pins the same rule for JSON
+// result sets (sqlite3 -json / duckdb -json).
+func TestSummarizeSQLQueryJSONKeepsAnomalousRecords(t *testing.T) {
+	records := make([]string, 0, 20)
+	for i := 0; i < 20; i++ {
+		state := "shipped"
+		if i == 17 {
+			state = "lost"
+		}
+		records = append(records, fmt.Sprintf(`{"order_id":%d,"state":%q}`, 9000+i, state))
+	}
+	input := "[" + strings.Join(records, ",") + "]"
+
+	got := sqlfilter.SummarizeSQLQuery(input, 6)
+	for _, want := range []string{
+		"20 row(s)",
+		`"order_id":9017`,
+		`"state":"lost"`,
+		"more rows",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in anomaly-aware SQL JSON summary:\n%s", want, got)
 		}
 	}
 }

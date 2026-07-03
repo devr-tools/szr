@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 
 	shared "github.com/devr-tools/szr/internal/filters"
@@ -67,11 +68,17 @@ func summarizeSQLQueryResult(input string, maxLines int) sqlQuerySummaryResult {
 	}
 
 	rawRowCount := len(rows)
-	rows = limitSQLRows(rows, len(summaries) > 0, maxLines)
-	out := append([]string{}, rows...)
+	if rawRowCount > maxLines-len(summaries) && len(summaries) == 0 {
+		summaries = append(summaries, fmt.Sprintf("rows: %d", rawRowCount))
+	}
+	kept, omittedRows := selectSQLRows(rows, len(summaries), maxLines)
+	out := append([]string{}, kept...)
+	if omittedRows > 0 {
+		out = append(out, fmt.Sprintf("... +%d more rows", omittedRows))
+	}
 	out = append(out, summaries...)
 	result := sqlQuerySummaryResult{
-		Text: shared.JoinLimitedLines(out, maxLines),
+		Text: strings.Join(out, "\n"),
 	}
 	if omitted := countSQLOmitted(rawRowCount, len(summaries), maxLines); omitted > 0 {
 		result.OmittedCount = omitted
@@ -119,21 +126,182 @@ func normalizeSQLSummarySlice(lines []string) []string {
 	return shared.UniqueStrings(shared.FoldConsecutiveLines(lines))
 }
 
-func limitSQLRows(rows []string, hasSummaries bool, maxLines int) []string {
-	if len(rows) == 0 {
-		return rows
-	}
-	limit := maxLines
-	if hasSummaries {
-		limit--
-	}
+// selectSQLRows keeps every result row when the budget allows, and otherwise
+// anomalous rows (rare values in low-cardinality columns such as status or
+// state) plus leading rows. The odd row out is usually the reason the query
+// was run, so positional truncation must never be what drops it.
+func selectSQLRows(rows []string, summaryCount, maxLines int) ([]string, int) {
+	limit := maxLines - summaryCount
 	if limit < 1 {
 		limit = 1
 	}
 	if len(rows) <= limit {
-		return rows
+		return rows, 0
 	}
-	return append(rows[:limit], fmt.Sprintf("... +%d more rows", len(rows)-limit))
+	keep := keepIndices(anomalousSQLRowIndices(rows), len(rows), limit)
+	out := filterByIndex(rows, keep)
+	return out, len(rows) - len(out)
+}
+
+// keepIndices marks up to limit indices as kept: the anomalous ones first,
+// then leading indices as positional fill.
+func keepIndices(anomalies []int, total, limit int) map[int]bool {
+	keep := map[int]bool{}
+	for _, idx := range anomalies {
+		if len(keep) >= limit {
+			break
+		}
+		keep[idx] = true
+	}
+	for i := 0; i < total && len(keep) < limit; i++ {
+		keep[i] = true
+	}
+	return keep
+}
+
+func filterByIndex(items []string, keep map[int]bool) []string {
+	out := make([]string, 0, len(keep))
+	for i, item := range items {
+		if keep[i] {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+const sqlAnomalyMinRows = 8
+
+// anomalousSQLRowIndices reports rows carrying rare values in low-cardinality
+// columns, rarest first. Columns are recovered by splitting on the delimiter
+// most rows agree on; ID-like columns (nearly all values distinct) never
+// qualify, so only status/state/type-shaped columns can flag a row.
+func anomalousSQLRowIndices(rows []string) []int {
+	if len(rows) < sqlAnomalyMinRows {
+		return nil
+	}
+	cells, columns := splitSQLRows(rows)
+	if columns < 2 {
+		return nil
+	}
+	rarity := map[int]int{}
+	for col := 0; col < columns; col++ {
+		markRareColumnValues(cells, col, len(rows), rarity)
+	}
+	return sortIndicesByRarity(rarity)
+}
+
+func splitSQLRows(rows []string) ([][]string, int) {
+	delimiter := pickSQLDelimiter(rows)
+	if delimiter == "" {
+		return nil, 0
+	}
+	cells := make([][]string, len(rows))
+	for i, row := range rows {
+		cells[i] = splitSQLCells(row, delimiter)
+	}
+	modal, modalCount := modalWidth(cells)
+	if modalCount*3 < len(rows)*2 {
+		return nil, 0
+	}
+	return cells, modal
+}
+
+func splitSQLCells(row, delimiter string) []string {
+	parts := strings.Split(row, delimiter)
+	for j, part := range parts {
+		parts[j] = strings.TrimSpace(part)
+	}
+	return parts
+}
+
+func modalWidth(cells [][]string) (int, int) {
+	counts := map[int]int{}
+	for _, row := range cells {
+		counts[len(row)]++
+	}
+	modal, modalCount := 0, 0
+	for width, count := range counts {
+		if count > modalCount {
+			modal, modalCount = width, count
+		}
+	}
+	return modal, modalCount
+}
+
+func pickSQLDelimiter(rows []string) string {
+	for _, delimiter := range []string{"|", "\t", ","} {
+		matching := 0
+		for _, row := range rows {
+			if strings.Contains(row, delimiter) {
+				matching++
+			}
+		}
+		if matching*3 >= len(rows)*2 {
+			return delimiter
+		}
+	}
+	return ""
+}
+
+// markRareColumnValues records, for each row whose value in the column is
+// rare (appears in at most 5% of rows while the column stays low-cardinality),
+// how rare that value is.
+func markRareColumnValues(cells [][]string, col, rowCount int, rarity map[int]int) {
+	counts := columnValueCounts(cells, col)
+	if len(counts) < 2 || len(counts) > 8 {
+		return
+	}
+	threshold := rareValueThreshold(rowCount)
+	for i, row := range cells {
+		if col >= len(row) || row[col] == "" {
+			continue
+		}
+		recordRarity(rarity, i, counts[row[col]], threshold)
+	}
+}
+
+func columnValueCounts(cells [][]string, col int) map[string]int {
+	counts := map[string]int{}
+	for _, row := range cells {
+		if col < len(row) && row[col] != "" {
+			counts[row[col]]++
+		}
+	}
+	return counts
+}
+
+func rareValueThreshold(rowCount int) int {
+	threshold := rowCount / 20
+	if threshold < 1 {
+		threshold = 1
+	}
+	return threshold
+}
+
+// recordRarity notes that row idx carries a value seen count times, when
+// that is at or below the rare threshold and rarer than anything already
+// recorded for the row.
+func recordRarity(rarity map[int]int, idx, count, threshold int) {
+	if count > threshold {
+		return
+	}
+	if existing, ok := rarity[idx]; !ok || count < existing {
+		rarity[idx] = count
+	}
+}
+
+func sortIndicesByRarity(rarity map[int]int) []int {
+	out := make([]int, 0, len(rarity))
+	for idx := range rarity {
+		out = append(out, idx)
+	}
+	sort.Slice(out, func(a, b int) bool {
+		if rarity[out[a]] == rarity[out[b]] {
+			return out[a] < out[b]
+		}
+		return rarity[out[a]] < rarity[out[b]]
+	})
+	return out
 }
 
 type sqlJSONSummaryResult struct {
@@ -159,21 +327,22 @@ func summarizeJSONResult(lines []string, maxLines int) sqlJSONSummaryResult {
 		if limit < 1 {
 			limit = 1
 		}
-		for i := 0; i < len(v) && i < limit; i++ {
-			encoded, err := json.Marshal(v[i])
+		keep := selectJSONRecordIndices(v, limit)
+		for _, idx := range keep {
+			encoded, err := json.Marshal(v[idx])
 			if err != nil {
 				continue
 			}
 			out = append(out, string(encoded))
 		}
-		if len(v) > limit {
-			out = append(out, fmt.Sprintf("... +%d more rows", len(v)-limit))
+		if len(v) > len(keep) {
+			out = append(out, fmt.Sprintf("... +%d more rows", len(v)-len(keep)))
 		}
 		result := sqlJSONSummaryResult{
 			Text: strings.Join(out, "\n"),
 		}
-		if len(v) > limit {
-			result.OmittedCount = len(v) - limit
+		if len(v) > len(keep) {
+			result.OmittedCount = len(v) - len(keep)
 		}
 		return result
 	case map[string]any:
@@ -184,6 +353,83 @@ func summarizeJSONResult(lines []string, maxLines int) sqlJSONSummaryResult {
 		return sqlJSONSummaryResult{Text: string(encoded)}
 	default:
 		return sqlJSONSummaryResult{}
+	}
+}
+
+// selectJSONRecordIndices keeps up to limit record indices in original order,
+// with anomalous records (rare values in low-cardinality string fields)
+// always included ahead of positional fill.
+func selectJSONRecordIndices(items []any, limit int) []int {
+	if len(items) <= limit {
+		out := make([]int, len(items))
+		for i := range items {
+			out[i] = i
+		}
+		return out
+	}
+	keep := keepIndices(anomalousJSONRecordIndices(items), len(items), limit)
+	out := make([]int, 0, len(keep))
+	for i := range items {
+		if keep[i] {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+// anomalousJSONRecordIndices applies the low-cardinality rare-value rule to
+// the string fields of an array of JSON records.
+func anomalousJSONRecordIndices(items []any) []int {
+	if len(items) < sqlAnomalyMinRows {
+		return nil
+	}
+	fieldCounts := collectJSONFieldCounts(items)
+	threshold := rareValueThreshold(len(items))
+	rarity := map[int]int{}
+	for i, item := range items {
+		markRareJSONRecord(item, fieldCounts, threshold, rarity, i)
+	}
+	return sortIndicesByRarity(rarity)
+}
+
+func collectJSONFieldCounts(items []any) map[string]map[string]int {
+	fieldCounts := map[string]map[string]int{}
+	for _, item := range items {
+		record, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		for key, value := range record {
+			text := stringFieldValue(value)
+			if text == "" {
+				continue
+			}
+			if fieldCounts[key] == nil {
+				fieldCounts[key] = map[string]int{}
+			}
+			fieldCounts[key][text]++
+		}
+	}
+	return fieldCounts
+}
+
+func stringFieldValue(value any) string {
+	text, _ := value.(string)
+	return text
+}
+
+func markRareJSONRecord(item any, fieldCounts map[string]map[string]int, threshold int, rarity map[int]int, idx int) {
+	record, ok := item.(map[string]any)
+	if !ok {
+		return
+	}
+	for key, value := range record {
+		text := stringFieldValue(value)
+		counts := fieldCounts[key]
+		if text == "" || len(counts) < 2 || len(counts) > 8 {
+			continue
+		}
+		recordRarity(rarity, idx, counts[text], threshold)
 	}
 }
 

@@ -1,6 +1,7 @@
 package cloudlist_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -159,6 +160,39 @@ func TestSummarizeCloudListHerokuApp(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected %q in Heroku cloud list summary:\n%s", want, got)
 		}
+	}
+}
+
+// TestSummarizeCloudListKeepsAnomalousState pins the anomaly rule: in an
+// inventory list the record whose state differs from the majority is the
+// payload, so it must survive even when it sits beyond the positional budget.
+func TestSummarizeCloudListKeepsAnomalousState(t *testing.T) {
+	instances := make([]string, 0, 12)
+	for i := 0; i < 12; i++ {
+		state := "running"
+		if i == 9 {
+			state = "stopped"
+		}
+		instances = append(instances, fmt.Sprintf(
+			`{"InstanceId":"i-0f00ba4%05d","InstanceType":"m6i.large","Tags":[{"Key":"Name","Value":"svc-%02d"}],"State":{"Name":%q}}`,
+			i, i, state))
+	}
+	input := fmt.Sprintf(`{"Reservations":[{"Instances":[%s]}]}`, strings.Join(instances, ","))
+
+	got := cloudfilter.SummarizeCloudList(input, 6)
+	for _, want := range []string{
+		"instances: 12",
+		"(running=11 stopped=1)",
+		"i-0f00ba400009",
+		"status=stopped",
+		"... +7 more instances",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in anomaly-aware cloud list summary:\n%s", want, got)
+		}
+	}
+	if lines := strings.Split(got, "\n"); len(lines) > 7 {
+		t.Fatalf("expected the summary to stay within budget, got %d lines:\n%s", len(lines), got)
 	}
 }
 

@@ -129,7 +129,7 @@ func Profiles(maxLines int) []engine.Profile {
 				InjectsPrepareArgs: true,
 			},
 			StreamPreference: engine.StreamStdoutOnly,
-			Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 9)),
+			Budget:           gitDiffBudget(maxLines),
 			LatencyBudget:    profilekit.LatencyBudget(20),
 			Match: func(inv engine.Invocation) bool {
 				return inv.Classification.Display.Head == "git" && inv.Classification.Display.Subcommand == "diff"
@@ -144,7 +144,7 @@ func Profiles(maxLines int) []engine.Profile {
 				return newGitDiffReducer(inv, maxLines, 0).Reduce(shared.StripANSI(exec.Stdout))
 			},
 			StreamRender: func(inv engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-				return newGitDiffReducer(inv, budget.MaxLines, budget.MaxBytes)
+				return newGitDiffReducerWithTokens(inv, budget.MaxLines, budget.MaxBytes, budget.MaxTokens)
 			},
 			ParseBytes: profilekit.ParseStdout,
 			Explain: []string{
@@ -360,14 +360,31 @@ func parseNonNegativeInt(value string) (int, bool) {
 }
 
 func newGitDiffReducer(inv engine.Invocation, maxLines int, maxBytes int) *gitfilter.GitDiffReducer {
+	return newGitDiffReducerWithTokens(inv, maxLines, maxBytes, gitDiffBudget(maxLines).MaxTokens)
+}
+
+func newGitDiffReducerWithTokens(inv engine.Invocation, maxLines, maxBytes, maxTokens int) *gitfilter.GitDiffReducer {
 	return gitfilter.NewGitDiffReducerWithOptions(gitfilter.GitDiffReducerOptions{
 		MaxLines:              maxLines,
 		MaxBytes:              maxBytes,
+		MaxTokens:             maxTokens,
 		Aggressive:            isAggressiveGitDiff(inv),
 		LargeFileThreshold:    5,
 		LargeSummaryTopN:      4,
 		AggressiveSummaryTopN: 2,
 	})
+}
+
+// gitDiffBudget widens the standard token budget for git-diff renders: a
+// many-file diff has to account for every touched filename (the inventory
+// render), and that payload cannot fit the generic per-profile token cap.
+// The compression contract's raw-tokens/5 ceiling still applies, so small
+// diffs are unaffected.
+func gitDiffBudget(maxLines int) engine.OutputBudget {
+	budget := profilekit.OutputBudget(profilekit.AtLeast(maxLines, 9))
+	budget.MaxTokens *= 5
+	budget.MaxBytes *= 5
+	return budget
 }
 
 func isAggressiveGitDiff(inv engine.Invocation) bool {

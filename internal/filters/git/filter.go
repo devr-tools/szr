@@ -454,6 +454,7 @@ type GitDiffReducer struct {
 	patchFiles            []gitDiffPatchFile
 	currentPatch          *gitDiffPatchFile
 	statEntries           []gitDiffStatEntry
+	maxTokens             int
 	aggressive            bool
 	largeFileThreshold    int
 	largeSummaryTopN      int
@@ -464,8 +465,12 @@ type GitDiffReducer struct {
 }
 
 type GitDiffReducerOptions struct {
-	MaxLines              int
-	MaxBytes              int
+	MaxLines int
+	MaxBytes int
+	// MaxTokens mirrors the profile budget's token cap so the reducer's
+	// self-capping renders (verbatim and inventory modes) predict the same
+	// allowance the engine compression contract will enforce.
+	MaxTokens             int
 	Aggressive            bool
 	LargeFileThreshold    int
 	LargeSummaryTopN      int
@@ -517,6 +522,7 @@ func NewGitDiffReducerWithOptions(opts GitDiffReducerOptions) *GitDiffReducer {
 		fallback:              shared.NewCompactLineReducer(12, opts.MaxBytes),
 		patchFiles:            make([]gitDiffPatchFile, 0, maxSummary),
 		statEntries:           make([]gitDiffStatEntry, 0, maxSummary),
+		maxTokens:             opts.MaxTokens,
 		aggressive:            opts.Aggressive,
 		largeFileThreshold:    opts.LargeFileThreshold,
 		largeSummaryTopN:      opts.LargeSummaryTopN,
@@ -851,6 +857,10 @@ func (r *GitDiffReducer) verbatimTokenAllowance() int {
 		return 0
 	}
 	allowed := (rawTokens + 4) / 5
+	if r.maxTokens > 0 && r.maxTokens < allowed {
+		// The contract also caps at the profile budget's token allowance.
+		allowed = r.maxTokens
+	}
 	if allowed < gitDiffVerbatimMinTokens {
 		allowed = gitDiffVerbatimMinTokens
 	}
@@ -1008,15 +1018,15 @@ func (r *GitDiffReducer) renderPatchSummary() []string {
 	if visible <= 0 {
 		visible = 1
 	}
+	if len(r.patchFiles) > visible {
+		// A diff that touches more files than the summary budget still has to
+		// account for every file: the inventory render keeps each filename
+		// discoverable instead of hiding the tail behind a bare count.
+		return r.renderPatchInventory()
+	}
 	out := make([]string, 0, visible)
 	for _, file := range r.patchFiles {
-		if len(out) >= visible {
-			break
-		}
 		out = append(out, formatPatchFileSummary(file))
-	}
-	if len(r.patchFiles) > visible {
-		out = append(out, fmt.Sprintf("... +%d more files", len(r.patchFiles)-visible))
 	}
 	return out
 }
