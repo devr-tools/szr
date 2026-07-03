@@ -6,6 +6,12 @@
   <a href="https://github.com/devr-tools/szr/releases">
     <img src="https://img.shields.io/github/v/release/devr-tools/szr?display_name=tag&include_prereleases" alt="release version" />
   </a>
+  <a href="https://www.npmjs.com/package/@devr-tools/szr">
+    <img src="https://img.shields.io/npm/v/@devr-tools/szr?logo=npm" alt="npm version" />
+  </a>
+  <a href="https://pypi.org/project/szr/">
+    <img src="https://img.shields.io/pypi/v/szr?logo=pypi&logoColor=white" alt="PyPI version" />
+  </a>
   <a href="https://github.com/devr-tools/szr/actions/workflows/cd.yml">
     <img src="https://github.com/devr-tools/szr/actions/workflows/cd.yml/badge.svg?branch=main&event=push" alt="CD" />
   </a>
