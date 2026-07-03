@@ -14,22 +14,60 @@ import (
 	"github.com/devr-tools/szr/internal/filters"
 )
 
-func RunGrep(rt Runtime, cfg config.Config, args []string) int {
+// RunGrep executes the builtin grep-to-ripgrep rewrite. The second return
+// value reports whether the builtin handled the command; when it is false the
+// caller must delegate the original argv to the native binary via the engine
+// so raw semantics and exit codes are preserved.
+func RunGrep(rt Runtime, cfg config.Config, args []string) (int, bool) {
 	if len(args) == 0 {
 		fmt.Fprintln(rt.Stderr, "szr: grep requires a pattern")
-		return 2
+		return 2, true
+	}
+	if !grepBuiltinSupports(args) {
+		return 0, false
 	}
 
-	pattern := args[0]
-	searchPath := "."
-	extra := []string{}
-	if len(args) > 1 {
-		searchPath = args[1]
-		if len(args) > 2 {
-			extra = args[2:]
+	output, exitCode, executed := runBuiltinRipgrep(args)
+	if !executed {
+		// rg vanished between LookPath and exec; fall back to grep.
+		return 0, false
+	}
+	if exitCode > 1 {
+		fmt.Fprintln(rt.Stderr, output)
+		return exitCode, true
+	}
+
+	fmt.Fprintln(rt.Stdout, filters.GroupRipgrep(output, adjustCountForReasoningMode(cfg.ReasoningBudgetMode, cfg.MaxMatchGroups)))
+	return exitCode, true
+}
+
+// grepBuiltinSupports reports whether the builtin can handle the argv:
+// the `PATTERN [PATH] [rg flags]` shape with ripgrep available on PATH.
+// grep-style flag-first argv (e.g. `grep -rn PATTERN PATH`) and a missing
+// ripgrep both mean the grep the user actually typed must run instead.
+func grepBuiltinSupports(args []string) bool {
+	if strings.HasPrefix(args[0], "-") {
+		return false
+	}
+	_, err := exec.LookPath("rg")
+	return err == nil
+}
+
+func runBuiltinRipgrep(args []string) (string, int, bool) {
+	cmd := exec.Command("rg", buildBuiltinRipgrepArgs(args)...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if !errors.As(err, &exitErr) {
+			return "", 0, false
 		}
+		return string(output), exitErr.ExitCode(), true
 	}
+	return string(output), 0, true
+}
 
+func buildBuiltinRipgrepArgs(args []string) []string {
+	pattern, searchPath, extra := splitGrepArgs(args)
 	rgArgs := []string{"-n", "--no-heading"}
 	if shouldInjectBuiltinRipgrepExcludes(searchPath, extra) {
 		for _, glob := range filters.DefaultRipgrepExcludeGlobs() {
@@ -37,76 +75,107 @@ func RunGrep(rt Runtime, cfg config.Config, args []string) int {
 		}
 	}
 	rgArgs = append(rgArgs, pattern, searchPath)
-	rgArgs = append(rgArgs, extra...)
-	cmd := exec.Command("rg", rgArgs...)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		var exitErr *exec.ExitError
-		if !errors.As(err, &exitErr) {
-			fmt.Fprintf(rt.Stderr, "szr: %v\n", err)
-			return 1
-		}
-		if exitErr.ExitCode() > 1 {
-			fmt.Fprintln(rt.Stderr, string(output))
-			return exitErr.ExitCode()
-		}
-	}
-
-	fmt.Fprintln(rt.Stdout, filters.GroupRipgrep(string(output), adjustCountForReasoningMode(cfg.ReasoningBudgetMode, cfg.MaxMatchGroups)))
-	return 0
+	return append(rgArgs, extra...)
 }
 
-func RunFind(rt Runtime, cfg config.Config, args []string) int {
-	opts, exitCode := parseFindOptions(rt, args)
-	if exitCode != 0 {
-		return exitCode
+// splitGrepArgs interprets the builtin shape `PATTERN [PATH] [rg flags]`.
+// A flag in the path position is treated as the start of the rg flags.
+func splitGrepArgs(args []string) (string, string, []string) {
+	pattern := args[0]
+	searchPath := "."
+	extra := []string{}
+	if len(args) > 1 {
+		if strings.HasPrefix(args[1], "-") {
+			extra = args[1:]
+		} else {
+			searchPath = args[1]
+			extra = args[2:]
+		}
+	}
+	return pattern, searchPath, extra
+}
+
+// RunFind executes the builtin find emulation. The second return value
+// reports whether the builtin handled the command; when it is false the
+// caller must delegate the original argv to the native find binary.
+func RunFind(rt Runtime, cfg config.Config, args []string) (int, bool) {
+	opts, status := parseFindOptions(rt, args)
+	if status == findDelegate {
+		return 0, false
+	}
+	if status == findParseError {
+		return 2, true
 	}
 
 	root := filepath.Clean(opts.root)
 	limit := adjustCountForReasoningMode(cfg.ReasoningBudgetMode, cfg.MaxPreviewLines)
-	matches := []string{}
-	rootDepth := pathDepth(root)
-	err := filepathWalk(root, func(current string, info os.FileInfo, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if current == root {
-			return nil
-		}
-		normalized := filepath.ToSlash(current)
-		relative := filepath.ToSlash(strings.TrimPrefix(current, root))
-		relative = strings.TrimPrefix(relative, "/")
-		decision, err := opts.match(current, normalized, relative, info, rootDepth)
-		if err != nil {
-			return err
-		}
-		if decision.skipDir {
-			return skipDir()
-		}
-		if !decision.include {
-			return nil
-		}
-		displayPath := relative
-		if displayPath == "" {
-			displayPath = filepath.Base(normalized)
-		}
-		if displayPath == "" {
-			displayPath = normalized
-		}
-		matches = append(matches, filepath.ToSlash(displayPath))
-		return nil
-	})
+	matches, err := collectFindMatches(root, opts)
 	if err != nil {
 		fmt.Fprintf(rt.Stderr, "szr: %v\n", err)
-		return 1
+		return 1, true
 	}
 
 	if opts.grouped {
 		fmt.Fprintln(rt.Stdout, filters.SummarizeFindPathsGrouped(matches, limit))
-		return 0
+		return 0, true
 	}
 	fmt.Fprintln(rt.Stdout, filters.SummarizeFindPaths(matches, limit))
-	return 0
+	return 0, true
+}
+
+func collectFindMatches(root string, opts findOptions) ([]string, error) {
+	collector := &findCollector{root: root, rootDepth: pathDepth(root), opts: opts, matches: []string{}}
+	err := filepathWalk(root, collector.visit)
+	return collector.matches, err
+}
+
+type findCollector struct {
+	root      string
+	rootDepth int
+	opts      findOptions
+	matches   []string
+}
+
+func (c *findCollector) visit(current string, info os.FileInfo, walkErr error) error {
+	if walkErr != nil {
+		return walkErr
+	}
+	if current == c.root {
+		return nil
+	}
+	normalized := filepath.ToSlash(current)
+	relative := findRelativePath(current, c.root)
+	decision, err := c.opts.match(current, normalized, relative, info, c.rootDepth)
+	if err != nil || decision.skipDir || !decision.include {
+		return findVisitOutcome(err, decision)
+	}
+	c.matches = append(c.matches, filepath.ToSlash(findDisplayPath(normalized, relative)))
+	return nil
+}
+
+func findVisitOutcome(err error, decision findMatchDecision) error {
+	if err != nil {
+		return err
+	}
+	if decision.skipDir {
+		return skipDir()
+	}
+	return nil
+}
+
+func findRelativePath(current, root string) string {
+	relative := filepath.ToSlash(strings.TrimPrefix(current, root))
+	return strings.TrimPrefix(relative, "/")
+}
+
+func findDisplayPath(normalized, relative string) string {
+	if relative != "" {
+		return relative
+	}
+	if base := filepath.Base(normalized); base != "" {
+		return base
+	}
+	return normalized
 }
 
 func RunRGExternal(rt Runtime, runExternal func([]string) int, args []string) int {
@@ -133,7 +202,15 @@ type findMatchDecision struct {
 	skipDir bool
 }
 
-func parseFindOptions(rt Runtime, args []string) (findOptions, int) {
+type findParseStatus int
+
+const (
+	findParsed findParseStatus = iota
+	findParseError
+	findDelegate
+)
+
+func parseFindOptions(rt Runtime, args []string) (findOptions, findParseStatus) {
 	opts := findOptions{
 		root:     ".",
 		maxDepth: -1,
@@ -142,18 +219,40 @@ func parseFindOptions(rt Runtime, args []string) (findOptions, int) {
 	rootSet := false
 
 	for i := 0; i < len(args); i++ {
-		if strings.HasPrefix(args[i], "--") {
+		if isSupportedFindFlag(args[i]) {
 			if !applyFindFlag(rt, &opts, args, &i) {
-				return findOptions{}, 2
+				return findOptions{}, findParseError
 			}
 			continue
 		}
-		if !assignFindRoot(rt, &opts, args[i], &rootSet) {
-			return findOptions{}, 2
+		if !acceptFindRoot(&opts, args[i], &rootSet) {
+			return findOptions{}, findDelegate
 		}
 	}
 
-	return opts, 0
+	return opts, findParsed
+}
+
+// acceptFindRoot records the positional root argument. Native find
+// predicates (`-name`, `-type`, `-not`, ...) and additional roots are not
+// implemented by the builtin, so it reports false and the caller delegates
+// the whole command to the real find binary.
+func acceptFindRoot(opts *findOptions, arg string, rootSet *bool) bool {
+	if strings.HasPrefix(arg, "-") || *rootSet {
+		return false
+	}
+	opts.root = arg
+	*rootSet = true
+	return true
+}
+
+func isSupportedFindFlag(arg string) bool {
+	switch arg {
+	case "--name", "--path", "--exclude", "--type", "--max-depth", "--grouped":
+		return true
+	default:
+		return false
+	}
 }
 
 func applyFindFlag(rt Runtime, opts *findOptions, args []string, index *int) bool {
@@ -203,16 +302,6 @@ func findFlagValue(rt Runtime, args []string, index *int, flag string) (string, 
 		return "", false
 	}
 	return args[*index], true
-}
-
-func assignFindRoot(rt Runtime, opts *findOptions, value string, rootSet *bool) bool {
-	if *rootSet {
-		fmt.Fprintf(rt.Stderr, "szr: unexpected find argument %s\n", value)
-		return false
-	}
-	opts.root = value
-	*rootSet = true
-	return true
 }
 
 func (o findOptions) match(current, normalized, relative string, info os.FileInfo, rootDepth int) (findMatchDecision, error) {
