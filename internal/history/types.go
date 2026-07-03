@@ -25,6 +25,7 @@ type Record struct {
 	VerifierRepairs    int       `json:"verifier_repairs,omitempty"`
 	VerifierSkipped    bool      `json:"verifier_skipped,omitempty"`
 	DedupRef           string    `json:"dedup_ref,omitempty"`
+	DeltaRef           string    `json:"delta_ref,omitempty"`
 	TeePath            string    `json:"tee_path,omitempty"`
 }
 

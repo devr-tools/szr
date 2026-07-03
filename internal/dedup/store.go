@@ -37,6 +37,12 @@ const (
 	compactRetainEntries = 1500
 )
 
+// ScopeEnv is the environment variable that namespaces the dedup and delta
+// store. When set, runs read and write entries under that scope only; an
+// orchestrator opts a whole agent fleet into one shared scope by exporting a
+// single value before launching the agents. Unset means the machine scope.
+const ScopeEnv = "SZR_SESSION"
+
 // Entry records one run eligible for session dedup. RawHash is the full
 // SHA-256 of the raw output (the dedup key); ArtifactHash is the SHA-256 of
 // the stored artifact bytes, which differs from RawHash only when the
@@ -52,6 +58,9 @@ type Entry struct {
 	ExitCode           int       `json:"exit_code"`
 	RawBytes           int64     `json:"raw_bytes,omitempty"`
 	Truncated          bool      `json:"truncated,omitempty"`
+	// Scope namespaces the entry to one agent session (ScopeEnv). Entries
+	// without a scope belong to the machine scope.
+	Scope string `json:"scope,omitempty"`
 }
 
 // Ref returns the short reference displayed to the caller.
@@ -63,20 +72,24 @@ func (e Entry) Ref() string {
 }
 
 // Key identifies the honesty boundary for a dedup match: the same command
-// text run in the same directory with the same exit code and byte-identical
-// raw output.
+// text run in the same directory and session scope with the same exit code
+// and byte-identical raw output. Scoped runs match entries in the same scope
+// only, and unscoped runs match unscoped entries only, so parallel fleets
+// never bleed references into sessions that did not opt in.
 type Key struct {
 	CommandFingerprint string
 	Cwd                string
 	ExitCode           int
 	RawHash            string
+	Scope              string
 }
 
 func (k Key) matches(e Entry) bool {
 	return e.CommandFingerprint == k.CommandFingerprint &&
 		e.Cwd == k.Cwd &&
 		e.ExitCode == k.ExitCode &&
-		e.RawHash == k.RawHash
+		e.RawHash == k.RawHash &&
+		e.Scope == k.Scope
 }
 
 type Store struct {
@@ -189,8 +202,30 @@ func (s *Store) Matches(key Key, since time.Time) ([]Entry, error) {
 	return matches, nil
 }
 
+// CommandMatches returns the entries recorded for the same command
+// fingerprint, working directory, and scope at or after since, newest first,
+// regardless of exit code or output hash. This is the delta-render baseline
+// lookup: the most recent output the same command produced in the same place.
+func (s *Store) CommandMatches(fingerprint string, cwd string, scope string, since time.Time) ([]Entry, error) {
+	entries, err := s.LoadAll()
+	if err != nil {
+		return nil, err
+	}
+	matches := make([]Entry, 0, 4)
+	for _, entry := range entries {
+		if entry.CommandFingerprint == fingerprint && entry.Cwd == cwd &&
+			entry.Scope == scope && !entry.Timestamp.Before(since) {
+			matches = append(matches, entry)
+		}
+	}
+	sortNewestFirst(matches)
+	return matches, nil
+}
+
 // FindRef resolves a reference by prefix match on the raw hash, preferring
-// the newest entry. References shorter than MinRefLength are rejected.
+// the newest entry. Refs resolve across all scopes: a ref hash is
+// content-addressed, so expanding it is always safe regardless of which
+// session stored it. References shorter than MinRefLength are rejected.
 func (s *Store) FindRef(ref string) (Entry, bool, error) {
 	ref = strings.ToLower(strings.TrimSpace(ref))
 	if len(ref) < MinRefLength {

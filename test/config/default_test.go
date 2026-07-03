@@ -17,6 +17,9 @@ func TestDefault(t *testing.T) {
 	if !cfg.Advanced.SessionDedup || cfg.Advanced.SessionDedupWindowMinutes != config.DefaultSessionDedupWindowMinutes {
 		t.Fatalf("unexpected session dedup defaults: %#v", cfg.Advanced)
 	}
+	if !cfg.Advanced.DeltaRender {
+		t.Fatalf("unexpected delta render default: %#v", cfg.Advanced)
+	}
 }
 
 func TestNormalizeSessionDedupWindow(t *testing.T) {

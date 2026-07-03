@@ -75,6 +75,84 @@ func TestMatchesRespectsKeyAndWindow(t *testing.T) {
 	}
 }
 
+func TestMatchesIsolatesScopes(t *testing.T) {
+	t.Parallel()
+	store := dedup.New(t.TempDir())
+	now := time.Now()
+	machine := entryFixture("aaaa7777", now)
+	scoped := entryFixture("aaaa7777", now)
+	scoped.Scope = "swarm-a"
+	otherScope := entryFixture("aaaa7777", now)
+	otherScope.Scope = "swarm-b"
+	for _, entry := range []dedup.Entry{machine, scoped, otherScope} {
+		if err := store.Append(entry); err != nil {
+			t.Fatalf("append: %v", err)
+		}
+	}
+
+	since := now.Add(-30 * time.Minute)
+	for _, tc := range []struct {
+		scope string
+		want  string
+	}{
+		{scope: "", want: ""},
+		{scope: "swarm-a", want: "swarm-a"},
+		{scope: "swarm-b", want: "swarm-b"},
+	} {
+		matches, err := store.Matches(dedup.Key{
+			CommandFingerprint: machine.CommandFingerprint,
+			Cwd:                machine.Cwd,
+			ExitCode:           machine.ExitCode,
+			RawHash:            machine.RawHash,
+			Scope:              tc.scope,
+		}, since)
+		if err != nil {
+			t.Fatalf("matches scope %q: %v", tc.scope, err)
+		}
+		if len(matches) != 1 || matches[0].Scope != tc.want {
+			t.Fatalf("expected exactly the %q-scope entry, got %#v", tc.scope, matches)
+		}
+	}
+}
+
+func TestCommandMatchesScopeWindowAndOrder(t *testing.T) {
+	t.Parallel()
+	store := dedup.New(t.TempDir())
+	now := time.Now()
+	older := entryFixture("bbbb8888", now.Add(-10*time.Minute))
+	newer := entryFixture("cccc9999", now)
+	newer.ExitCode = 1
+	expired := entryFixture("dddd0000", now.Add(-2*time.Hour))
+	scoped := entryFixture("eeee1111", now)
+	scoped.Scope = "swarm-a"
+	otherCwd := entryFixture("ffff2222", now)
+	otherCwd.Cwd = "/elsewhere"
+	for _, entry := range []*dedup.Entry{&newer, &expired, &scoped, &otherCwd} {
+		entry.CommandFingerprint = older.CommandFingerprint
+	}
+	for _, entry := range []dedup.Entry{older, newer, expired, scoped, otherCwd} {
+		if err := store.Append(entry); err != nil {
+			t.Fatalf("append: %v", err)
+		}
+	}
+
+	matches, err := store.CommandMatches(older.CommandFingerprint, older.Cwd, "", now.Add(-30*time.Minute))
+	if err != nil {
+		t.Fatalf("command matches: %v", err)
+	}
+	if len(matches) != 2 || matches[0].RawHash != newer.RawHash || matches[1].RawHash != older.RawHash {
+		t.Fatalf("expected newest-first machine-scope matches across exit codes, got %#v", matches)
+	}
+
+	scopedMatches, err := store.CommandMatches(scoped.CommandFingerprint, scoped.Cwd, "swarm-a", now.Add(-30*time.Minute))
+	if err != nil {
+		t.Fatalf("scoped command matches: %v", err)
+	}
+	if len(scopedMatches) != 1 || scopedMatches[0].Scope != "swarm-a" {
+		t.Fatalf("expected only the swarm-a entry, got %#v", scopedMatches)
+	}
+}
+
 func TestLoadAllToleratesCorruptLines(t *testing.T) {
 	t.Parallel()
 	dataDir := t.TempDir()

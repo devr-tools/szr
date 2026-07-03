@@ -49,6 +49,9 @@ type Result struct {
 	// DedupRef is the short session-dedup reference emitted in place of the
 	// render when the output was byte-identical to a recent run.
 	DedupRef string
+	// DeltaRef is the baseline reference behind a delta digest render, set
+	// when the run rendered as a change digest against the previous run.
+	DeltaRef string
 }
 
 type Classification struct {
