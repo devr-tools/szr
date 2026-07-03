@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.12.0](https://github.com/devr-tools/szr/compare/v0.11.0...v0.12.0) (2026-07-03)
+
+
+### Features
+
+* **filters:** severity-aware summaries for log files ([742b4ab](https://github.com/devr-tools/szr/commit/742b4ab5d7314f68661279f2c9f32adfc713f7bb))
+* **profiles:** summarize raw gh api JSON responses ([eee2d1f](https://github.com/devr-tools/szr/commit/eee2d1f4a54fd6dfd02ec43c9600d7be9b502072))
+* summarize raw gh api JSON responses ([efbdbf1](https://github.com/devr-tools/szr/commit/efbdbf1545a6a30b100771f848e6deb89add44b4))
+
+
+### Bug Fixes
+
+* **cli:** delegate unsupported builtin argv to native binaries ([0b207f5](https://github.com/devr-tools/szr/commit/0b207f58a54892cabc4b8125daa7cf0c2e977a46))
+* **cli:** report spread savings over filtered traffic and skip zero-output hotspots ([b13d9f3](https://github.com/devr-tools/szr/commit/b13d9f35f754d5cf612bd71beae826389736b22b))
+* **cli:** restore exported localcmd signatures for API compatibility ([bd36457](https://github.com/devr-tools/szr/commit/bd36457f09394d0cbeb4ce08dbd2ce731102ffdb))
+* **engine:** fidelity floor for the compression contract ([8e80a3b](https://github.com/devr-tools/szr/commit/8e80a3b683baf7a367dd2fb2de7df01c0d5b852a))
+* **engine:** retry command start on ETXTBSY ([98eabf7](https://github.com/devr-tools/szr/commit/98eabf75b7cc2ea3d66037f95069261ceac7c70d))
+* fidelity-first filtering — never destroy the answer ([db8d6bd](https://github.com/devr-tools/szr/commit/db8d6bdc325a509fbcacf91d20a471b9517c011d))
+* **filters:** list small find results verbatim and lead gh pr view with its headline ([f8033f2](https://github.com/devr-tools/szr/commit/f8033f28a75a5ef4fbee30369204a6270a8ad969))
+* **profiles:** git rewrites respect explicit user flags and small diffs keep content ([bffdd3f](https://github.com/devr-tools/szr/commit/bffdd3fc442f4d2cac3b61da5b6069138fca8260))
+
 ## [0.11.0](https://github.com/devr-tools/szr/compare/v0.10.0...v0.11.0) (2026-07-02)
 
 
