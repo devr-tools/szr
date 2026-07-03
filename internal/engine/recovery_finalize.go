@@ -1,6 +1,10 @@
 package engine
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/devr-tools/szr/internal/history"
+)
 
 type renderedDisplayFinalizer struct {
 	profile             Profile
@@ -20,6 +24,33 @@ type renderedDisplayFinalizer struct {
 }
 
 func (f renderedDisplayFinalizer) finalize() string {
+	return f.preferTinyRawOverSuffixedDisplay(f.assemble())
+}
+
+// preferTinyRawOverSuffixedDisplay enforces never-worse-than-raw on the
+// FINAL display: when a complete tiny raw output is strictly cheaper than
+// the render plus its artifact suffix, the raw output wins and no pointer
+// is needed - it omits nothing. Failures keep their suffixes regardless;
+// recovery references matter most there.
+func (f renderedDisplayFinalizer) preferTinyRawOverSuffixedDisplay(display string) string {
+	if f.passthrough || f.ultraCompact || !f.guardSmallOutput || !f.captureComplete || f.exitCode != 0 {
+		return display
+	}
+	raw := strings.TrimSpace(f.rawCombined)
+	if raw == "" || len(raw) > neverWorseThanRawMaxBytes {
+		return display
+	}
+	rawTokens := history.EstimateTokens(raw)
+	if rawTokens > neverWorseThanRawMaxTokens {
+		return display
+	}
+	if history.EstimateTokens(display) > rawTokens {
+		return raw
+	}
+	return display
+}
+
+func (f renderedDisplayFinalizer) assemble() string {
 	// Apply the never-worse-than-raw preference to the rendered content
 	// before artifact suffixes are attached: the guard must not strip
 	// tee/recovery references when it decides tiny raw output is cheaper.
@@ -38,6 +69,10 @@ func (f renderedDisplayFinalizer) finalize() string {
 	if len(suffixes) == 0 {
 		return f.rendered
 	}
+	return f.assembleWithSuffixes(suffixes)
+}
+
+func (f renderedDisplayFinalizer) assembleWithSuffixes(suffixes []string) string {
 	rawTokens := trueRawTokenCount(f.rawTokens, f.rawCombined)
 	if !f.compressionContract || rawTokens < compressionContractMinRawTokens {
 		return appendDisplaySuffix(f.rendered, suffixes[0])

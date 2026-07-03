@@ -58,10 +58,10 @@ func shouldKeepCanonicalSmallSummary(_ Profile, rendered string, rawCombined str
 	if exitCode != 0 || rendered == rawCombined {
 		return false
 	}
-	// The marker earns a summary modest slack over tiny raw output, but a
-	// "summary" that outweighs what it summarizes by more than a quarter is
-	// not one - prefer the raw output instead.
-	if history.EstimateTokens(rendered)*4 > history.EstimateTokens(rawCombined)*5 {
+	// No summary of a complete tiny output justifies costing more than the
+	// output itself: the marker only breaks the equal-size tie, never a
+	// deficit - prefer the raw output whenever it is strictly cheaper.
+	if history.EstimateTokens(rendered) > history.EstimateTokens(rawCombined) {
 		return false
 	}
 	return hasCanonicalCompactSummaryMarker(rendered)

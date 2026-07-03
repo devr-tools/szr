@@ -72,7 +72,9 @@ func TestRunRoutes(t *testing.T) {
 		{"doctor missing tool", []string{"doctor"}, 0, []string{"go: missing"}, nil, ""},
 		{"git status", []string{"git", "status"}, 0, []string{"main...origin/main", "M  README.md"}, nil, ""},
 		{"git log", []string{"git", "log"}, 0, []string{"abc123 first", "def456 second"}, nil, ""},
-		{"git diff", []string{"git", "diff"}, 0, []string{"files=1 +1 -1", "a.go | 2 +-"}, nil, ""},
+		// A tiny diff's complete raw output is cheaper than summary+pointer,
+		// so the final-display guard prefers it.
+		{"git diff", []string{"git", "diff"}, 0, []string{"diff --git a/a.go b/a.go", "1 insertion(+)"}, nil, ""},
 		{"go test", []string{"go", "test", "./..."}, 0, []string{"pkg/fail", "TestSad"}, nil, ""},
 		{"go build", []string{"go", "build"}, 1, []string{"compile error"}, nil, ""},
 		{"go vet", []string{"go", "vet"}, 1, []string{"warning: suspicious"}, nil, ""},
