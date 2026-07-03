@@ -120,6 +120,14 @@ func RunCompare(ctx context.Context, rt Runtime, args []string) int {
 		fmt.Fprintln(rt.Stderr, "szr: compare requires a command")
 		return 2
 	}
+	// Check the ORIGINAL argv: the engine unwraps shell `-c` wrappers into
+	// their inner command for matching, so the effective command no longer
+	// betrays the wrapper — and compare must not silently execute the inner
+	// command without its shell.
+	if isShellTrampoline(command[0]) {
+		fmt.Fprintln(rt.Stderr, "szr: shell wrapper commands are not allowed in compare; run the target binary directly")
+		return 2
+	}
 
 	cfg := rt.Config
 	if maxLines > 0 {

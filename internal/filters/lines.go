@@ -164,24 +164,46 @@ var diagnosticAnchorExtensions = []string{
 	".lua:", ".dart:", ".clj:", ".sh:", ".bash:", ".zig:", ".vue:", ".svelte:",
 }
 
+// nodeInlineAnchorMarkers are the pseudo-file anchors node prints for
+// inline scripts (`node -e`) and stdin programs; their frames carry
+// line:col positions like real source anchors ("at [eval]:1:7").
+var nodeInlineAnchorMarkers = []string{"[eval]:", "[stdin]:"}
+
 func DiagnosticAnchor(line string) string {
 	lower := strings.ToLower(line)
 	for _, ext := range diagnosticAnchorExtensions {
-		idx := strings.Index(lower, ext)
-		if idx < 0 {
+		if idx := strings.Index(lower, ext); idx >= 0 {
+			return expandAnchorToken(line, idx, idx+len(ext))
+		}
+	}
+	return nodeInlineAnchor(line, lower)
+}
+
+// nodeInlineAnchor recognizes node's bracketed pseudo-file frames when a
+// digit follows the marker, so "[eval]:1:7" anchors but prose containing
+// "[eval]:" does not.
+func nodeInlineAnchor(line string, lower string) string {
+	for _, marker := range nodeInlineAnchorMarkers {
+		idx := strings.Index(lower, marker)
+		if idx < 0 || idx+len(marker) >= len(line) {
 			continue
 		}
-		start := idx
-		for start > 0 && !strings.ContainsRune(" \t([{\"'", rune(line[start-1])) {
-			start--
+		if c := line[idx+len(marker)]; c < '0' || c > '9' {
+			continue
 		}
-		end := idx + len(ext)
-		for end < len(line) && !strings.ContainsRune(" \t)]}\"'", rune(line[end])) {
-			end++
-		}
-		return line[start:end]
+		return expandAnchorToken(line, idx, idx+len(marker))
 	}
 	return ""
+}
+
+func expandAnchorToken(line string, start int, end int) string {
+	for start > 0 && !strings.ContainsRune(" \t([{\"'", rune(line[start-1])) {
+		start--
+	}
+	for end < len(line) && !strings.ContainsRune(" \t)]}\"'", rune(line[end])) {
+		end++
+	}
+	return line[start:end]
 }
 
 type CompactLineReducer struct {

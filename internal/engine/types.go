@@ -15,6 +15,10 @@ type Invocation struct {
 	ReasoningBudgetMode string
 	Advanced            config.Advanced
 	Classification      Classification
+	// ShellWrap is set when Command was unwrapped from a shell `-c` wrapper
+	// for classification and matching only; execution still runs the
+	// original wrapper argv (see ShellWrap.execCommand).
+	ShellWrap *ShellWrap
 }
 
 type Execution struct {
@@ -76,6 +80,7 @@ type GitCommandFacts struct {
 type JavaScriptCommandFacts struct {
 	IsPackageManagerTest bool
 	IsWorkspaceCommand   bool
+	IsNodeEval           bool
 	Runner               string
 	StructuredMode       bool
 }

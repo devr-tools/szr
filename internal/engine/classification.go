@@ -62,6 +62,9 @@ func canonicalArgsForClassification(args []string) []string {
 		return nil
 	}
 
+	if inner, ok := unwrapShellCommandArgs(args); ok {
+		args = inner
+	}
 	trimmed := stripCommandWrappers(args)
 	if len(trimmed) == 0 {
 		return nil
@@ -310,6 +313,7 @@ func classifyJavaScriptCommand(args []string) JavaScriptCommandFacts {
 
 	facts.IsPackageManagerTest = isPackageManagerTestCommand(args)
 	facts.IsWorkspaceCommand = isJavaScriptWorkspaceCommand(args)
+	facts.IsNodeEval = isNodeEvalCommand(args)
 	facts.Runner = detectJavaScriptRunner(args)
 	if facts.Runner != "" {
 		facts.StructuredMode = hasStructuredJavaScriptArgs(args, facts.Runner)
@@ -338,6 +342,32 @@ func isJavaScriptWorkspaceCommand(args []string) bool {
 	default:
 		return false
 	}
+}
+
+// isNodeEvalCommand reports `node -e/--eval/-p/--print` inline-script runs.
+// Only flags before the first positional argument count: node stops parsing
+// its own options at the script path.
+func isNodeEvalCommand(args []string) bool {
+	if len(args) < 2 || args[0] != "node" {
+		return false
+	}
+	for _, arg := range args[1:] {
+		if arg == "--" || !strings.HasPrefix(arg, "-") {
+			return false
+		}
+		if isNodeEvalFlag(arg) {
+			return true
+		}
+	}
+	return false
+}
+
+func isNodeEvalFlag(arg string) bool {
+	switch arg {
+	case "-e", "--eval", "-p", "--print", "-pe", "-ep":
+		return true
+	}
+	return strings.HasPrefix(arg, "--eval=") || strings.HasPrefix(arg, "--print=")
 }
 
 func detectJavaScriptRunner(args []string) string {
