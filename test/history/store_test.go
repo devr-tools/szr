@@ -244,6 +244,12 @@ func TestBudgetSuggestions(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "history.jsonl")
 	store := history.New(path)
 	for i := 0; i < 4; i++ {
+		// Only the first run fails: loosen suggestions are suppressed for
+		// fingerprints that fail on (nearly) every run.
+		exitCode := 0
+		if i == 0 {
+			exitCode = 1
+		}
 		if err := store.Append(history.Record{
 			Timestamp:          time.Date(2026, 5, 20, 10+i, 0, 0, 0, time.UTC),
 			Command:            "szr go build ./...",
@@ -251,7 +257,7 @@ func TestBudgetSuggestions(t *testing.T) {
 			Profile:            "go-build",
 			ProfileConfidence:  "medium",
 			DurationMS:         40,
-			ExitCode:           1,
+			ExitCode:           exitCode,
 			RawTokens:          200,
 			FilteredTokens:     12,
 			SavedTokens:        188,
@@ -416,8 +422,11 @@ func TestSummaryPrioritizesMaterialHotspotsOverTinyNoise(t *testing.T) {
 	if got := summary.CommandHotspots[0].Command; got != "szr git diff" {
 		t.Fatalf("expected material diff hotspot to rank first, got %#v", summary.CommandHotspots)
 	}
-	if len(summary.FingerprintHotspots) != 1 || summary.FingerprintHotspots[0].Command != "szr git diff --stat" {
-		t.Fatalf("expected fingerprint hotspot to favor material opportunity, got %#v", summary.FingerprintHotspots)
+	// The diff fingerprint averages ~62% savings, which is healthy: it must
+	// not be reported as a poor-savings fingerprint, and the tiny negative
+	// single-run status record stays suppressed as noise.
+	if len(summary.FingerprintHotspots) != 0 {
+		t.Fatalf("expected healthy fingerprints to stay out of poor-savings table, got %#v", summary.FingerprintHotspots)
 	}
 }
 

@@ -14,19 +14,6 @@ func commandHotspotSeverity(item CommandHotspot, rawTokens, filteredTokens int) 
 	return (emitted + fallbackPenalty + failurePenalty + latencyPenalty + efficiencyPenalty) * repetitionWeight
 }
 
-func fingerprintHotspotSeverity(item FingerprintStat, rawTokens, filteredTokens int) float64 {
-	volumeWeight := scaledVolumeWeight(rawTokens, 32)
-	overhead := 0.0
-	if item.AveragePct < 0 {
-		overhead = -item.AveragePct * float64(rawTokens) / 100 * 2
-		if isTinyHotspotOverhead(rawTokens, filteredTokens, item.AveragePct) {
-			overhead *= 0.2
-		}
-	}
-	poorSavings := hotspotSavingsPenalty(item.AveragePct, rawTokens, filteredTokens)
-	return (float64(filteredTokens) + overhead + poorSavings) * volumeWeight
-}
-
 func hasHotspotSavingsOpportunity(rawTokens, filteredTokens int) bool {
 	return rawTokens >= 96 || filteredTokens >= 72
 }

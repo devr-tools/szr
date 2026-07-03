@@ -478,6 +478,12 @@ func TestSpreadBudgetSuggestionsOutput(t *testing.T) {
 	testutil.EnsurePaths(t, paths)
 	store := history.New(paths.HistoryFile)
 	for i := 0; i < 4; i++ {
+		// Only the first run fails: loosen suggestions are suppressed for
+		// fingerprints that fail on (nearly) every run.
+		exitCode := 0
+		if i == 0 {
+			exitCode = 1
+		}
 		if err := store.Append(history.Record{
 			Timestamp:          time.Date(2026, 5, 20, 10+i, 0, 0, 0, time.UTC),
 			Command:            "szr go build ./...",
@@ -485,7 +491,7 @@ func TestSpreadBudgetSuggestionsOutput(t *testing.T) {
 			Profile:            "go-build",
 			ProfileConfidence:  "medium",
 			DurationMS:         40,
-			ExitCode:           1,
+			ExitCode:           exitCode,
 			RawBytesRead:       240,
 			BytesParsed:        160,
 			BytesEmitted:       48,
