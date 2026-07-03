@@ -68,6 +68,14 @@ func summarizeJSON(input string, maxLines int) (string, bool, int) {
 		return "", false, 0
 	}
 
+	if rendered, ok := summarizeUniformJSONStream(lines, maxLines); ok {
+		full, fullOK := summarizeUniformJSONStream(lines, largePreviewLimit(maxLines))
+		if !fullOK {
+			return rendered, true, 0
+		}
+		return rendered, true, omittedRenderedLines(full, rendered)
+	}
+
 	out := make([]string, 0, len(lines))
 	fullOut := make([]string, 0, len(lines))
 	perEntryLines := maxLines / len(lines)
@@ -92,10 +100,34 @@ func summarizeJSON(input string, maxLines int) (string, bool, int) {
 }
 
 func summarizeSingleJSON(input string, maxLines int) (string, bool) {
-	if !json.Valid([]byte(input)) {
+	var value any
+	if err := json.Unmarshal([]byte(input), &value); err != nil {
 		return "", false
 	}
-	return shared.SummarizeJSONPreview([]byte(input), maxLines), true
+	// Uniform object arrays (API list responses) take the tabular JSON
+	// preview: keys declared once in a header, values in delimited rows, with
+	// anomalous rows kept ahead of positional truncation.
+	if items, ok := value.([]any); ok {
+		if rendered, tabular := shared.SummarizeUniformJSONArray("array", items, maxLines); tabular {
+			return rendered, true
+		}
+	}
+	return shared.SummarizeJSONValuePreview(value, maxLines), true
+}
+
+// summarizeUniformJSONStream renders an NDJSON stream of uniform objects as
+// one tabular JSON preview instead of per-line previews, which repeat the
+// same leading keys for every event.
+func summarizeUniformJSONStream(lines []string, maxLines int) (string, bool) {
+	items := make([]any, 0, len(lines))
+	for _, line := range lines {
+		var value any
+		if err := json.Unmarshal([]byte(strings.TrimSpace(line)), &value); err != nil {
+			return "", false
+		}
+		items = append(items, value)
+	}
+	return shared.SummarizeUniformJSONArray("stream", items, maxLines)
 }
 
 func joinStreams(stdout, stderr string) string {

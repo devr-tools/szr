@@ -1,6 +1,7 @@
 package jsonquery_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -30,6 +31,46 @@ func TestSummarizeQueryOutput(t *testing.T) {
 	fallback := jsonquery.SummarizeQueryOutput("", "jq: parse error: Invalid numeric literal at line 1, column 4", 4)
 	if !strings.Contains(fallback, "jq: parse error") {
 		t.Fatalf("expected stderr fallback, got:\n%s", fallback)
+	}
+}
+
+func TestSummarizeQueryOutputTabularUniformArray(t *testing.T) {
+	t.Parallel()
+
+	items := make([]string, 0, 40)
+	for i := 0; i < 40; i++ {
+		state := "open"
+		if i == 27 {
+			state = "spam_flagged"
+		}
+		items = append(items, fmt.Sprintf(`{"id":%d,"state":%q,"author":"alice"}`, 9000+i, state))
+	}
+
+	rendered := jsonquery.SummarizeQueryOutput("["+strings.Join(items, ",")+"]", "", 8)
+	for _, want := range []string{
+		"array len=40 uniform objects, cols: id|state|author",
+		"9000|open|alice",
+		"#27 9027|spam_flagged|alice",
+		"more rows",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected %q in tabular array output:\n%s", want, rendered)
+		}
+	}
+
+	ndjson := jsonquery.SummarizeQueryOutput(strings.Join(items, "\n"), "", 8)
+	for _, want := range []string{
+		"stream len=40 uniform objects, cols: id|state|author",
+		"#27 9027|spam_flagged|alice",
+	} {
+		if !strings.Contains(ndjson, want) {
+			t.Fatalf("expected %q in tabular stream output:\n%s", want, ndjson)
+		}
+	}
+
+	kind, summary, requireRawCapture := jsonquery.QueryOutputRecoveryInfo("["+strings.Join(items, ",")+"]", "", 8)
+	if kind != "full-output" || !strings.Contains(summary, "additional lines") || !requireRawCapture {
+		t.Fatalf("unexpected tabular recovery info: kind=%q summary=%q requireRawCapture=%v", kind, summary, requireRawCapture)
 	}
 }
 
