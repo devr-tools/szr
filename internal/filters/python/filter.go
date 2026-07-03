@@ -37,6 +37,7 @@ func summarizePytestResult(input string, maxLines int) pythonSummaryResult {
 
 	summaries := uniqueStrings(shared.FoldConsecutiveLines(collectPytestSummaries(lines)))
 	failures := uniqueStrings(shared.FoldConsecutiveLines(collectPytestShortFailures(lines)))
+	failures = mergePytestSectionNames(failures, collectPytestSectionNames(lines))
 	details := uniqueStrings(shared.FoldConsecutiveLines(collectPytestDetails(lines)))
 
 	if len(failures) == 0 && len(details) == 0 {
@@ -151,6 +152,9 @@ func collectPytestSummaries(lines []string) []string {
 	return out
 }
 
+// collectPytestShortFailures keeps every FAILED/ERROR entry from the short
+// test summary section (including parametrized ids), merging wrapped
+// continuation lines into their entry instead of stopping at the first one.
 func collectPytestShortFailures(lines []string) []string {
 	out := []string{}
 	inSummary := false
@@ -158,28 +162,81 @@ func collectPytestShortFailures(lines []string) []string {
 		trimmed := strings.TrimSpace(line)
 		normalized := normalizePytestSummaryLine(trimmed)
 
-		if strings.HasPrefix(normalized, "FAILED ") || strings.HasPrefix(normalized, "ERROR ") {
-			out = append(out, normalized)
-			if !inSummary {
-				continue
-			}
-		}
-
 		if strings.EqualFold(normalized, "short test summary info") {
 			inSummary = true
 			continue
 		}
-		if !inSummary {
+		if strings.HasPrefix(normalized, "FAILED ") || strings.HasPrefix(normalized, "ERROR ") {
+			out = append(out, normalized)
 			continue
 		}
-		if isDividerLine(trimmed) {
+		if !inSummary || isDividerLine(trimmed) {
+			continue
+		}
+		if isPytestStatusSummary(normalized) {
+			break
+		}
+		if isPytestSummaryStatusEntry(normalized) {
 			continue
 		}
 		if len(out) > 0 {
-			break
+			out[len(out)-1] = clip(out[len(out)-1]+" "+normalized, 200)
 		}
 	}
 	return out
+}
+
+// isPytestSummaryStatusEntry matches non-failure entries that -ra report
+// chars add to the short summary section.
+func isPytestSummaryStatusEntry(line string) bool {
+	for _, prefix := range []string{"SKIPPED", "XFAIL", "XPASS", "PASSED", "RERUN", "WARNING"} {
+		if strings.HasPrefix(line, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// collectPytestSectionNames extracts failing test ids from the
+// "_____ test_name _____" banners inside FAILURES/ERRORS blocks so ids
+// survive even when the short summary section is missing or truncated.
+func collectPytestSectionNames(lines []string) []string {
+	out := []string{}
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if len(trimmed) < 8 || !strings.HasPrefix(trimmed, "__") || !strings.HasSuffix(trimmed, "__") {
+			continue
+		}
+		name := strings.TrimSpace(strings.Trim(trimmed, "_"))
+		if name == "" || strings.ContainsAny(name, "=|") {
+			continue
+		}
+		out = append(out, clip(name, 160))
+	}
+	return out
+}
+
+// mergePytestSectionNames appends section-banner test ids that no short
+// summary entry already covers.
+func mergePytestSectionNames(failures, sectionNames []string) []string {
+	for _, name := range sectionNames {
+		fields := strings.Fields(name)
+		if len(fields) == 0 {
+			continue
+		}
+		id := fields[len(fields)-1]
+		covered := false
+		for _, failure := range failures {
+			if strings.Contains(failure, id) {
+				covered = true
+				break
+			}
+		}
+		if !covered {
+			failures = append(failures, name)
+		}
+	}
+	return failures
 }
 
 func collectPytestDetails(lines []string) []string {

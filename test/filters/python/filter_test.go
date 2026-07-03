@@ -71,6 +71,55 @@ func TestSummarizePytestFixtureError(t *testing.T) {
 	}
 }
 
+func TestSummarizePytestKeepsEveryShortSummaryFailure(t *testing.T) {
+	input := strings.Join([]string{
+		"collected 52 items",
+		"=================================== FAILURES ===================================",
+		"__________________________ test_rate_limit_headers ____________________________",
+		">       assert resp.status_code == 429",
+		"E       assert 200 == 429",
+		"tests/test_api.py:87: AssertionError",
+		"________________________ test_normalize_rejects_empty _________________________",
+		">       assert normalize_user(\"   \") == \"anonymous\"",
+		"E       AssertionError: assert '' == 'anonymous'",
+		"tests/test_users.py:31: AssertionError",
+		"=========================== short test summary info ============================",
+		"FAILED tests/test_api.py::test_rate_limit_headers - assert 200 == 429",
+		"FAILED tests/test_users.py::test_normalize_rejects_empty - AssertionError: as...",
+		"FAILED tests/test_users.py::test_normalize_variants[space-2] - AssertionError",
+		"========================= 3 failed, 49 passed in 4.83s =========================",
+	}, "\n")
+
+	got := pyfilter.SummarizePytest(input, 12)
+	for _, want := range []string{
+		"FAILED tests/test_api.py::test_rate_limit_headers - assert 200 == 429",
+		"FAILED tests/test_users.py::test_normalize_rejects_empty - AssertionError: as...",
+		"FAILED tests/test_users.py::test_normalize_variants[space-2] - AssertionError",
+		"3 failed, 49 passed in 4.83s",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in pytest summary:\n%s", want, got)
+		}
+	}
+}
+
+func TestSummarizePytestRecoversIdsFromSectionBanners(t *testing.T) {
+	input := strings.Join([]string{
+		"collected 12 items",
+		"=================================== FAILURES ===================================",
+		"________________________ test_normalize_rejects_empty _________________________",
+		">       assert normalize_user(\"   \") == \"anonymous\"",
+		"E       AssertionError: assert '' == 'anonymous'",
+		"tests/test_users.py:31: AssertionError",
+		"========================= 1 failed, 11 passed in 0.61s ========================",
+	}, "\n")
+
+	got := pyfilter.SummarizePytest(input, 8)
+	if !strings.Contains(got, "test_normalize_rejects_empty") {
+		t.Fatalf("expected section-banner test id retention:\n%s", got)
+	}
+}
+
 func TestSummarizePytestPass(t *testing.T) {
 	input := "collected 2 items\n\n..\n============================== 2 passed in 0.04s ==============================\n"
 	if got := pyfilter.SummarizePytest(input, 4); got != "collected 2 items\n2 passed in 0.04s" {
