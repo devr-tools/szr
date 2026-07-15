@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/devr-tools/szr/internal/engine"
 )
 
 type spreadUI struct {
@@ -314,6 +316,9 @@ func formatTokenCount(value int) string {
 func (a *App) runProfiles() int {
 	for _, profile := range a.engine.Profiles() {
 		fmt.Printf("%s\n  %s\n", profile.Name, profile.Description)
+		if profile.Source != "" && profile.Source != engine.SourceBuiltin {
+			fmt.Printf("  source: %s\n", profile.Source)
+		}
 		if profile.Confidence != "" {
 			fmt.Printf("  confidence: %s\n", profile.Confidence)
 		}

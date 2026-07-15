@@ -11,7 +11,7 @@ import (
 )
 
 func (a *App) runSpread(args []string) int {
-	showHistory, asJSON, code := parseSpreadArgs(args)
+	opts, code := parseSpreadArgs(args)
 	if code != 0 {
 		return code
 	}
@@ -23,10 +23,11 @@ func (a *App) runSpread(args []string) int {
 	}
 	summaryRecords := filterSpreadRecords(records)
 	summary := history.Summarize(summaryRecords, 8)
-	if asJSON {
+	cost := a.spreadCostReport(summary, opts)
+	if opts.asJSON {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		_ = enc.Encode(summary)
+		_ = enc.Encode(spreadJSONPayload{Summary: summary, Cost: cost})
 		return 0
 	}
 
@@ -62,25 +63,52 @@ func (a *App) runSpread(args []string) int {
 	renderSpreadHotspots(ui, summary.CommandHotspots)
 	renderSpreadFingerprints(ui, summary.FingerprintHotspots)
 	renderSpreadBudgetSuggestions(ui, summary.BudgetSuggestions)
-	renderSpreadHistory(ui, summary.Recent, showHistory)
+	renderSpreadCost(ui, cost)
+	renderSpreadHistory(ui, summary.Recent, opts.showHistory)
 	return 0
 }
 
-func parseSpreadArgs(args []string) (bool, bool, int) {
-	showHistory := false
-	asJSON := false
-	for _, arg := range args {
-		switch arg {
-		case "--history":
-			showHistory = true
-		case "--json":
-			asJSON = true
-		default:
-			fmt.Fprintf(os.Stderr, "szr: unknown spread flag %s\n", arg)
-			return false, false, 2
+type spreadOptions struct {
+	showHistory bool
+	asJSON      bool
+	cost        bool
+	rate        float64
+}
+
+func parseSpreadArgs(args []string) (spreadOptions, int) {
+	var opts spreadOptions
+	i := 0
+	for i < len(args) {
+		next, ok := opts.consumeFlag(args, i)
+		if !ok {
+			return opts, 2
 		}
+		i = next
 	}
-	return showHistory, asJSON, 0
+	return opts, 0
+}
+
+func (o *spreadOptions) consumeFlag(args []string, i int) (int, bool) {
+	switch arg := args[i]; {
+	case arg == "--history":
+		o.showHistory = true
+	case arg == "--json":
+		o.asJSON = true
+	case arg == "--cost":
+		o.cost = true
+	case arg == "--rate":
+		if i+1 >= len(args) {
+			fmt.Fprintln(os.Stderr, "szr: --rate requires a value in USD per million input tokens")
+			return 0, false
+		}
+		return i + 2, o.applyRate(args[i+1])
+	case strings.HasPrefix(arg, "--rate="):
+		return i + 1, o.applyRate(strings.TrimPrefix(arg, "--rate="))
+	default:
+		fmt.Fprintf(os.Stderr, "szr: unknown spread flag %s\n", arg)
+		return 0, false
+	}
+	return i + 1, true
 }
 
 func filterSpreadRecords(records []history.Record) []history.Record {

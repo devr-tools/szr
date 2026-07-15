@@ -1,0 +1,55 @@
+Previewing update (ledgerkit/dev):
+
+     Type                                    Name                        Plan       Info
+     pulumi:pulumi:Stack                     ledgerkit-dev
+ +   ├─ aws:s3:Bucket                        invoice-archive             create
+ +   ├─ aws:sqs:Queue                        invoice-retry-queue         create
+ ~   ├─ aws:lambda:Function                  invoice-webhook             update     [diff: ~memorySize,timeout]
+ ~   ├─ aws:ecs:Service                      billing-api                 update     [diff: ~desiredCount]
+ -   ├─ aws:cloudwatch:MetricAlarm           legacy-cpu-alarm            delete
+     ├─ aws:ec2:SecurityGroup                billing-api-sg
+     ├─ aws:ec2:SecurityGroupRule            billing-api-ingress-443
+     ├─ aws:ec2:SecurityGroupRule            billing-api-egress-all
+     ├─ aws:ecs:Cluster                      ledgerkit-dev-cluster
+     ├─ aws:ecs:TaskDefinition               billing-api-task
+     ├─ aws:iam:Role                         billing-api-task-role
+     ├─ aws:iam:RolePolicy                   billing-api-task-policy
+     ├─ aws:iam:Role                         invoice-webhook-role
+     ├─ aws:iam:RolePolicy                   invoice-webhook-policy
+     ├─ aws:lambda:Permission                invoice-webhook-apigw
+     ├─ aws:apigatewayv2:Api                 billing-http-api
+     ├─ aws:apigatewayv2:Stage               billing-http-api-dev
+     ├─ aws:apigatewayv2:Integration         billing-webhook-integration
+     ├─ aws:apigatewayv2:Route               billing-webhook-route
+     ├─ aws:dynamodb:Table                   invoices-table
+     ├─ aws:dynamodb:Table                   receipts-table
+     ├─ aws:sns:Topic                        billing-alerts
+     ├─ aws:sns:TopicSubscription            billing-alerts-pager
+     ├─ aws:cloudwatch:LogGroup              billing-api-logs
+     ├─ aws:cloudwatch:LogGroup              invoice-webhook-logs
+     ├─ aws:cloudwatch:MetricAlarm           billing-api-5xx-alarm
+     ├─ aws:cloudwatch:MetricAlarm           invoice-webhook-errors
+     ├─ aws:route53:Record                   billing-api-dns
+     ├─ aws:acm:Certificate                  billing-api-cert
+     ├─ aws:acm:CertificateValidation        billing-api-cert-check
+     ├─ aws:ssm:Parameter                    billing-db-endpoint
+     ├─ aws:ssm:Parameter                    billing-db-username
+     ├─ aws:rds:Instance                     ledgerkit-dev-db
+     ├─ aws:rds:SubnetGroup                  ledgerkit-dev-db-subnets
+     ├─ aws:ec2:Vpc                          ledgerkit-dev-vpc
+     ├─ aws:ec2:Subnet                       ledgerkit-dev-private-a
+     ├─ aws:ec2:Subnet                       ledgerkit-dev-private-b
+     ├─ aws:ec2:Subnet                       ledgerkit-dev-public-a
+     ├─ aws:ec2:Subnet                       ledgerkit-dev-public-b
+     ├─ aws:ec2:InternetGateway              ledgerkit-dev-igw
+     ├─ aws:ec2:NatGateway                   ledgerkit-dev-nat
+     ├─ aws:ec2:RouteTable                   ledgerkit-dev-private-rt
+     └─ aws:ec2:RouteTable                   ledgerkit-dev-public-rt
+
+Resources:
+    + 2 to create
+    ~ 2 to update
+    - 1 to delete
+    39 unchanged
+
+Duration: 6s

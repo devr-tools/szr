@@ -156,6 +156,20 @@ Use this surface when you want to:
 - distinguish between safe auto-rewrites and hint-only guidance
 - avoid re-encoding `git diff`, `grep`, `find`, and pipeline policy in multiple places
 
+## User-defined filters
+
+Drop a JSON spec into the `filters/` directory next to `config.json` and szr loads it as an extra profile — a `match` section routes commands, and the same declarative reducer keys the builtins use (`keep_patterns`, `strip_patterns`, `head`, `tail`, `dedup_consecutive`, …) shape the output. Project-local specs in `.szr/filters/` load too, once `advanced.project_filters` is enabled via `szr settings` (off by default). Name collisions with project rules, builtins, or earlier user filters are skipped with a warning, never silently shadowed. `szr profiles` marks loaded specs with `source: user` or `source: project`.
+
+See [docs/FILTERS.md](docs/FILTERS.md) for the spec format and a worked example.
+
+## Savings insight
+
+`szr spread` summarizes recorded savings; three additions make the numbers actionable:
+
+- **`szr spread --cost`** appends an estimated-cost section: dollars avoided at a USD-per-million-input-tokens rate, raw versus emitted output cost, and a `≈ N× a 200k-token context` anchor. The rate resolves from `--rate <usd-per-mtok>` first, then the `cost_rate_per_mtok` config key, then the default `3.00`; passing `--rate` implies `--cost`. With `--json`, the figures appear as a `cost` object. `szr gain` accepts the same flags.
+- **`szr discover`** scans local AI-agent session transcripts (`~/.claude/projects/`) for shell commands that ran *without* szr, routes each through szr's own profile matching, and estimates the missed token savings using your own per-profile history ratios (60% fallback for profiles without enough history). Read-only and local-only: transcripts are never modified or transmitted. By default it covers the current project's transcripts from the last 30 days; `--all` scans every project, `--since <days>` widens or narrows the window, `--top <n>` sizes the command table (default 15), and `--json` emits the full report.
+- **`szr usage`** joins the two sides: per agent session it reports the model-billed tokens recorded in the transcripts (fresh input, cache reads, output — exact, as recorded by the agent runtime) next to szr's estimated emitted and avoided tokens for that session, including szr's share of fresh input and how much larger fresh input would have been without szr. Records are correlated by session scope when present (`SZR_SESSION`), otherwise by directory and session time window; cache reads are always excluded from the derived percentages. Flags: `--all`, `--since <days>` (default 7), `--session <id-prefix>`, `--json`.
+
 ## Upcoming features
 
 - stdin pipe mode for filtering output already in flight
@@ -173,6 +187,9 @@ Use this surface when you want to:
 | `szr rewrite --json --command '<cmd>'` | Return the shared shell-routing decision for external agents and integrations. |
 | `szr spread` | Show token savings, usage patterns, hotspot summaries, and per-profile fallback and empty-result rates. |
 | `szr spread --history` | Inspect savings history across recent commands. |
+| `szr spread --cost [--rate <usd-per-mtok>]` | Append estimated dollar figures and a 200k-context anchor to the savings summary. |
+| `szr discover [--all\|--since <n>\|--top <n>\|--json]` | Scan local agent transcripts read-only for commands that ran without szr and estimate the missed savings. |
+| `szr usage [--all\|--since <n>\|--session <id>\|--json]` | Compare model-billed tokens per agent session against szr-side emitted and avoided estimates. |
 | `szr doctor [--json]` | Check runtime diagnostics and local history health. |
 | `szr self doctor [--json]` | Check install state, `PATH`, config, cache, and version details. |
 | `szr settings` | Open the interactive settings menu for update checks, auto update, and other local preferences. |
@@ -181,7 +198,7 @@ Use this surface when you want to:
 | `szr tee --latest` | Inspect the latest preserved full-output artifact. |
 | `szr explain go test ./...` | Show the matched profile, budget, and rewrite decisions for a command. |
 | `szr commands` | Show the full command catalog for power users and agents. |
-| `szr profiles` | List built-in reducer profiles. |
+| `szr profiles` | List built-in and user-defined reducer profiles. |
 
 Reasoning budget modes:
 
@@ -233,3 +250,5 @@ Zero or negative values fall back to the defaults rather than meaning "unlimited
 - [Releasing](docs/RELEASING.md)
 - [Go package](docs/GO_PACKAGE.md)
 - [Architecture](docs/ARCHITECTURE.md)
+- [Profiles](docs/PROFILES.MD)
+- [User-defined filters](docs/FILTERS.md)

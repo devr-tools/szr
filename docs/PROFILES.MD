@@ -2,9 +2,9 @@
 
 This document tracks the builtin profiles currently registered by `internal/profiles.Builtins()`.
 
-Current coverage: `53` builtin profiles across `23` categories.
+Current coverage: `60` builtin profiles across `24` categories.
 
-Anything not listed here does not currently have a dedicated builtin profile in `szr`.
+Anything not listed here does not currently have a dedicated builtin profile in `szr`. User-defined declarative filters (see [FILTERS.md](FILTERS.md)) register alongside the builtins and show up in `szr profiles` with `source: user` or `source: project`.
 
 Contributor guides for profile families:
 
@@ -27,13 +27,14 @@ Contributor guides for profile families:
 | JavaScript | 5 | `npm`, `pnpm`, `yarn`, `bun`, `turbo`, `nx`, `vite`, `vitest`, `jest`, `eslint`, `tsc` |
 | PHP | 1 | `composer`, `phpunit`, `pest`, `phpstan`, `psalm`, `phpcs`, `phpcbf`, `php-cs-fixer`, `php artisan` |
 | Python | 2 | `uv`, `poetry`, `pip`, `pytest`, `ruff`, `mypy` |
-| Build systems | 1 | `make`, `just`, `task`, `bazel`, `ninja`, `cmake` |
+| Build systems | 2 | `make`, `just`, `task`, `bazel`, `ninja`, `cmake`, dedicated `gradle`/`./gradlew` build, test, and check handling |
+| Infrastructure as code | 1 | `pulumi preview`, `pulumi up`, `pulumi destroy`, `pulumi refresh` |
 | C/C++ tooling | 2 | `ctest`, `clang-tidy`, `clang-format`, `bear` |
 | Patch and diff | 1 | `diff`, `patch`, `git apply` |
 | Rust | 2 | `cargo test`, `cargo build`, `cargo clippy` |
 | Containers | 3 | `docker ps`, `docker images`, `docker logs`, `docker compose ps`, `docker compose logs` |
-| Cloud inventory | 2 | `aws`, `gcloud`, `az`, `doctl`, `oci`, `openstack`, `vercel`, `supabase`, `heroku` inventory and deployment listings |
-| Cloud logs | 3 | cloud log streams plus scoped Supabase function logs and Heroku router logs |
+| Cloud inventory | 6 | `aws`, `gcloud`, `az`, `doctl`, `oci`, `openstack`, `vercel`, `supabase`, `heroku` inventory and deployment listings, plus dedicated `aws lambda`, `aws cloudformation`, `aws s3 ls`, and `aws ecs` summaries |
+| Cloud logs | 4 | cloud log streams plus CloudWatch log-event dedup, scoped Supabase function logs, and Heroku router logs |
 | Kubernetes | 5 | `kubectl get`, `kubectl describe`, `kubectl logs`, `kubectl top`, `kubectl events` |
 | HTTP API | 1 | `curl`, `http`, `httpie`, stdout-oriented `wget` API fetches |
 | JSON query | 1 | `jq`, `yq`, JSON file reads, `python -m json.tool` |
@@ -169,9 +170,18 @@ Contributor guides for profile families:
 
 ### Build systems
 
+- `gradle-build`
+  - Matches: `gradle` and `./gradlew` invocations running `build`, `test`, or `check` tasks, ahead of the generic build-system profile
+  - Focus: on failure keeps failed task headers, compiler diagnostics with `file:line` anchors, and failing test names; on success compacts to the `BUILD SUCCESSFUL` line plus task counts; handles both rich and `--console=plain` output
 - `build-system`
   - Matches: `make`, `just`, `task`, `bazel`, `ninja`, `cmake`, `terraform`, `tofu`, `helm`, `gradle`, `mvn`, `docker build`
   - Focus: failing targets, orchestration errors, and source-file diagnostics
+
+### Infrastructure as code
+
+- `pulumi-diff`
+  - Matches: `pulumi preview`, `pulumi up`, `pulumi destroy`, `pulumi refresh`
+  - Focus: compacts the resource-diff table to change rows only, keeps diagnostics in full plus the resource counts and duration summary
 
 ### C/C++ tooling
 
@@ -214,12 +224,27 @@ Contributor guides for profile families:
 - `vercel-deployments`
   - Matches: `vercel list`, `vercel ls`
   - Focus: deployment target, ready state, URL, branch, creator, and metadata-aware Vercel deployment previews
+- `aws-lambda-functions`
+  - Matches: `aws lambda list-functions`, ahead of the generic cloud inventory profile
+  - Focus: one name/runtime/size line per function with memory, timeout, and a runtime breakdown header
+- `aws-stack-events`
+  - Matches: `aws cloudformation describe-stack-events`, ahead of the generic cloud inventory profile
+  - Focus: failed events with their status reasons first (folding repeated cancellations), counting the rest
+- `aws-s3-ls`
+  - Matches: `aws s3 ls` for buckets, prefixes, and object listings
+  - Focus: object and prefix counts with total size, the largest objects, and any `--summarize` footer
+- `aws-ecs-state`
+  - Matches: `aws ecs list-clusters`, `list-services`, `list-tasks`, and `describe-services`, ahead of the generic cloud inventory profile
+  - Focus: shortens ARN listings to resource names and reduces service descriptions to status, running/desired counts, and rollout state with failures first
 - `cloud-list`
   - Matches: inventory-style `aws`, `gcloud`, `az`, `doctl`, `oci`, `openstack`, `vercel`, `supabase`, and `heroku` commands
   - Focus: resource identity, status, region or zone, framework or project context, and provider-specific nested metadata
 
 ### Cloud logs
 
+- `aws-log-events`
+  - Matches: `aws logs filter-log-events` and `aws logs get-log-events`, ahead of the generic cloud log profile
+  - Focus: groups events whose messages differ only in numbers or identifiers into counted templates, keeping every distinct error template
 - `supabase-function-logs`
   - Matches: `supabase functions logs`
   - Focus: scoped Edge Function failures with function slug, path, method, status code, and repeated invocation grouping

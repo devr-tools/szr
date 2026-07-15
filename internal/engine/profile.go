@@ -9,10 +9,12 @@ const (
 )
 
 const (
-	SourceBuiltin    = "built-in"
-	SourceProject    = "project-local"
-	SourcePreference = "project-preference"
-	SourceFallback   = "fallback"
+	SourceBuiltin       = "built-in"
+	SourceProject       = "project-local"
+	SourcePreference    = "project-preference"
+	SourceFallback      = "fallback"
+	SourceUserFilter    = "user"
+	SourceProjectFilter = "project"
 )
 
 const (
