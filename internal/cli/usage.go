@@ -34,7 +34,7 @@ func (a *App) runUsage(args []string) int {
 	sessions := discover.ScanUsage(state.opts)
 	records := a.loadUsageRecords()
 	report := buildUsageReport(sessions, records)
-	return writeUsageOutput(report, state.asJSON)
+	return writeUsageOutput(report, state)
 }
 
 func (a *App) loadUsageRecords() []history.Record {
@@ -49,9 +49,10 @@ func (a *App) loadUsageRecords() []history.Record {
 }
 
 type usageArgState struct {
-	opts   discover.UsageOptions
-	asJSON bool
-	all    bool
+	opts    discover.UsageOptions
+	asJSON  bool
+	all     bool
+	noInput bool
 }
 
 func parseUsageOptions(args []string) (usageArgState, int) {
@@ -81,6 +82,9 @@ func parseUsageFlag(state *usageArgState, args []string, index int) (int, bool) 
 		return index, true
 	case "--all":
 		state.all = true
+		return index, true
+	case "--no-input":
+		state.noInput = true
 		return index, true
 	case "--since":
 		value, next, ok := usageIntFlag(args, index, "--since")
@@ -118,10 +122,17 @@ func usageIntFlag(args []string, index int, flag string) (int, int, bool) {
 	return value, index + 1, true
 }
 
+type usageAgentRow struct {
+	discover.AgentUsage
+	FreshInputTokens int `json:"fresh_input_tokens"`
+}
+
 type usageSessionRow struct {
 	discover.SessionUsage
-	FreshInputTokens int `json:"fresh_input_tokens"`
-	SZRCommands      int `json:"szr_commands"`
+	FreshInputTokens int             `json:"fresh_input_tokens"`
+	AgentCount       int             `json:"agent_count"`
+	Agents           []usageAgentRow `json:"agents,omitempty"`
+	SZRCommands      int             `json:"szr_commands"`
 	// Token counts below are szr-side heuristic estimates, not billed values.
 	SZREmittedTokens int  `json:"szr_emitted_tokens_est"`
 	SZRAvoidedTokens int  `json:"szr_avoided_tokens_est"`
@@ -137,6 +148,7 @@ type usageSessionRow struct {
 type usageTotals struct {
 	Sessions         int     `json:"sessions"`
 	Turns            int     `json:"turns"`
+	AgentCount       int     `json:"agent_count"`
 	FreshInputTokens int     `json:"fresh_input_tokens"`
 	CacheReadTokens  int     `json:"cache_read_tokens"`
 	OutputTokens     int     `json:"output_tokens"`
@@ -157,7 +169,12 @@ type usageReport struct {
 func buildUsageReport(sessions []discover.SessionUsage, records []history.Record) usageReport {
 	rows := make([]usageSessionRow, len(sessions))
 	for i, session := range sessions {
-		rows[i] = usageSessionRow{SessionUsage: session, FreshInputTokens: session.FreshInputTokens()}
+		rows[i] = usageSessionRow{
+			SessionUsage:     session,
+			FreshInputTokens: session.FreshInputTokens(),
+			AgentCount:       len(session.Agents),
+			Agents:           usageAgentRows(session.Agents),
+		}
 	}
 	correlateUsageRecords(rows, records)
 	for i := range rows {
@@ -166,6 +183,17 @@ func buildUsageReport(sessions []discover.SessionUsage, records []history.Record
 	}
 	totals := sumUsageRows(rows)
 	return usageReport{Sessions: rows, Totals: totals, Notes: usageNotes(totals)}
+}
+
+func usageAgentRows(agents []discover.AgentUsage) []usageAgentRow {
+	if len(agents) == 0 {
+		return nil
+	}
+	rows := make([]usageAgentRow, len(agents))
+	for i, agent := range agents {
+		rows[i] = usageAgentRow{AgentUsage: agent, FreshInputTokens: agent.FreshInputTokens()}
+	}
+	return rows
 }
 
 // correlateUsageRecords attributes each szr history record to one session: an
@@ -241,6 +269,7 @@ func sumUsageRows(rows []usageSessionRow) usageTotals {
 	totals := usageTotals{Sessions: len(rows)}
 	for _, row := range rows {
 		totals.Turns += row.Turns
+		totals.AgentCount += row.AgentCount
 		totals.FreshInputTokens += row.FreshInputTokens
 		totals.CacheReadTokens += row.CacheReadTokens
 		totals.OutputTokens += row.OutputTokens
@@ -273,8 +302,8 @@ func usageNotes(totals usageTotals) []string {
 	return notes
 }
 
-func writeUsageOutput(report usageReport, asJSON bool) int {
-	if asJSON {
+func writeUsageOutput(report usageReport, state usageArgState) int {
+	if state.asJSON {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		_ = enc.Encode(report)
@@ -284,6 +313,19 @@ func writeUsageOutput(report usageReport, asJSON bool) int {
 		fmt.Println("no agent sessions with model usage found")
 		return 0
 	}
-	renderUsageReport(report)
+	if usageInteractiveEligible(state) {
+		renderUsageReport(report, usageRenderOptions{numbered: true})
+		return runUsageInteractive(report, os.Stdin, os.Stdout, os.Stderr)
+	}
+	drillDown := state.opts.SessionPrefix != "" && len(report.Sessions) == 1
+	renderUsageReport(report, usageRenderOptions{drillDown: drillDown})
 	return 0
+}
+
+// usageInteractiveEligible keeps every piped, scripted, or filtered
+// invocation byte-identical to the non-interactive output: the prompt loop
+// only runs on a real terminal with no --json, --session, or --no-input.
+func usageInteractiveEligible(state usageArgState) bool {
+	return !state.asJSON && !state.noInput && state.opts.SessionPrefix == "" &&
+		isInteractiveFile(os.Stdin) && isInteractiveFile(os.Stdout)
 }

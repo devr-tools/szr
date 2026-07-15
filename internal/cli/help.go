@@ -46,7 +46,7 @@ func (a *App) printHelp() {
 		rows: [][]string{
 			{"szr spread [--history|--json|--cost]", "Review savings, usage, hotspots, and fallback behavior."},
 			{"szr discover [--all|--json]", "Estimate savings szr would have captured for raw agent-run commands."},
-			{"szr usage [--all|--json]", "Compare model-billed tokens per agent session against szr-side savings estimates."},
+			{"szr usage [--all|--json|--no-input]", "Compare model-billed tokens per agent session against szr-side savings estimates."},
 			{"szr reset-history", "Clear the recorded command history used by spread, gain, discover, hotspots, and recommend."},
 			{"szr clear-spread", "Clear the recorded command history used by spread, gain, discover, hotspots, and recommend."},
 			{"szr recommend [--json]", "Turn command history into concrete tuning next steps."},
@@ -134,7 +134,7 @@ func (a *App) printCommands() {
 		rows: [][]string{
 			{"szr spread [--history|--json|--cost]", "Summarize savings, hotspots, and fallback rates."},
 			{"szr discover [--all|--since <n>|--json]", "Scan local agent transcripts for raw commands szr would have compressed."},
-			{"szr usage [--all|--since <n>|--session <id>|--json]", "Report model-billed tokens per session next to szr-side savings estimates."},
+			{"szr usage [--all|--since <n>|--session <id>|--json|--no-input]", "Report model-billed tokens per session and subagent next to szr-side savings estimates."},
 			{"szr reset-history", "Reset the recorded spread history without touching tee artifacts."},
 			{"szr clear-spread", "Reset the recorded spread history without touching tee artifacts."},
 			{"szr gain [--history|--json|--cost]", "Alias for spread."},
