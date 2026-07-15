@@ -13,6 +13,30 @@ func Profiles(maxLines int) []engine.Profile {
 	return []engine.Profile{glabPipelineProfile(maxLines)}
 }
 
+var glabPipelineExplain = []string{
+	"Matches `glab ci status`, `glab ci list`, and `glab pipeline list` job and pipeline tables.",
+	"Leads with a status breakdown, keeps failed, running, and canceled rows in full, and folds the dominant status into a count.",
+}
+
+func renderGlabPipeline(maxLines int) func(engine.Invocation, engine.Execution) string {
+	return func(_ engine.Invocation, exec engine.Execution) string {
+		return gitlabfilter.SummarizePipelines(exec.Stdout+"\n"+exec.Stderr, maxLines)
+	}
+}
+
+func streamRenderGlabPipeline(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
+	return shared.NewBufferedTextReducerWithRecovery(
+		true,
+		true,
+		func(input string) string {
+			return gitlabfilter.SummarizePipelines(input, budget.MaxLines)
+		},
+		func(input string) (string, string, bool) {
+			return gitlabfilter.PipelineRecoveryInfo(input, budget.MaxLines)
+		},
+	)
+}
+
 func glabPipelineProfile(maxLines int) engine.Profile {
 	return engine.Profile{
 		Name:             "glab-pipeline",
@@ -22,26 +46,10 @@ func glabPipelineProfile(maxLines int) engine.Profile {
 		Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 10)),
 		LatencyBudget:    profilekit.LatencyBudget(25),
 		Match:            matchGlabPipeline,
-		Render: func(_ engine.Invocation, exec engine.Execution) string {
-			return gitlabfilter.SummarizePipelines(exec.Stdout+"\n"+exec.Stderr, maxLines)
-		},
-		StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-			return shared.NewBufferedTextReducerWithRecovery(
-				true,
-				true,
-				func(input string) string {
-					return gitlabfilter.SummarizePipelines(input, budget.MaxLines)
-				},
-				func(input string) (string, string, bool) {
-					return gitlabfilter.PipelineRecoveryInfo(input, budget.MaxLines)
-				},
-			)
-		},
-		ParseBytes: profilekit.ParseCombined,
-		Explain: []string{
-			"Matches `glab ci status`, `glab ci list`, and `glab pipeline list` job and pipeline tables.",
-			"Leads with a status breakdown, keeps failed, running, and canceled rows in full, and folds the dominant status into a count.",
-		},
+		Render:           renderGlabPipeline(maxLines),
+		StreamRender:     streamRenderGlabPipeline,
+		ParseBytes:       profilekit.ParseCombined,
+		Explain:          glabPipelineExplain,
 	}
 }
 

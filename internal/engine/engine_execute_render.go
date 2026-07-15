@@ -25,32 +25,104 @@ func renderStreamingOutput(
 	failureArtifactPath string,
 	memo history.TokenMemo,
 ) (string, bool, bool, RecoveryPlan) {
-	rendered := rawCombined
-	if !passthrough {
-		rendered = renderedStreamingContent(profile, preparedInv, execResult, streamReducer, rawCombined, fastPath, rawBytesRead, captureTruncated)
-		if strings.TrimSpace(rendered) == "" {
-			rendered = renderPreferredStreamFallback(profile, execResult, budget)
-		}
-	}
+	rendered := initialStreamingRender(profile, preparedInv, execResult, streamReducer, budget, rawCombined, passthrough, fastPath, rawBytesRead, captureTruncated)
+	rendered, fallbackUsed, emptyResult, recoveryPlan := escalateStreamingRender(profile, preparedInv, execResult, streamReducer, budget, rendered, rawCombined, passthrough)
+	rendered = applyUltraCompactRender(preparedInv, execResult, rendered, rawCombined)
+	rendered, recoveryPlan, _ = enforceCompressionContract(rendered, rawCombined, rawTokens, budget, recoveryPlan, passthrough, preparedInv.Advanced.CompressionContract, memo)
+	rendered = finalizeStreamingRender(profile, preparedInv, execResult, budget, rendered, rawCombined, passthrough, captureTruncated, commandRewritten, failureArtifactPath, memo)
+	return rendered, fallbackUsed, emptyResult, recoveryPlan
+}
+
+// escalateStreamingRender records the render-health flags for the run, then
+// escalates empty renders to raw output and failing renders to the failure
+// escape.
+func escalateStreamingRender(
+	profile Profile,
+	inv Invocation,
+	execResult Execution,
+	streamReducer StreamReducer,
+	budget OutputBudget,
+	rendered string,
+	rawCombined string,
+	passthrough bool,
+) (string, bool, bool, RecoveryPlan) {
 	fallbackUsed, emptyResult := streamingFallbackUsed(profile, streamReducer, passthrough, rendered, rawCombined)
 	recoveryPlan := reducerRecoveryPlan(streamReducer)
 	if strings.TrimSpace(rendered) == "" {
 		rendered = rawCombined
 	}
-	if shouldUseFailureEscape(profile, execResult.ExitCode, passthrough, fallbackUsed) && rawCombined != "" {
-		escapeBudget := ExpandBudgetForFailureEscape(budget, preparedInv)
-		if escaped := filters.CompactLines(rawCombined, escapeBudget.MaxLines); strings.TrimSpace(escaped) != "" {
-			rendered = escaped
-		}
+	rendered = applyStreamingFailureEscape(profile, inv, budget, rendered, rawCombined, execResult.ExitCode, passthrough, fallbackUsed)
+	return rendered, fallbackUsed, emptyResult, recoveryPlan
+}
+
+// initialStreamingRender produces the first-pass render: the reducer or
+// profile render for filtered runs, raw output for passthrough.
+func initialStreamingRender(
+	profile Profile,
+	preparedInv Invocation,
+	execResult Execution,
+	streamReducer StreamReducer,
+	budget OutputBudget,
+	rawCombined string,
+	passthrough bool,
+	fastPath FastPathDecision,
+	rawBytesRead int,
+	captureTruncated bool,
+) string {
+	if passthrough {
+		return rawCombined
 	}
-	rendered = applyUltraCompactRender(preparedInv, execResult, rendered, rawCombined)
-	rendered, recoveryPlan, _ = enforceCompressionContract(rendered, rawCombined, rawTokens, budget, recoveryPlan, passthrough, preparedInv.Advanced.CompressionContract, memo)
+	rendered := renderedStreamingContent(profile, preparedInv, execResult, streamReducer, rawCombined, fastPath, rawBytesRead, captureTruncated)
+	if strings.TrimSpace(rendered) == "" {
+		rendered = renderPreferredStreamFallback(profile, execResult, budget)
+	}
+	return rendered
+}
+
+// applyStreamingFailureEscape swaps in compact raw lines when a failing run
+// qualifies for the failure escape and the raw capture has content.
+func applyStreamingFailureEscape(
+	profile Profile,
+	inv Invocation,
+	budget OutputBudget,
+	rendered string,
+	rawCombined string,
+	exitCode int,
+	passthrough bool,
+	fallbackUsed bool,
+) string {
+	if !shouldUseFailureEscape(profile, exitCode, passthrough, fallbackUsed) || rawCombined == "" {
+		return rendered
+	}
+	escapeBudget := ExpandBudgetForFailureEscape(budget, inv)
+	if escaped := filters.CompactLines(rawCombined, escapeBudget.MaxLines); strings.TrimSpace(escaped) != "" {
+		return escaped
+	}
+	return rendered
+}
+
+// finalizeStreamingRender applies the trailing render guards: informative
+// failure output, terse renders for rewritten commands, and the small-output
+// guard for guarded profiles.
+func finalizeStreamingRender(
+	profile Profile,
+	preparedInv Invocation,
+	execResult Execution,
+	budget OutputBudget,
+	rendered string,
+	rawCombined string,
+	passthrough bool,
+	captureTruncated bool,
+	commandRewritten bool,
+	failureArtifactPath string,
+	memo history.TokenMemo,
+) string {
 	rendered = ensureInformativeFailureRender(profile, preparedInv, rendered, rawCombined, failureArtifactPath, execResult.ExitCode, passthrough, budget)
 	rendered = preferTerseRenderForRewrittenCommand(rendered, rawCombined, execResult.ExitCode, commandRewritten, passthrough, captureTruncated, memo)
 	if !captureTruncated && shouldGuardSmallOutput(profile, passthrough) && !preparedInv.UltraCompact {
 		rendered = preferRawSmallOutputForProfile(profile, rendered, rawCombined, execResult.ExitCode)
 	}
-	return rendered, fallbackUsed, emptyResult, recoveryPlan
+	return rendered
 }
 
 // renderPreferredStreamFallback substitutes a compact view of the unreduced
@@ -204,21 +276,30 @@ func preferTerseRenderForRewrittenCommand(
 	if renderedTokens <= rewrittenCommandTerseRenderMaxTokens {
 		return rendered
 	}
+	if compact, ok := terseCompactAlternative(rawCombined, renderedTokens); ok {
+		return compact
+	}
+	return rendered
+}
+
+// terseCompactAlternative returns the compact-lines view of the raw output
+// when it can stand in for an oversized render of a rewritten command. A
+// compact view that had to omit lines is a lossy head-chop, not a faithful
+// terse summary; it may never replace a real render. And a marginal size win
+// does not justify discarding a structured render — only a drastic one (the
+// "plain output would have been one line" case).
+func terseCompactAlternative(rawCombined string, renderedTokens int) (string, bool) {
 	compact := strings.TrimSpace(filters.CompactLines(rawCombined, rewrittenCommandTerseRenderMaxLines))
 	if compact == "" {
-		return rendered
+		return "", false
 	}
-	// A compact view that had to omit lines is a lossy head-chop, not a
-	// faithful terse summary; it may never replace a real render. And a
-	// marginal size win does not justify discarding a structured render —
-	// only a drastic one (the "plain output would have been one line" case).
 	if strings.Contains(compact, "... +") {
-		return rendered
+		return "", false
 	}
 	if history.EstimateTokens(compact)*3 >= renderedTokens {
-		return rendered
+		return "", false
 	}
-	return compact
+	return compact, true
 }
 
 func renderedStreamingContent(

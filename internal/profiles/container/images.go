@@ -7,6 +7,38 @@ import (
 	"github.com/devr-tools/szr/internal/profilekit"
 )
 
+var dockerImagesExplain = []string{
+	"Moves `docker images`/`docker image ls` to a tab format unless the user already chose --format, --quiet, or --digests.",
+	"Leads with image count and size total, collapses dangling `<none>` images into one line, and keeps repo:tag, size, and age per image.",
+}
+
+func matchDockerImagesInvocation(inv engine.Invocation) bool {
+	return matchDockerImages(inv.Display)
+}
+
+func prepareDockerImagesInvocation(inv engine.Invocation) []string {
+	return prepareDockerImagesCommand(inv.Command)
+}
+
+func renderDockerImages(maxLines int) func(engine.Invocation, engine.Execution) string {
+	return func(_ engine.Invocation, exec engine.Execution) string {
+		return containerfilter.SummarizeDockerImages(exec.Stdout, maxLines)
+	}
+}
+
+func streamRenderDockerImages(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
+	return shared.NewBufferedTextReducerWithRecovery(
+		true,
+		false,
+		func(input string) string {
+			return containerfilter.SummarizeDockerImages(input, budget.MaxLines)
+		},
+		func(input string) (string, string, bool) {
+			return containerfilter.DockerImagesRecoveryInfo(input, budget.MaxLines)
+		},
+	)
+}
+
 func dockerImagesProfile(maxLines int) engine.Profile {
 	return engine.Profile{
 		Name:             "docker-images",
@@ -15,32 +47,12 @@ func dockerImagesProfile(maxLines int) engine.Profile {
 		StreamPreference: engine.StreamStdoutOnly,
 		Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 10)),
 		LatencyBudget:    profilekit.LatencyBudget(20),
-		Match: func(inv engine.Invocation) bool {
-			return matchDockerImages(inv.Display)
-		},
-		Prepare: func(inv engine.Invocation) []string {
-			return prepareDockerImagesCommand(inv.Command)
-		},
-		Render: func(_ engine.Invocation, exec engine.Execution) string {
-			return containerfilter.SummarizeDockerImages(exec.Stdout, maxLines)
-		},
-		StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-			return shared.NewBufferedTextReducerWithRecovery(
-				true,
-				false,
-				func(input string) string {
-					return containerfilter.SummarizeDockerImages(input, budget.MaxLines)
-				},
-				func(input string) (string, string, bool) {
-					return containerfilter.DockerImagesRecoveryInfo(input, budget.MaxLines)
-				},
-			)
-		},
-		ParseBytes: profilekit.ParseStdout,
-		Explain: []string{
-			"Moves `docker images`/`docker image ls` to a tab format unless the user already chose --format, --quiet, or --digests.",
-			"Leads with image count and size total, collapses dangling `<none>` images into one line, and keeps repo:tag, size, and age per image.",
-		},
+		Match:            matchDockerImagesInvocation,
+		Prepare:          prepareDockerImagesInvocation,
+		Render:           renderDockerImages(maxLines),
+		StreamRender:     streamRenderDockerImages,
+		ParseBytes:       profilekit.ParseStdout,
+		Explain:          dockerImagesExplain,
 	}
 }
 

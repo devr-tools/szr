@@ -72,42 +72,43 @@ func collectTeeArtifacts(dir string, now time.Time) []teeDirArtifact {
 	}
 	artifacts := make([]teeDirArtifact, 0, len(entries))
 	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
+		if artifact, ok := teeArtifactFromEntry(dir, entry, now); ok {
+			artifacts = append(artifacts, artifact)
 		}
-		info, err := entry.Info()
-		if err != nil {
-			continue
-		}
-		path := filepath.Join(dir, entry.Name())
-		if strings.HasSuffix(entry.Name(), ".partial") {
-			if now.Sub(info.ModTime()) > staleTeePartialAge {
-				_ = os.Remove(path)
-			}
-			continue
-		}
-		if !strings.HasSuffix(entry.Name(), ".log") {
-			continue
-		}
-		artifacts = append(artifacts, teeDirArtifact{path: path, size: info.Size(), modTime: info.ModTime()})
 	}
 	return artifacts
+}
+
+// teeArtifactFromEntry classifies one directory entry: completed .log
+// artifacts are returned, stale .partial captures are removed, everything
+// else is skipped.
+func teeArtifactFromEntry(dir string, entry os.DirEntry, now time.Time) (teeDirArtifact, bool) {
+	if entry.IsDir() {
+		return teeDirArtifact{}, false
+	}
+	info, err := entry.Info()
+	if err != nil {
+		return teeDirArtifact{}, false
+	}
+	path := filepath.Join(dir, entry.Name())
+	if strings.HasSuffix(entry.Name(), ".partial") {
+		if now.Sub(info.ModTime()) > staleTeePartialAge {
+			_ = os.Remove(path)
+		}
+		return teeDirArtifact{}, false
+	}
+	if !strings.HasSuffix(entry.Name(), ".log") {
+		return teeDirArtifact{}, false
+	}
+	return teeDirArtifact{path: path, size: info.Size(), modTime: info.ModTime()}, true
 }
 
 // removeExcessTeeArtifacts deletes oldest-first until both caps hold. The
 // newest artifact always survives, so the run that triggered pruning keeps
 // its own reference.
 func removeExcessTeeArtifacts(artifacts []teeDirArtifact, limits teeLimits) []string {
-	sort.Slice(artifacts, func(i, j int) bool {
-		if artifacts[i].modTime.Equal(artifacts[j].modTime) {
-			return artifacts[i].path < artifacts[j].path
-		}
-		return artifacts[i].modTime.Before(artifacts[j].modTime)
-	})
-	var total int64
-	for _, artifact := range artifacts {
-		total += artifact.size
-	}
+	sortTeeArtifactsOldestFirst(artifacts)
+	total := totalTeeArtifactBytes(artifacts)
 	count := len(artifacts)
 	removed := make([]string, 0)
 	for _, artifact := range oldestTeeArtifacts(artifacts) {
@@ -122,6 +123,23 @@ func removeExcessTeeArtifacts(artifacts []teeDirArtifact, limits teeLimits) []st
 		total -= artifact.size
 	}
 	return removed
+}
+
+func sortTeeArtifactsOldestFirst(artifacts []teeDirArtifact) {
+	sort.Slice(artifacts, func(i, j int) bool {
+		if artifacts[i].modTime.Equal(artifacts[j].modTime) {
+			return artifacts[i].path < artifacts[j].path
+		}
+		return artifacts[i].modTime.Before(artifacts[j].modTime)
+	})
+}
+
+func totalTeeArtifactBytes(artifacts []teeDirArtifact) int64 {
+	var total int64
+	for _, artifact := range artifacts {
+		total += artifact.size
+	}
+	return total
 }
 
 func oldestTeeArtifacts(artifacts []teeDirArtifact) []teeDirArtifact {
@@ -142,6 +160,13 @@ func dropTeeIndexEntries(dir string, removedPaths []string) {
 	if err != nil || len(entries) == 0 {
 		return
 	}
+	survivors := filterRemovedTeeIndexEntries(entries, removedPaths)
+	if len(survivors) != len(entries) {
+		_ = store.Replace(survivors)
+	}
+}
+
+func filterRemovedTeeIndexEntries(entries []teeindex.Entry, removedPaths []string) []teeindex.Entry {
 	removed := make(map[string]struct{}, len(removedPaths))
 	for _, path := range removedPaths {
 		removed[path] = struct{}{}
@@ -152,7 +177,5 @@ func dropTeeIndexEntries(dir string, removedPaths []string) {
 			survivors = append(survivors, entry)
 		}
 	}
-	if len(survivors) != len(entries) {
-		_ = store.Replace(survivors)
-	}
+	return survivors
 }

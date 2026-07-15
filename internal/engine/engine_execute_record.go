@@ -21,28 +21,53 @@ func (e *Engine) ensureStreamingArtifactPath(
 	keepRawCapture bool,
 ) string {
 	if teePath != "" {
-		if shouldPersistRecoveryArtifact(recoveryPlan, rawCombined, passthrough) {
-			return teePath
-		}
-		if isFailureExit(profile, exitCode) && e.config.TeeOnFailure && shouldPersistFailureArtifact(profile, fallbackUsed, passthrough) {
-			return teePath
-		}
-		// Session dedup still needs the capture file; cleanupDedupCapture
-		// removes it after the dedup step has archived what it needs.
-		if !keepRawCapture {
-			_ = os.Remove(teePath)
-		}
-		return ""
+		return e.retainExistingTeeArtifact(teePath, exitCode, rawCombined, profile, fallbackUsed, recoveryPlan, passthrough, keepRawCapture)
 	}
+	return e.writeDeferredTeeArtifact(rawCombined, exitCode, command, profile, fallbackUsed, recoveryPlan, passthrough)
+}
+
+// retainExistingTeeArtifact decides whether the capture written during the run
+// stays on disk or is removed once no retention rule claims it.
+func (e *Engine) retainExistingTeeArtifact(
+	teePath string,
+	exitCode int,
+	rawCombined string,
+	profile Profile,
+	fallbackUsed bool,
+	recoveryPlan RecoveryPlan,
+	passthrough bool,
+	keepRawCapture bool,
+) string {
+	if shouldPersistRecoveryArtifact(recoveryPlan, rawCombined, passthrough) {
+		return teePath
+	}
+	if isFailureExit(profile, exitCode) && e.config.TeeOnFailure && shouldPersistFailureArtifact(profile, fallbackUsed, passthrough) {
+		return teePath
+	}
+	// Session dedup still needs the capture file; cleanupDedupCapture
+	// removes it after the dedup step has archived what it needs.
+	if !keepRawCapture {
+		_ = os.Remove(teePath)
+	}
+	return ""
+}
+
+// writeDeferredTeeArtifact persists the in-memory capture after the run when
+// no capture file was streamed to disk but a retention rule wants one.
+func (e *Engine) writeDeferredTeeArtifact(
+	rawCombined string,
+	exitCode int,
+	command []string,
+	profile Profile,
+	fallbackUsed bool,
+	recoveryPlan RecoveryPlan,
+	passthrough bool,
+) string {
 	if rawCombined == "" {
 		return ""
 	}
 	if shouldPersistRecoveryArtifact(recoveryPlan, rawCombined, passthrough) {
-		path, teeErr := e.writeTee(rawCombined, command)
-		if teeErr != nil {
-			return ""
-		}
-		return path
+		return e.writeTeeArtifact(rawCombined, command)
 	}
 	if !isFailureExit(profile, exitCode) {
 		return ""
@@ -50,6 +75,10 @@ func (e *Engine) ensureStreamingArtifactPath(
 	if !e.config.TeeOnFailure || !shouldPersistFailureArtifact(profile, fallbackUsed, passthrough) {
 		return ""
 	}
+	return e.writeTeeArtifact(rawCombined, command)
+}
+
+func (e *Engine) writeTeeArtifact(rawCombined string, command []string) string {
 	path, teeErr := e.writeTee(rawCombined, command)
 	if teeErr != nil {
 		return ""
@@ -105,8 +134,15 @@ func buildStreamingHistoryRecord(
 	rendered string,
 	memo history.TokenMemo,
 ) history.Record {
+	record := newStreamingRecordBase(inv, profile, profileConfidence, duration, exitCode)
+	applyStreamingRecordVolume(&record, rawBytesRead, bytesParsed, bytesEmitted, rawTokens, memo.Estimate(rendered))
+	applyStreamingRecordFlags(&record, fallbackUsed, emptyResult, passthrough, teePath)
+	return record
+}
+
+func newStreamingRecordBase(inv Invocation, profile Profile, profileConfidence string, duration time.Duration, exitCode int) history.Record {
 	commandText := strings.Join(inv.Display, " ")
-	record := history.Record{
+	return history.Record{
 		Timestamp:          time.Now(),
 		Command:            commandText,
 		CommandFingerprint: history.Fingerprint(commandText),
@@ -115,23 +151,28 @@ func buildStreamingHistoryRecord(
 		Cwd:                inv.Cwd,
 		DurationMS:         duration.Milliseconds(),
 		ExitCode:           exitCode,
-		RawBytes:           rawBytesRead,
-		FilteredBytes:      bytesEmitted,
-		RawBytesRead:       rawBytesRead,
-		BytesParsed:        bytesParsed,
-		BytesEmitted:       bytesEmitted,
-		RawTokens:          rawTokens,
-		FilteredTokens:     memo.Estimate(rendered),
-		FallbackUsed:       fallbackUsed,
-		EmptyResult:        emptyResult,
-		Passthrough:        passthrough,
-		TeePath:            teePath,
 	}
-	record.SavedTokens = record.RawTokens - record.FilteredTokens
-	if record.RawTokens > 0 {
-		record.SavingsPct = float64(record.SavedTokens) * 100 / float64(record.RawTokens)
+}
+
+func applyStreamingRecordVolume(record *history.Record, rawBytesRead int, bytesParsed int, bytesEmitted int, rawTokens int, filteredTokens int) {
+	record.RawBytes = rawBytesRead
+	record.FilteredBytes = bytesEmitted
+	record.RawBytesRead = rawBytesRead
+	record.BytesParsed = bytesParsed
+	record.BytesEmitted = bytesEmitted
+	record.RawTokens = rawTokens
+	record.FilteredTokens = filteredTokens
+	record.SavedTokens = rawTokens - filteredTokens
+	if rawTokens > 0 {
+		record.SavingsPct = float64(record.SavedTokens) * 100 / float64(rawTokens)
 	}
-	return record
+}
+
+func applyStreamingRecordFlags(record *history.Record, fallbackUsed bool, emptyResult bool, passthrough bool, teePath string) {
+	record.FallbackUsed = fallbackUsed
+	record.EmptyResult = emptyResult
+	record.Passthrough = passthrough
+	record.TeePath = teePath
 }
 
 func (e *Engine) appendStreamingHistory(record history.Record) {
@@ -169,6 +210,12 @@ func buildStreamingResult(
 	bytesEmitted int,
 	verification retentionOutcome,
 ) Result {
+	result := newStreamingResultBase(profile, profileConfidence, rendered, rawCombined, exitCode, teePath, duration)
+	applyStreamingResultTelemetry(&result, fallbackUsed, fastPath, rawBytesRead, bytesParsed, bytesEmitted, verification)
+	return result
+}
+
+func newStreamingResultBase(profile Profile, profileConfidence string, rendered string, rawCombined string, exitCode int, teePath string, duration time.Duration) Result {
 	return Result{
 		ProfileName:       profile.Name,
 		ProfileConfidence: profileConfidence,
@@ -177,15 +224,18 @@ func buildStreamingResult(
 		ExitCode:          exitCode,
 		TeePath:           teePath,
 		Duration:          duration,
-		FallbackUsed:      fallbackUsed,
-		BypassReason:      bypassReason(fastPath),
-		LatencyWarning:    fastPath.WarnLatency,
-		RawBytesRead:      rawBytesRead,
-		BytesParsed:       bytesParsed,
-		BytesEmitted:      bytesEmitted,
-		VerifierRepairs:   verification.repairs,
-		VerifierSkipped:   verification.skipped,
 	}
+}
+
+func applyStreamingResultTelemetry(result *Result, fallbackUsed bool, fastPath FastPathDecision, rawBytesRead int, bytesParsed int, bytesEmitted int, verification retentionOutcome) {
+	result.FallbackUsed = fallbackUsed
+	result.BypassReason = bypassReason(fastPath)
+	result.LatencyWarning = fastPath.WarnLatency
+	result.RawBytesRead = rawBytesRead
+	result.BytesParsed = bytesParsed
+	result.BytesEmitted = bytesEmitted
+	result.VerifierRepairs = verification.repairs
+	result.VerifierSkipped = verification.skipped
 }
 
 // streamingCaptureIncomplete reports whether the in-memory capture is an

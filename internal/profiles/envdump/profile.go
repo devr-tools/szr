@@ -11,6 +11,30 @@ func Profiles(maxLines int) []engine.Profile {
 	return []engine.Profile{envPrintProfile(maxLines)}
 }
 
+var envPrintExplain = []string{
+	"Matches only a bare `env` with no flags, assignments, or wrapped command, so `env KEY=VAL cmd` stays untouched.",
+	"Keeps PATH and common diagnostic variables readable, groups the rest by name prefix, and redacts values of secret-looking names.",
+}
+
+func renderEnvPrint(maxLines int) func(engine.Invocation, engine.Execution) string {
+	return func(_ engine.Invocation, exec engine.Execution) string {
+		return envfilter.SummarizeEnvDump(exec.Stdout, maxLines)
+	}
+}
+
+func streamRenderEnvPrint(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
+	return shared.NewBufferedTextReducerWithRecovery(
+		true,
+		false,
+		func(input string) string {
+			return envfilter.SummarizeEnvDump(input, budget.MaxLines)
+		},
+		func(input string) (string, string, bool) {
+			return envfilter.EnvDumpRecoveryInfo(input, budget.MaxLines)
+		},
+	)
+}
+
 func envPrintProfile(maxLines int) engine.Profile {
 	return engine.Profile{
 		Name:             "env-print",
@@ -20,26 +44,10 @@ func envPrintProfile(maxLines int) engine.Profile {
 		Budget:           profilekit.OutputBudget(profilekit.AtLeast(maxLines, 10)),
 		LatencyBudget:    profilekit.LatencyBudget(20),
 		Match:            matchEnvPrint,
-		Render: func(_ engine.Invocation, exec engine.Execution) string {
-			return envfilter.SummarizeEnvDump(exec.Stdout, maxLines)
-		},
-		StreamRender: func(_ engine.Invocation, budget engine.OutputBudget) engine.StreamReducer {
-			return shared.NewBufferedTextReducerWithRecovery(
-				true,
-				false,
-				func(input string) string {
-					return envfilter.SummarizeEnvDump(input, budget.MaxLines)
-				},
-				func(input string) (string, string, bool) {
-					return envfilter.EnvDumpRecoveryInfo(input, budget.MaxLines)
-				},
-			)
-		},
-		ParseBytes: profilekit.ParseStdout,
-		Explain: []string{
-			"Matches only a bare `env` with no flags, assignments, or wrapped command, so `env KEY=VAL cmd` stays untouched.",
-			"Keeps PATH and common diagnostic variables readable, groups the rest by name prefix, and redacts values of secret-looking names.",
-		},
+		Render:           renderEnvPrint(maxLines),
+		StreamRender:     streamRenderEnvPrint,
+		ParseBytes:       profilekit.ParseStdout,
+		Explain:          envPrintExplain,
 	}
 }
 

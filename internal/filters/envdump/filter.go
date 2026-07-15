@@ -135,6 +135,21 @@ func formatEnvValue(v envVar) string {
 // groupedEnvLines renders one line per prefix family (two or more members)
 // and packs the leftovers into shared width-bounded lines.
 func groupedEnvLines(vars []envVar) []string {
+	groups, order := collectEnvGroups(vars)
+	out := []string{}
+	loose := []string{}
+	for _, key := range order {
+		members := groups[key]
+		if key == "" || len(members) < 2 {
+			loose = append(loose, members...)
+			continue
+		}
+		out = append(out, formatEnvGroup(key, members))
+	}
+	return append(out, packLines(loose)...)
+}
+
+func collectEnvGroups(vars []envVar) (map[string][]string, []string) {
 	groups := map[string][]string{}
 	order := []string{}
 	for _, v := range vars {
@@ -144,18 +159,12 @@ func groupedEnvLines(vars []envVar) []string {
 		}
 		groups[key] = append(groups[key], formatEnvValue(v))
 	}
-	out := []string{}
-	loose := []string{}
-	for _, key := range order {
-		members := groups[key]
-		if key == "" || len(members) < 2 {
-			loose = append(loose, members...)
-			continue
-		}
-		line := fmt.Sprintf("%s_* (%d): %s", key, len(members), strings.Join(members, " "))
-		out = append(out, shared.Clip(line, maxEnvLineWidth))
-	}
-	return append(out, packLines(loose)...)
+	return groups, order
+}
+
+func formatEnvGroup(key string, members []string) string {
+	line := fmt.Sprintf("%s_* (%d): %s", key, len(members), strings.Join(members, " "))
+	return shared.Clip(line, maxEnvLineWidth)
 }
 
 func envPrefix(name string) string {

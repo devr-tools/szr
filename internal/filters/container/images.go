@@ -39,6 +39,15 @@ func summarizeDockerImagesResult(input string, maxLines int) dockerPSSummaryResu
 	if len(images) == 0 {
 		return dockerPSSummaryResult{Text: shared.CompactLines(strings.TrimSpace(clean), maxLines)}
 	}
+	out := dockerImagesSummaryLines(images)
+	result := dockerPSSummaryResult{Text: shared.JoinLimitedLines(out, maxLines)}
+	if len(out) > maxLines {
+		result.OmittedCount = len(out) - maxLines
+	}
+	return result
+}
+
+func dockerImagesSummaryLines(images []dockerImage) []string {
 	named, dangling := splitDanglingImages(images)
 	out := []string{fmt.Sprintf("images: %d (total %s)", len(images), formatImageSize(sumImageSizes(images)))}
 	if len(dangling) > 0 {
@@ -47,11 +56,7 @@ func summarizeDockerImagesResult(input string, maxLines int) dockerPSSummaryResu
 	for _, image := range named {
 		out = append(out, formatDockerImage(image))
 	}
-	result := dockerPSSummaryResult{Text: shared.JoinLimitedLines(out, maxLines)}
-	if len(out) > maxLines {
-		result.OmittedCount = len(out) - maxLines
-	}
-	return result
+	return out
 }
 
 func parseDockerImages(input string) []dockerImage {
