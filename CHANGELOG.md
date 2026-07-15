@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.19.0](https://github.com/devr-tools/szr/compare/v0.18.1...v0.19.0) (2026-07-15)
+
+
+### Features
+
+* per-agent usage breakdown and interactive session picker ([45306f3](https://github.com/devr-tools/szr/commit/45306f35a80104c0f31d1c7d5290972b86a23922))
+* per-agent usage breakdown and interactive session picker ([90f0be5](https://github.com/devr-tools/szr/commit/90f0be57a5d5bb7438eb7d7c433251b358d9a2e2))
+
 ## [0.18.1](https://github.com/devr-tools/szr/compare/v0.18.0...v0.18.1) (2026-07-15)
 
 
