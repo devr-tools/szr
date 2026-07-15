@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.18.0](https://github.com/devr-tools/szr/compare/v0.17.0...v0.18.0) (2026-07-15)
+
+
+### Features
+
+* land user-defined filters, transcript insight commands, and coverage batch on main ([b4669f3](https://github.com/devr-tools/szr/commit/b4669f3d10c2d4c7d819b77e693038a3c6fb7097))
+* output-guard invariant, tee retention, transparent prefixes, and new profiles ([82cefd8](https://github.com/devr-tools/szr/commit/82cefd89a041d2026bf94a8296911d38980ceb09))
+* output-guard invariant, tee retention, transparent prefixes, and new profiles ([00faa8f](https://github.com/devr-tools/szr/commit/00faa8fc2c31356060833d30bf33201ba9cd765a))
+* user-defined filters, transcript insight commands, and coverage batch ([2666200](https://github.com/devr-tools/szr/commit/2666200be3e084d42c44100c7f58af8cf7fdb210))
+* user-defined filters, transcript insight commands, and coverage batch ([f2553d2](https://github.com/devr-tools/szr/commit/f2553d2b8b2596b5a6580bcc924d968456c8b54e))
+
 ## [0.17.0](https://github.com/devr-tools/szr/compare/v0.16.0...v0.17.0) (2026-07-03)
 
 
