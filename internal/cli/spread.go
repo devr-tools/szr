@@ -39,6 +39,7 @@ func (a *App) runSpread(args []string) int {
 	savedDisplay := spreadSavedTokensDisplay(summary)
 	failureRate := fmt.Sprintf("%.1f%% (%d/%d)", summary.FailureRate, summary.Failures, summary.Commands)
 	fallbackRate := fmt.Sprintf("%.1f%% (%d/%d)", summary.FallbackRate, summary.Fallbacks, summary.Commands)
+	emptyResultRate := fmt.Sprintf("%.1f%% (%d/%d)", summary.EmptyResultRate, summary.EmptyResults, summary.Commands)
 	teeRate := fmt.Sprintf("%.1f%% (%d/%d)", summary.TeeRate, summary.TeeCount, summary.Commands)
 	ui.header("Spread Summary")
 	ui.alignedMetrics([][2]string{
@@ -53,6 +54,7 @@ func (a *App) runSpread(args []string) int {
 	ui.metric("bytes (read/parsed/emitted)", fmt.Sprintf("%d / %d / %d", summary.RawBytesRead, summary.BytesParsed, summary.BytesEmitted), "")
 	ui.metric("failed commands", failureRate, withBar(summary.FailureRate, failureRate, ui.color, false))
 	ui.metric("fallback usage", fallbackRate, withBar(summary.FallbackRate, fallbackRate, ui.color, false))
+	ui.metric("empty results", emptyResultRate, withBar(summary.EmptyResultRate, emptyResultRate, ui.color, false))
 	ui.metric("tee usage", teeRate, withBar(summary.TeeRate, teeRate, ui.color, false))
 	renderSpreadPassthrough(ui, summary)
 	renderSpreadTopCommands(ui, summary.TopCommands)
@@ -173,14 +175,15 @@ func renderSpreadProfiles(ui spreadUI, stats []history.ProfileStat) {
 			fmt.Sprintf("%dms", stat.DurationP95MS),
 			fmt.Sprintf("%.1f%%", stat.FailureRate),
 			fmt.Sprintf("%.1f%%", stat.FallbackRate),
+			fmt.Sprintf("%.1f%%", stat.EmptyResultRate),
 			fmt.Sprintf("%.1f%%", stat.TeeRate),
 		})
 	}
 	ui.table(
-		[]string{"profile", "conf", "count", "saved", "avg", "p95", "fail", "fallback", "tee"},
+		[]string{"profile", "conf", "count", "saved", "avg", "p95", "fail", "fallback", "empty", "tee"},
 		rows,
 		tableSpec{
-			alignRight: map[int]bool{2: true, 3: true, 5: true, 6: true, 7: true, 8: true},
+			alignRight: map[int]bool{2: true, 3: true, 5: true, 6: true, 7: true, 8: true, 9: true},
 			maxWidth:   map[int]int{0: 18, 4: 22},
 		},
 	)

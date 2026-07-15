@@ -21,6 +21,7 @@ type renderedDisplayFinalizer struct {
 	guardSmallOutput    bool
 	ultraCompact        bool
 	captureComplete     bool
+	memo                history.TokenMemo
 }
 
 func (f renderedDisplayFinalizer) finalize() string {
@@ -40,11 +41,11 @@ func (f renderedDisplayFinalizer) preferTinyRawOverSuffixedDisplay(display strin
 	if raw == "" || len(raw) > neverWorseThanRawMaxBytes {
 		return display
 	}
-	rawTokens := history.EstimateTokens(raw)
+	rawTokens := f.memo.Estimate(raw)
 	if rawTokens > neverWorseThanRawMaxTokens {
 		return display
 	}
-	if history.EstimateTokens(display) > rawTokens {
+	if f.memo.Estimate(display) > rawTokens {
 		return raw
 	}
 	return display
@@ -73,7 +74,7 @@ func (f renderedDisplayFinalizer) assemble() string {
 }
 
 func (f renderedDisplayFinalizer) assembleWithSuffixes(suffixes []string) string {
-	rawTokens := trueRawTokenCount(f.rawTokens, f.rawCombined)
+	rawTokens := trueRawTokenCount(f.rawTokens, f.rawCombined, f.memo)
 	if !f.compressionContract || rawTokens < compressionContractMinRawTokens {
 		return appendDisplaySuffix(f.rendered, suffixes[0])
 	}

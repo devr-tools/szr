@@ -22,16 +22,16 @@ const (
 	compressionContractRetainedDen  = 5
 )
 
-func enforceCompressionContract(text string, rawCombined string, rawTokens int, budget OutputBudget, plan RecoveryPlan, passthrough bool, enabled bool) (string, RecoveryPlan, bool) {
+func enforceCompressionContract(text string, rawCombined string, rawTokens int, budget OutputBudget, plan RecoveryPlan, passthrough bool, enabled bool, memo history.TokenMemo) (string, RecoveryPlan, bool) {
 	if passthrough || !enabled {
 		return text, plan, false
 	}
-	rawTokens = trueRawTokenCount(rawTokens, rawCombined)
+	rawTokens = trueRawTokenCount(rawTokens, rawCombined, memo)
 	if rawTokens < compressionContractMinRawTokens {
 		return text, plan, false
 	}
 	allowedTokens := compressionContractAllowedTokens(rawTokens, budget)
-	filteredTokens := history.EstimateTokens(text)
+	filteredTokens := memo.Estimate(text)
 	if allowedTokens <= 0 || filteredTokens <= allowedTokens {
 		return text, plan, false
 	}
@@ -55,8 +55,8 @@ func compressionContractPlan(plan RecoveryPlan, rawCombined string, allowedToken
 // prefer the provided count and only fall back to estimating the captured
 // text when it is the larger signal (the batch path, where rawCombined is the
 // complete output).
-func trueRawTokenCount(provided int, rawCombined string) int {
-	if estimated := history.EstimateTokens(rawCombined); estimated > provided {
+func trueRawTokenCount(provided int, rawCombined string, memo history.TokenMemo) int {
+	if estimated := memo.Estimate(rawCombined); estimated > provided {
 		return estimated
 	}
 	return provided

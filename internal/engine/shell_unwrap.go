@@ -5,20 +5,27 @@ import (
 	"strings"
 )
 
-// ShellWrap records how a shell `-c` wrapper invocation was unwrapped for
-// classification and matching. Execution always runs the ORIGINAL wrapper
-// argv: profile Prepare rewrites are translated back into the wrapper's
-// command string only when the final segment re-quotes losslessly
-// (LiteralSafe), and are suppressed otherwise.
+// ShellWrap records how a shell `-c` wrapper or transparent prefix wrapper
+// invocation was unwrapped for classification and matching. Execution always
+// runs the ORIGINAL wrapper argv: profile Prepare rewrites are translated
+// back into the wrapper's command string only when the final segment
+// re-quotes losslessly (LiteralSafe) — or spliced after the verbatim prefix
+// words for argv-prefix wraps — and are suppressed otherwise.
 type ShellWrap struct {
 	// Original is the exact argv the user invoked, wrapper included.
 	Original []string
-	// CommandArg is the index in Original of the `-c` command string.
+	// CommandArg is the index in Original of the `-c` command string, or -1
+	// for a transparent argv-prefix wrap (env/command/nice/time) with no
+	// `-c` string to rebuild.
 	CommandArg int
 	// Prefix is the verbatim slice of the command string preceding the
 	// final segment (setup commands plus their separator), kept byte-exact
 	// when the command string is rebuilt.
 	Prefix string
+	// PrefixWords holds transparent wrapper words stripped from the front
+	// of the matching command; they are re-prepended verbatim when a
+	// Prepare rewrite is spliced back for execution.
+	PrefixWords []string
 	// LiteralSafe reports that every word of the final segment parsed
 	// without quoting-sensitive constructs (expansions, globs, tildes), so
 	// re-quoting the words individually preserves the shell's semantics.
@@ -33,24 +40,52 @@ type ShellWrap struct {
 // string whose words we cannot re-quote losslessly (expansions and globs
 // would turn literal), and profile renders still work on the raw output.
 func (w *ShellWrap) execCommand(matchedInner, preparedInner []string) []string {
-	if !w.LiteralSafe || sameStrings(matchedInner, preparedInner) {
+	if sameStrings(matchedInner, preparedInner) {
+		return append([]string(nil), w.Original...)
+	}
+	rebuilt := preparedInner
+	if len(w.PrefixWords) > 0 {
+		rebuilt = append(append([]string(nil), w.PrefixWords...), preparedInner...)
+	}
+	if w.CommandArg < 0 {
+		// Argv-prefix wrap: splicing rewritten words after the verbatim
+		// prefix is lossless, no command string to re-quote.
+		return rebuilt
+	}
+	if !w.LiteralSafe {
 		return append([]string(nil), w.Original...)
 	}
 	out := append([]string(nil), w.Original...)
-	out[w.CommandArg] = w.Prefix + joinShellWords(preparedInner)
+	out[w.CommandArg] = w.Prefix + joinShellWords(rebuilt)
 	return out
 }
 
 // unwrapShellInvocation rewrites the effective invocation's Command and
 // Display to the wrapper's inner command for classification and matching.
-// The recorded ShellWrap keeps the original argv for execution; history and
-// user-facing display always come from the caller's original invocation.
+// Transparent wrapper prefixes (env/command/nice/time and leading
+// assignments) are stripped the same way, including from the inner command
+// of a shell `-c` wrap. The recorded ShellWrap keeps the original argv for
+// execution; history and user-facing display always come from the caller's
+// original invocation.
 func unwrapShellInvocation(inv Invocation) Invocation {
 	if wrap, inner, ok := unwrapShellWrapper(inv.Command); ok {
 		inv.ShellWrap = wrap
 		inv.Command = inner
 	}
+	if prefix, inner, ok := stripTransparentPrefix(inv.Command); ok {
+		if inv.ShellWrap == nil {
+			inv.ShellWrap = &ShellWrap{
+				Original:   append([]string(nil), inv.Command...),
+				CommandArg: -1,
+			}
+		}
+		inv.ShellWrap.PrefixWords = prefix
+		inv.Command = inner
+	}
 	if inner, ok := unwrapShellCommandArgs(inv.Display); ok {
+		inv.Display = inner
+	}
+	if _, inner, ok := stripTransparentPrefix(inv.Display); ok {
 		inv.Display = inner
 	}
 	return inv

@@ -65,7 +65,10 @@ func updateBudgetSuggestionAccumulator(acc *budgetSuggestionAccumulator, rec Rec
 	if rec.ExitCode != 0 {
 		acc.failures++
 	}
-	if rec.FallbackUsed {
+	// Empty-result runs are not parse fallbacks: the command produced
+	// nothing renderable, so a looser budget cannot help. Only genuine
+	// fallbacks may feed the fallback_heavy loosen trigger.
+	if rec.FallbackUsed && !rec.EmptyResult {
 		acc.fallbacks++
 	}
 }

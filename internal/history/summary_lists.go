@@ -41,6 +41,7 @@ func summarizeProfiles(profileStats map[string]*summaryProfileAccumulator) []Pro
 		profile.stat.Confidence = dominantConfidence(profile.confidence)
 		profile.stat.FailureRate = percent(profile.stat.Failures, profile.stat.Commands)
 		profile.stat.FallbackRate = percent(profile.stat.Fallbacks, profile.stat.Commands)
+		profile.stat.EmptyResultRate = percent(profile.stat.EmptyResults, profile.stat.Commands)
 		profile.stat.TeeRate = percent(profile.stat.TeeCount, profile.stat.Commands)
 		profile.stat.DurationP50MS = percentile(profile.durations, 50)
 		profile.stat.DurationP95MS = percentile(profile.durations, 95)

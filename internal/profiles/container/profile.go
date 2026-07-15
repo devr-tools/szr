@@ -10,6 +10,7 @@ import (
 func Profiles(maxLines int) []engine.Profile {
 	return []engine.Profile{
 		dockerPSProfile(maxLines),
+		dockerImagesProfile(maxLines),
 		dockerLogsProfile(maxLines),
 		dockerTransferProfile(maxLines),
 		dockerActivityProfile(maxLines),

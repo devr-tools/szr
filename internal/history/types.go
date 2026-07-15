@@ -21,12 +21,16 @@ type Record struct {
 	SavedTokens        int       `json:"saved_tokens"`
 	SavingsPct         float64   `json:"savings_pct"`
 	FallbackUsed       bool      `json:"fallback_used,omitempty"`
-	Passthrough        bool      `json:"passthrough,omitempty"`
-	VerifierRepairs    int       `json:"verifier_repairs,omitempty"`
-	VerifierSkipped    bool      `json:"verifier_skipped,omitempty"`
-	DedupRef           string    `json:"dedup_ref,omitempty"`
-	DeltaRef           string    `json:"delta_ref,omitempty"`
-	TeePath            string    `json:"tee_path,omitempty"`
+	// EmptyResult marks runs whose profile produced an empty render (the
+	// command wrote nothing renderable), as opposed to a reducer-reported
+	// parse fallback. Older records predate the field and leave it unset.
+	EmptyResult     bool   `json:"empty_result,omitempty"`
+	Passthrough     bool   `json:"passthrough,omitempty"`
+	VerifierRepairs int    `json:"verifier_repairs,omitempty"`
+	VerifierSkipped bool   `json:"verifier_skipped,omitempty"`
+	DedupRef        string `json:"dedup_ref,omitempty"`
+	DeltaRef        string `json:"delta_ref,omitempty"`
+	TeePath         string `json:"tee_path,omitempty"`
 }
 
 type Summary struct {
@@ -40,6 +44,8 @@ type Summary struct {
 	FailureRate         float64            `json:"failure_rate"`
 	Fallbacks           int                `json:"fallbacks"`
 	FallbackRate        float64            `json:"fallback_rate"`
+	EmptyResults        int                `json:"empty_results"`
+	EmptyResultRate     float64            `json:"empty_result_rate"`
 	TeeCount            int                `json:"tee_count"`
 	TeeRate             float64            `json:"tee_rate"`
 	PassthroughCommands int                `json:"passthrough_commands,omitempty"`
@@ -69,21 +75,23 @@ type CommandStat struct {
 }
 
 type ProfileStat struct {
-	Name           string  `json:"name"`
-	Confidence     string  `json:"confidence,omitempty"`
-	Commands       int     `json:"commands"`
-	AveragePct     float64 `json:"average_pct"`
-	SavedTokens    int     `json:"saved_tokens"`
-	RawTokens      int     `json:"raw_tokens"`
-	FilteredTokens int     `json:"filtered_tokens"`
-	Failures       int     `json:"failures"`
-	FailureRate    float64 `json:"failure_rate"`
-	Fallbacks      int     `json:"fallbacks"`
-	FallbackRate   float64 `json:"fallback_rate"`
-	TeeCount       int     `json:"tee_count"`
-	TeeRate        float64 `json:"tee_rate"`
-	DurationP50MS  int64   `json:"duration_p50_ms"`
-	DurationP95MS  int64   `json:"duration_p95_ms"`
+	Name            string  `json:"name"`
+	Confidence      string  `json:"confidence,omitempty"`
+	Commands        int     `json:"commands"`
+	AveragePct      float64 `json:"average_pct"`
+	SavedTokens     int     `json:"saved_tokens"`
+	RawTokens       int     `json:"raw_tokens"`
+	FilteredTokens  int     `json:"filtered_tokens"`
+	Failures        int     `json:"failures"`
+	FailureRate     float64 `json:"failure_rate"`
+	Fallbacks       int     `json:"fallbacks"`
+	FallbackRate    float64 `json:"fallback_rate"`
+	EmptyResults    int     `json:"empty_results"`
+	EmptyResultRate float64 `json:"empty_result_rate"`
+	TeeCount        int     `json:"tee_count"`
+	TeeRate         float64 `json:"tee_rate"`
+	DurationP50MS   int64   `json:"duration_p50_ms"`
+	DurationP95MS   int64   `json:"duration_p95_ms"`
 }
 
 type FingerprintStat struct {

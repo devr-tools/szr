@@ -16,8 +16,9 @@ type Invocation struct {
 	Advanced            config.Advanced
 	Classification      Classification
 	// ShellWrap is set when Command was unwrapped from a shell `-c` wrapper
-	// for classification and matching only; execution still runs the
-	// original wrapper argv (see ShellWrap.execCommand).
+	// or a transparent prefix wrapper (env/nice/command/time) for
+	// classification and matching only; execution still runs the original
+	// wrapper argv (see ShellWrap.execCommand).
 	ShellWrap *ShellWrap
 }
 

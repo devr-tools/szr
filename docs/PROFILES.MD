@@ -2,7 +2,7 @@
 
 This document tracks the builtin profiles currently registered by `internal/profiles.Builtins()`.
 
-Current coverage: `50` builtin profiles across `21` categories.
+Current coverage: `53` builtin profiles across `23` categories.
 
 Anything not listed here does not currently have a dedicated builtin profile in `szr`.
 
@@ -17,11 +17,13 @@ Contributor guides for profile families:
 | Category | Count | Covered commands and workflows |
 | --- | ---: | --- |
 | Filesystem | 2 | `ls`, `tree`, single-file `cat` previews |
+| Environment | 1 | bare `env` variable dumps |
 | Go | 2 | `go test`, `go build`, `go vet` |
 | Generic fallback | 2 | wrapped `test` commands, shallow `summary` commands |
 | Search | 5 | `grep`, `rg` plain-text search, `rg --files`, `rg --files-with-matches`, `find` path discovery |
 | Git | 4 | `git ls-files`, `git status`, `git log`, `git diff` |
 | GitHub CLI | 5 | `gh pr view`, `gh pr checks`, `gh run list`, `gh run view`, GitHub Actions logs |
+| GitLab CLI | 1 | `glab ci status`, `glab ci list`, `glab pipeline list` |
 | JavaScript | 5 | `npm`, `pnpm`, `yarn`, `bun`, `turbo`, `nx`, `vite`, `vitest`, `jest`, `eslint`, `tsc` |
 | PHP | 1 | `composer`, `phpunit`, `pest`, `phpstan`, `psalm`, `phpcs`, `phpcbf`, `php-cs-fixer`, `php artisan` |
 | Python | 2 | `uv`, `poetry`, `pip`, `pytest`, `ruff`, `mypy` |
@@ -29,7 +31,7 @@ Contributor guides for profile families:
 | C/C++ tooling | 2 | `ctest`, `clang-tidy`, `clang-format`, `bear` |
 | Patch and diff | 1 | `diff`, `patch`, `git apply` |
 | Rust | 2 | `cargo test`, `cargo build`, `cargo clippy` |
-| Containers | 2 | `docker ps`, `docker logs`, `docker compose ps`, `docker compose logs` |
+| Containers | 3 | `docker ps`, `docker images`, `docker logs`, `docker compose ps`, `docker compose logs` |
 | Cloud inventory | 2 | `aws`, `gcloud`, `az`, `doctl`, `oci`, `openstack`, `vercel`, `supabase`, `heroku` inventory and deployment listings |
 | Cloud logs | 3 | cloud log streams plus scoped Supabase function logs and Heroku router logs |
 | Kubernetes | 5 | `kubectl get`, `kubectl describe`, `kubectl logs`, `kubectl top`, `kubectl events` |
@@ -48,6 +50,12 @@ Contributor guides for profile families:
 - `cat-read`
   - Matches: single-file non-JSON `cat`
   - Focus: structural file previews that prefer headings, declarations, and anchored lines
+
+### Environment
+
+- `env-print`
+  - Matches: a bare `env` with no flags, assignments, or wrapped command (`env KEY=VAL cmd` routes to the inner command's profile instead)
+  - Focus: keeps `PATH` and common shell diagnostics readable, groups the remaining variables by name prefix, and redacts values of secret-looking names as `NAME=<redacted len=N>`
 
 ### Go
 
@@ -118,6 +126,14 @@ Contributor guides for profile families:
   - Matches: `gh run view`
   - Focus: workflow status, branch or event context, failed jobs, and failed steps
 
+### GitLab CLI
+
+- `glab-pipeline`
+  - Matches: `glab ci status`, `glab ci list`, `glab pipeline status`, and `glab pipeline list` (plus `ls` aliases)
+  - Focus: leads with a status breakdown, keeps failed, running, and canceled rows in full, and folds the dominant status into a count
+
+`glab mr list`, `glab mr view`, and `glab issue list` are covered by the GitHub CLI profiles, which normalize `glab` merge-request commands alongside `gh pr` commands.
+
 ### JavaScript
 
 - `bun-test`
@@ -186,6 +202,9 @@ Contributor guides for profile families:
 - `docker-ps`
   - Matches: `docker ps`, `docker compose ps`
   - Focus: container state, service names, and image identifiers
+- `docker-images`
+  - Matches: `docker images`, `docker image ls`
+  - Focus: injects a tab `--format` template when the user did not already choose `--format`, `--quiet`, or `--digests`; leads with image count and size total, collapses dangling `<none>` images into one line, and keeps repo:tag, size, and age per image
 - `docker-logs`
   - Matches: `docker logs`, `docker compose logs`
   - Focus: bounded log tails with repeated failures collapsed by service or container

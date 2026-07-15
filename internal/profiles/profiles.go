@@ -10,8 +10,10 @@ import (
 	containerprofiles "github.com/devr-tools/szr/internal/profiles/container"
 	cppprofiles "github.com/devr-tools/szr/internal/profiles/cpp"
 	dotnetprofiles "github.com/devr-tools/szr/internal/profiles/dotnet"
+	envdumpprofiles "github.com/devr-tools/szr/internal/profiles/envdump"
 	gitprofiles "github.com/devr-tools/szr/internal/profiles/git"
 	githubprofiles "github.com/devr-tools/szr/internal/profiles/github"
+	gitlabprofiles "github.com/devr-tools/szr/internal/profiles/gitlab"
 	httpapiprofiles "github.com/devr-tools/szr/internal/profiles/httpapi"
 	javascriptprofiles "github.com/devr-tools/szr/internal/profiles/javascript"
 	jsonqueryprofiles "github.com/devr-tools/szr/internal/profiles/jsonquery"
@@ -37,8 +39,10 @@ func Builtins(maxLines int) []engine.Profile {
 	list = append(list, containerprofiles.Profiles(maxLines)...)
 	list = append(list, cloudlistprofiles.Profiles(maxLines)...)
 	list = append(list, cloudlogsprofiles.Profiles(maxLines)...)
+	list = append(list, envdumpprofiles.Profiles(maxLines)...)
 	list = append(list, kubernetesprofiles.Profiles(maxLines)...)
 	list = append(list, githubprofiles.Profiles(maxLines)...)
+	list = append(list, gitlabprofiles.Profiles(maxLines)...)
 	list = append(list, httpapiprofiles.Profiles(maxLines)...)
 	list = append(list, javascriptprofiles.Profiles(maxLines)...)
 	list = append(list, jsonqueryprofiles.Profiles(maxLines)...)

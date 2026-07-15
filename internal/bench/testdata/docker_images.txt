@@ -1,0 +1,21 @@
+REPOSITORY                           TAG               IMAGE ID       CREATED         SIZE
+registry.acme.dev/platform/api       1.42.0            3f8a9b2c1d4e   2 days ago      812MB
+registry.acme.dev/platform/api       1.41.2            7c2d4e6f8a1b   2 weeks ago     809MB
+registry.acme.dev/platform/worker    1.42.0            a1b2c3d4e5f6   2 days ago      1.24GB
+registry.acme.dev/platform/gateway   0.9.7             b2c3d4e5f6a7   5 days ago      148MB
+postgres                             16.3              c3d4e5f6a7b8   3 weeks ago     432MB
+postgres                             15.6              d4e5f6a7b8c9   4 months ago    426MB
+redis                                7.2-alpine        e5f6a7b8c9d0   6 weeks ago     41.1MB
+nginx                                1.27-alpine       f6a7b8c9d0e1   3 weeks ago     43.2MB
+node                                 20.14-slim        0a1b2c3d4e5f   2 months ago    219MB
+node                                 18.20-slim        1b2c3d4e5f60   5 months ago    215MB
+golang                               1.23-bookworm     2c3d4e5f6071   6 weeks ago     839MB
+python                               3.12-slim         3d4e5f607182   2 months ago    158MB
+rabbitmq                             3.13-management   4e5f60718293   3 months ago    271MB
+minio/minio                          latest            5f6071829304   2 months ago    174MB
+grafana/grafana                      11.1.0            607182930415   4 months ago    453MB
+prom/prometheus                      v2.53.0           718293041526   4 months ago    289MB
+localstack/localstack                3.5               829304152637   3 months ago    1.09GB
+<none>                               <none>            930415263748   5 weeks ago     1.02GB
+<none>                               <none>            041526374859   2 months ago    812MB
+<none>                               <none>            152637485960   3 months ago    97.4MB

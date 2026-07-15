@@ -15,6 +15,29 @@ func preferRawSmallOutput(rendered string, rawCombined string) string {
 	return preferRawSmallOutputForProfile(Profile{}, rendered, rawCombined, 0)
 }
 
+// enforceFinalNeverWorseThanRaw is the last render pass: the emitted display
+// (body plus any recovery or artifact suffix, retention repairs included)
+// must never cost more tokens than relaying the raw output. Failure escapes
+// may expand a render, but only within raw size — when the finished display
+// would exceed it, the raw output wins on both cost and fidelity, and any
+// artifact pointer becomes pure redundancy because the display omits
+// nothing. Only a complete capture can stand in for the raw stream.
+// Ultra-compact mode is exempt, matching the other never-worse-than-raw
+// guards: the user opted into a reshaped display over token minimality.
+func enforceFinalNeverWorseThanRaw(rendered string, rawCombined string, passthrough bool, captureComplete bool, ultraCompact bool, memo history.TokenMemo) string {
+	if passthrough || ultraCompact || !captureComplete {
+		return rendered
+	}
+	raw := strings.TrimSpace(rawCombined)
+	if raw == "" {
+		return rendered
+	}
+	if memo.Estimate(rendered) > memo.Estimate(raw) {
+		return raw
+	}
+	return rendered
+}
+
 func preferRawSmallOutputForProfile(profile Profile, rendered string, rawCombined string, exitCode int) string {
 	if !shouldPreferRawSmallOutput(profile, rendered, rawCombined, exitCode) {
 		return rendered
@@ -36,8 +59,13 @@ func shouldPreferRawSmallOutput(profile Profile, rendered string, rawCombined st
 	if rawCombined == "" || rendered == "" {
 		return false
 	}
+	// The byte gate runs before the token estimate so large outputs skip the
+	// scan entirely; only outputs already within the byte cap get estimated.
+	if len(rawCombined) > neverWorseThanRawMaxBytes {
+		return false
+	}
 	rawTokens := history.EstimateTokens(rawCombined)
-	if len(rawCombined) > neverWorseThanRawMaxBytes || rawTokens > neverWorseThanRawMaxTokens {
+	if rawTokens > neverWorseThanRawMaxTokens {
 		return false
 	}
 	if shouldKeepCanonicalSmallSummary(profile, rendered, rawCombined, exitCode) {

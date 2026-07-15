@@ -44,7 +44,10 @@ func TestExecuteUsesStreamReducerAndStreamsTeeOnFailure(t *testing.T) {
 	if result.ExitCode != 7 {
 		t.Fatalf("expected exit 7, got %#v", result)
 	}
-	if !strings.Contains(result.Display, "stderr-one") || !strings.Contains(result.Display, "[tee: ") {
+	// The tiny raw output plus a tee suffix would exceed raw token cost, so
+	// the final never-worse-than-raw guard relays the complete raw output
+	// and drops the now-redundant artifact pointer from the display.
+	if result.Display != "stdout-one\nstderr-one\nstderr-two" {
 		t.Fatalf("unexpected rendered display: %q", result.Display)
 	}
 	if result.TeePath == "" {
@@ -345,7 +348,7 @@ func TestExecuteCountsTokensWithoutFullyCapturingIgnoredStream(t *testing.T) {
 	t.Parallel()
 
 	binDir := t.TempDir()
-	mixedOutPath := testutil.WriteExecutable(t, binDir, "mixedout", "#!/bin/sh\nprintf 'ok\\n'\nprintf 'very noisy ignored stderr line\\n' >&2\n")
+	mixedOutPath := testutil.WriteExecutable(t, binDir, "mixedout", "#!/bin/sh\nprintf 'ok\\n'\ni=1\nwhile [ $i -le 30 ]; do\n  echo \"very noisy ignored stderr line $i\" >&2\n  i=$((i+1))\ndone\n")
 
 	root := t.TempDir()
 	paths := testutil.Paths(root)
@@ -373,8 +376,13 @@ func TestExecuteCountsTokensWithoutFullyCapturingIgnoredStream(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute mixed output: %v", err)
 	}
-	if strings.Contains(result.RawCombined, "ignored stderr") {
+	// The ignored stream keeps only a bounded preview (for empty-render
+	// fallbacks); the stream's tail must never be fully buffered.
+	if strings.Contains(result.RawCombined, "ignored stderr line 30") {
 		t.Fatalf("did not expect ignored stderr to be fully buffered, got %#v", result)
+	}
+	if result.Display != "ok" {
+		t.Fatalf("expected reducer render untouched by ignored-stream preview, got %q", result.Display)
 	}
 
 	records, loadErr := store.LoadAll()
@@ -393,7 +401,7 @@ func TestExecuteCountsTokensWithoutFullyCapturingIgnoredStdout(t *testing.T) {
 	t.Parallel()
 
 	binDir := t.TempDir()
-	mixedErrPath := testutil.WriteExecutable(t, binDir, "mixederr", "#!/bin/sh\nprintf 'very noisy ignored stdout line\\n'\nprintf 'primary stderr\\n' >&2\n")
+	mixedErrPath := testutil.WriteExecutable(t, binDir, "mixederr", "#!/bin/sh\ni=1\nwhile [ $i -le 30 ]; do\n  echo \"very noisy ignored stdout line $i\"\n  i=$((i+1))\ndone\nprintf 'primary stderr\\n' >&2\n")
 
 	root := t.TempDir()
 	paths := testutil.Paths(root)
@@ -424,7 +432,9 @@ func TestExecuteCountsTokensWithoutFullyCapturingIgnoredStdout(t *testing.T) {
 	if result.Display != "primary stderr" {
 		t.Fatalf("expected stderr-only render, got %#v", result)
 	}
-	if strings.Contains(result.RawCombined, "ignored stdout") {
+	// The ignored stream keeps only a bounded preview (for empty-render
+	// fallbacks); the stream's tail must never be fully buffered.
+	if strings.Contains(result.RawCombined, "ignored stdout line 30") {
 		t.Fatalf("did not expect ignored stdout to be fully buffered, got %#v", result)
 	}
 
