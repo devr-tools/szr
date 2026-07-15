@@ -191,7 +191,7 @@ See [docs/FILTERS.md](docs/FILTERS.md) for the spec format and a worked example.
 | `szr discover [--all\|--since <n>\|--top <n>\|--json]` | Scan local agent transcripts read-only for commands that ran without szr and estimate the missed savings. |
 | `szr usage [--all\|--since <n>\|--session <id>\|--json]` | Compare model-billed tokens per agent session against szr-side emitted and avoided estimates. |
 | `szr doctor [--json]` | Check runtime diagnostics and local history health. |
-| `szr self doctor [--json]` | Check install state, `PATH`, config, cache, and version details. |
+| `szr self doctor [--json] [--refresh]` | Check install state, `PATH`, config, cache, and version details; `--refresh` bypasses the release-check cache for a live lookup. |
 | `szr settings` | Open the interactive settings menu for update checks, auto update, and other local preferences. |
 | `szr expand <ref>` | Recover the byte-exact original output behind a dedup or delta baseline reference. |
 | `SZR_SESSION=<id> szr <cmd...>` | Scope dedup and delta references to one agent session; export it fleet-wide so parallel agents share a scope. |
@@ -210,7 +210,7 @@ Reasoning budget modes:
 
 - Interactive shells: `szr` can print update notices on `stderr` when update checks are enabled.
 - Agent or non-interactive tool runs: inline update notices are suppressed to keep tool output stable.
-- Hosts can poll `szr doctor --json` or `szr self doctor --json` and render their own user-facing notification with the returned `update` object.
+- Hosts can poll `szr doctor --json` or `szr self doctor --json` and render their own user-facing notification with the returned `update` object; add `--refresh` to force a live release lookup instead of the cached one.
 - Opt-in auto update is available for recognized Homebrew or `go install` installs:
 
 ```json

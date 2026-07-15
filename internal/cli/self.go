@@ -46,11 +46,11 @@ func selfRuntime(a *App) selfcmd.Runtime {
 				UpgradeCommand: result.UpgradeCommand,
 			}, err
 		},
-		DoctorReport: func(ctx context.Context, cfg selfcmd.Config) selfcmd.DoctorReport {
+		DoctorReport: func(ctx context.Context, cfg selfcmd.Config, opts ...selfcmd.DoctorOption) selfcmd.DoctorReport {
 			if a.updater == nil {
 				return selfcmd.DoctorReport{}
 			}
-			report := a.updater.Doctor(ctx, a.version, cfg.UpdateCheck)
+			report := a.updater.Doctor(ctx, a.version, cfg.UpdateCheck, opts...)
 			return selfcmd.DoctorReport(report)
 		},
 	}

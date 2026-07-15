@@ -559,7 +559,7 @@ type stubUpdater struct {
 	autoCalls    int
 }
 
-func (s stubUpdater) Doctor(context.Context, string, config.UpdateCheck) updates.DoctorReport {
+func (s stubUpdater) Doctor(context.Context, string, config.UpdateCheck, ...updates.DoctorOption) updates.DoctorReport {
 	return s.report
 }
 
@@ -578,7 +578,7 @@ type countingUpdater struct {
 	autoCalls int
 }
 
-func (u *countingUpdater) Doctor(context.Context, string, config.UpdateCheck) updates.DoctorReport {
+func (u *countingUpdater) Doctor(context.Context, string, config.UpdateCheck, ...updates.DoctorOption) updates.DoctorReport {
 	return updates.DoctorReport{}
 }
 

@@ -23,7 +23,7 @@ type orderRecordingUpdater struct {
 	autoAfterCommand bool
 }
 
-func (u *orderRecordingUpdater) Doctor(context.Context, string, config.UpdateCheck) updates.DoctorReport {
+func (u *orderRecordingUpdater) Doctor(context.Context, string, config.UpdateCheck, ...updates.DoctorOption) updates.DoctorReport {
 	return updates.DoctorReport{}
 }
 
@@ -71,7 +71,7 @@ type blockingUpdater struct {
 	autoCalls int
 }
 
-func (u *blockingUpdater) Doctor(ctx context.Context, _ string, _ config.UpdateCheck) updates.DoctorReport {
+func (u *blockingUpdater) Doctor(ctx context.Context, _ string, _ config.UpdateCheck, _ ...updates.DoctorOption) updates.DoctorReport {
 	<-ctx.Done()
 	return updates.DoctorReport{}
 }

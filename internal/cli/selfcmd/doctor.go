@@ -11,6 +11,7 @@ import (
 	workflowcmd "github.com/devr-tools/szr/internal/cli/workflows"
 	"github.com/devr-tools/szr/internal/history"
 	"github.com/devr-tools/szr/internal/selfinstall"
+	"github.com/devr-tools/szr/internal/updates"
 )
 
 func RunDoctor(rt Runtime, ctx context.Context, cfg Config, args []string) int {
@@ -20,7 +21,7 @@ func RunDoctor(rt Runtime, ctx context.Context, cfg Config, args []string) int {
 	}
 
 	executablePath, plan, planErr := doctorInstallPlan()
-	update := doctorUpdateReport(rt, ctx, cfg)
+	update := doctorUpdateReport(rt, ctx, cfg, parsed.refresh)
 	historyDiagnostics, err := doctorHistoryDiagnostics(rt, parsed.showHistory)
 	if err != nil {
 		fmt.Fprintf(rt.Stderr, "szr: failed to read history: %v\n", err)
@@ -87,6 +88,8 @@ func parseDoctorArgs(rt Runtime, args []string) (doctorArgs, int) {
 			parsed.showHistory = true
 		case "--json":
 			parsed.asJSON = true
+		case "--refresh":
+			parsed.refresh = true
 		default:
 			fmt.Fprintf(rt.Stderr, "szr: unknown doctor flag %s\n", arg)
 			return doctorArgs{}, 2
@@ -125,9 +128,12 @@ func printDoctorInstallPlan(rt Runtime, plan selfinstall.Plan, err error) {
 	}
 }
 
-func doctorUpdateReport(rt Runtime, ctx context.Context, cfg Config) DoctorReport {
+func doctorUpdateReport(rt Runtime, ctx context.Context, cfg Config, refresh bool) DoctorReport {
 	if rt.DoctorReport == nil {
 		return DoctorReport{}
+	}
+	if refresh {
+		return rt.DoctorReport(ctx, cfg, updates.WithRefresh())
 	}
 	return rt.DoctorReport(ctx, cfg)
 }

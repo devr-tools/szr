@@ -17,6 +17,7 @@ var ErrSelfUpdateUnavailable = errors.New("self update is unavailable in this bu
 type Config = config.Config
 type Paths = config.Paths
 type DoctorReport = updates.DoctorReport
+type DoctorOption = updates.DoctorOption
 
 type SelfUpdateResult struct {
 	Method         updates.InstallMethod
@@ -31,12 +32,13 @@ type Runtime struct {
 	Stdout       io.Writer
 	Stderr       io.Writer
 	SelfUpdate   func(context.Context, *os.File, *os.File) (SelfUpdateResult, error)
-	DoctorReport func(context.Context, Config) DoctorReport
+	DoctorReport func(context.Context, Config, ...DoctorOption) DoctorReport
 }
 
 type doctorArgs struct {
 	showHistory bool
 	asJSON      bool
+	refresh     bool
 }
 
 type doctorJSON struct {
