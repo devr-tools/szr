@@ -6,12 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
-	"strconv"
 	"strings"
 	"time"
 
@@ -73,49 +70,70 @@ type AutoUpdateResult struct {
 	Error     string
 }
 
+type DoctorOptions struct {
+	Refresh bool
+}
+
+type DoctorOption func(*DoctorOptions)
+
+func WithRefresh() DoctorOption {
+	return func(o *DoctorOptions) { o.Refresh = true }
+}
+
+func buildDoctorOptions(opts []DoctorOption) DoctorOptions {
+	var options DoctorOptions
+	for _, opt := range opts {
+		opt(&options)
+	}
+	return options
+}
+
 type Service struct {
-	paths        config.Paths
-	now          func() time.Time
-	readFile     func(string) ([]byte, error)
-	writeFile    func(string, []byte, os.FileMode) error
-	mkdirAll     func(string, os.FileMode) error
-	executable   func() (string, error)
-	evalSymlinks func(string) (string, error)
-	lookPath     func(string) (string, error)
-	getenv       func(string) string
-	userHomeDir  func() (string, error)
-	fetchLatest  func(context.Context) (Release, error)
-	runBrew      func(context.Context, io.Writer, io.Writer) error
-	runGoInstall func(context.Context, io.Writer, io.Writer) error
+	paths            config.Paths
+	now              func() time.Time
+	readFile         func(string) ([]byte, error)
+	writeFile        func(string, []byte, os.FileMode) error
+	mkdirAll         func(string, os.FileMode) error
+	executable       func() (string, error)
+	evalSymlinks     func(string) (string, error)
+	lookPath         func(string) (string, error)
+	getenv           func(string) string
+	userHomeDir      func() (string, error)
+	fetchLatest      func(context.Context) (Release, error)
+	runBrewUpdate    func(context.Context, io.Writer, io.Writer) error
+	runBrew          func(context.Context, io.Writer, io.Writer) error
+	runGoInstall     func(context.Context, io.Writer, io.Writer) error
+	installedVersion func(context.Context) (string, error)
 }
 
 func New(paths config.Paths) *Service {
-	return &Service{
-		paths:        paths,
-		now:          time.Now,
-		readFile:     os.ReadFile,
-		writeFile:    os.WriteFile,
-		mkdirAll:     os.MkdirAll,
-		executable:   os.Executable,
-		evalSymlinks: filepath.EvalSymlinks,
-		lookPath:     exec.LookPath,
-		getenv:       os.Getenv,
-		userHomeDir:  os.UserHomeDir,
-		fetchLatest:  fetchLatestRelease,
-		runBrew:      runBrewUpgrade,
-		runGoInstall: runGoInstallLatest,
+	s := &Service{
+		paths:         paths,
+		now:           time.Now,
+		readFile:      os.ReadFile,
+		writeFile:     os.WriteFile,
+		mkdirAll:      os.MkdirAll,
+		executable:    os.Executable,
+		evalSymlinks:  filepath.EvalSymlinks,
+		lookPath:      exec.LookPath,
+		getenv:        os.Getenv,
+		userHomeDir:   os.UserHomeDir,
+		fetchLatest:   fetchLatestRelease,
+		runBrewUpdate: runBrewFormulaeUpdate,
+		runBrew:       runBrewUpgrade,
+		runGoInstall:  runGoInstallLatest,
 	}
+	s.installedVersion = s.reportedBinaryVersion
+	return s
 }
 
 func (s *Service) Doctor(ctx context.Context, currentVersion string, cfg config.UpdateCheck) DoctorReport {
-	method, upgradeCommand := s.detectInstallMethod()
-	report := DoctorReport{
-		Enabled:        cfg.Enabled,
-		Interval:       time.Duration(cfg.IntervalHours) * time.Hour,
-		AutoUpdate:     cfg.AutoUpdate,
-		Method:         method,
-		UpgradeCommand: upgradeCommand,
-	}
+	return s.DoctorWithOptions(ctx, currentVersion, cfg)
+}
+
+func (s *Service) DoctorWithOptions(ctx context.Context, currentVersion string, cfg config.UpdateCheck, opts ...DoctorOption) DoctorReport {
+	options := buildDoctorOptions(opts)
+	report := s.baseDoctorReport(cfg)
 	cache, cacheErr := s.loadCache()
 	if cacheErr == nil {
 		report.AutoUpdateState = cache.autoUpdateState()
@@ -124,40 +142,61 @@ func (s *Service) Doctor(ctx context.Context, currentVersion string, cfg config.
 		return report
 	}
 
-	if cacheErr == nil && !cache.CheckedAt.IsZero() && s.now().Sub(cache.CheckedAt) < report.Interval {
-		report.LatestVersion = cache.LatestVersion
-		report.LatestURL = cache.LatestURL
-		report.CheckedAt = cache.CheckedAt
-		report.FromCache = true
-		report.UpdateAvailable = compareVersions(currentVersion, cache.LatestVersion) < 0
+	if !options.Refresh && cacheErr == nil && s.cacheFresh(cache, report.Interval) {
+		applyCachedRelease(&report, cache, currentVersion)
 		return report
 	}
 
+	s.liveDoctorCheck(ctx, &report, cache, currentVersion)
+	return report
+}
+
+func (s *Service) baseDoctorReport(cfg config.UpdateCheck) DoctorReport {
+	method, upgradeCommand := s.detectInstallMethod()
+	return DoctorReport{
+		Enabled:        cfg.Enabled,
+		Interval:       time.Duration(cfg.IntervalHours) * time.Hour,
+		AutoUpdate:     cfg.AutoUpdate,
+		Method:         method,
+		UpgradeCommand: upgradeCommand,
+	}
+}
+
+func (s *Service) liveDoctorCheck(ctx context.Context, report *DoctorReport, cache cachedRelease, currentVersion string) {
 	release, err := s.fetchLatest(ctx)
 	if err != nil {
-		if cacheErr == nil && !cache.CheckedAt.IsZero() {
-			report.LatestVersion = cache.LatestVersion
-			report.LatestURL = cache.LatestURL
-			report.CheckedAt = cache.CheckedAt
-			report.FromCache = true
-			report.UpdateAvailable = compareVersions(currentVersion, cache.LatestVersion) < 0
+		if !cache.CheckedAt.IsZero() {
+			applyCachedRelease(report, cache, currentVersion)
 		}
 		report.Error = err.Error()
-		return report
+		return
 	}
+	s.recordLiveRelease(report, cache, release, currentVersion)
+}
 
+func (s *Service) cacheFresh(cache cachedRelease, interval time.Duration) bool {
+	return !cache.CheckedAt.IsZero() && s.now().Sub(cache.CheckedAt) < interval
+}
+
+func applyCachedRelease(report *DoctorReport, cache cachedRelease, currentVersion string) {
+	report.LatestVersion = cache.LatestVersion
+	report.LatestURL = cache.LatestURL
+	report.CheckedAt = cache.CheckedAt
+	report.FromCache = true
+	report.UpdateAvailable = compareVersions(currentVersion, cache.LatestVersion) < 0
+}
+
+func (s *Service) recordLiveRelease(report *DoctorReport, cache cachedRelease, release Release, currentVersion string) {
 	report.LatestVersion = release.Version
 	report.LatestURL = release.URL
 	report.CheckedAt = s.now().UTC()
 	report.UpdateAvailable = compareVersions(currentVersion, release.Version) < 0
-	if writeErr := s.saveCache(cachedRelease{
-		CheckedAt:     report.CheckedAt,
-		LatestVersion: release.Version,
-		LatestURL:     release.URL,
-	}); writeErr != nil {
+	cache.CheckedAt = report.CheckedAt
+	cache.LatestVersion = release.Version
+	cache.LatestURL = release.URL
+	if writeErr := s.saveCache(cache); writeErr != nil {
 		report.Error = writeErr.Error()
 	}
-	return report
 }
 
 func (s *Service) AutoUpdate(ctx context.Context, currentVersion string, cfg config.UpdateCheck, stdout, stderr io.Writer) AutoUpdateResult {
@@ -206,6 +245,12 @@ func (s *Service) AutoUpdate(ctx context.Context, currentVersion string, cfg con
 		_ = s.saveCache(cache)
 		return result
 	}
+	if verifyErr := s.verifyInstalledVersion(ctx, report.LatestVersion); verifyErr != nil {
+		result.Error = verifyErr.Error()
+		cache.AutoUpdateError = result.Error
+		_ = s.saveCache(cache)
+		return result
+	}
 
 	result.Updated = true
 	cache.AutoUpdateSucceededAt = s.now().UTC()
@@ -226,6 +271,9 @@ func (s *Service) SelfUpdate(ctx context.Context, stdout, stderr io.Writer) (Sel
 	case InstallMethodBrew:
 		if _, err := s.lookPath("brew"); err != nil {
 			return result, fmt.Errorf("brew is not installed or not on PATH")
+		}
+		if err := s.runBrewUpdate(ctx, stdout, stderr); err != nil {
+			fmt.Fprintf(stderr, "szr: brew update failed, continuing with upgrade: %v\n", err)
 		}
 		if err := s.runBrew(ctx, stdout, stderr); err != nil {
 			return result, fmt.Errorf("failed to update via %s: %w", result.UpgradeCommand, err)
@@ -306,130 +354,4 @@ func autoUpdateAttemptFresh(cache cachedRelease, version string, now time.Time, 
 		return true
 	}
 	return now.Sub(cache.AutoUpdateAttemptedAt) < interval
-}
-
-func (s *Service) detectInstallMethod() (InstallMethod, string) {
-	execPath, err := s.executable()
-	if err != nil {
-		return InstallMethodUnknown, ""
-	}
-	resolved := execPath
-	if path, err := s.evalSymlinks(execPath); err == nil {
-		resolved = path
-	}
-	resolved = filepath.Clean(resolved)
-
-	cellarFragment := string(filepath.Separator) + "Cellar" + string(filepath.Separator) + "szr" + string(filepath.Separator)
-	if strings.Contains(resolved, cellarFragment) {
-		return InstallMethodBrew, "brew upgrade szr"
-	}
-
-	binName := "szr"
-	if runtime.GOOS == "windows" {
-		binName += ".exe"
-	}
-	if gobin := strings.TrimSpace(s.getenv("GOBIN")); gobin != "" && samePath(resolved, filepath.Join(gobin, binName)) {
-		return InstallMethodGo, "go install " + goInstallRef
-	}
-
-	gopath := strings.TrimSpace(s.getenv("GOPATH"))
-	if gopath == "" {
-		if homeDir, err := s.userHomeDir(); err == nil {
-			gopath = filepath.Join(homeDir, "go")
-		}
-	}
-	if gopath != "" && samePath(resolved, filepath.Join(gopath, "bin", binName)) {
-		return InstallMethodGo, "go install " + goInstallRef
-	}
-
-	return InstallMethodUnknown, ""
-}
-
-func samePath(left, right string) bool {
-	if runtime.GOOS == "windows" {
-		return strings.EqualFold(filepath.Clean(left), filepath.Clean(right))
-	}
-	return filepath.Clean(left) == filepath.Clean(right)
-}
-
-func compareVersions(current, latest string) int {
-	currentParts, currentOK := parseVersion(current)
-	latestParts, latestOK := parseVersion(latest)
-	if !currentOK || !latestOK {
-		return 0
-	}
-	for i := 0; i < 3; i++ {
-		switch {
-		case currentParts[i] < latestParts[i]:
-			return -1
-		case currentParts[i] > latestParts[i]:
-			return 1
-		}
-	}
-	return 0
-}
-
-func parseVersion(value string) ([3]int, bool) {
-	value = strings.TrimSpace(strings.TrimPrefix(value, "v"))
-	if value == "" {
-		return [3]int{}, false
-	}
-	parts := strings.SplitN(value, "-", 2)
-	fields := strings.Split(parts[0], ".")
-	if len(fields) != 3 {
-		return [3]int{}, false
-	}
-	var parsed [3]int
-	for i, field := range fields {
-		n, err := strconv.Atoi(field)
-		if err != nil {
-			return [3]int{}, false
-		}
-		parsed[i] = n
-	}
-	return parsed, true
-}
-
-func fetchLatestRelease(ctx context.Context) (Release, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, releaseAPIURL, nil)
-	if err != nil {
-		return Release{}, err
-	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "szr-update-check")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return Release{}, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return Release{}, fmt.Errorf("update check failed: %s", resp.Status)
-	}
-
-	var payload struct {
-		TagName string `json:"tag_name"`
-		HTMLURL string `json:"html_url"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return Release{}, err
-	}
-	if payload.TagName == "" {
-		return Release{}, errors.New("update check returned no release tag")
-	}
-	return Release{Version: payload.TagName, URL: payload.HTMLURL}, nil
-}
-
-func runBrewUpgrade(ctx context.Context, stdout, stderr io.Writer) error {
-	cmd := exec.CommandContext(ctx, "brew", "upgrade", "szr")
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-	return cmd.Run()
-}
-
-func runGoInstallLatest(ctx context.Context, stdout, stderr io.Writer) error {
-	cmd := exec.CommandContext(ctx, "go", "install", goInstallRef)
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-	return cmd.Run()
 }

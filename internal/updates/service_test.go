@@ -215,6 +215,7 @@ func TestAutoUpdateRunsOncePerVersion(t *testing.T) {
 			_, _ = io.WriteString(stdout, "updated\n")
 			return nil
 		},
+		installedVersion: func(context.Context) (string, error) { return "v0.2.0", nil },
 	}
 
 	var stdout strings.Builder

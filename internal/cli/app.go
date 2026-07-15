@@ -25,6 +25,7 @@ type App struct {
 
 type updater interface {
 	Doctor(context.Context, string, config.UpdateCheck) updates.DoctorReport
+	DoctorWithOptions(context.Context, string, config.UpdateCheck, ...updates.DoctorOption) updates.DoctorReport
 	AutoUpdate(context.Context, string, config.UpdateCheck, io.Writer, io.Writer) updates.AutoUpdateResult
 	SelfUpdate(context.Context, io.Writer, io.Writer) (updates.SelfUpdateResult, error)
 }
