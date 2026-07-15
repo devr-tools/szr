@@ -149,6 +149,7 @@ func newStreamingRecordBase(inv Invocation, profile Profile, profileConfidence s
 		Profile:            profile.Name,
 		ProfileConfidence:  profileConfidence,
 		Cwd:                inv.Cwd,
+		SessionScope:       sessionScope(),
 		DurationMS:         duration.Milliseconds(),
 		ExitCode:           exitCode,
 	}

@@ -14,10 +14,6 @@ func (a *App) runRecommend(args []string) int {
 	return workflowcmd.RunRecommend(workflowRuntime(a, 0, false), args)
 }
 
-func (a *App) runDiscover(args []string) int {
-	return workflowcmd.RunDiscover(workflowRuntime(a, 0, false), args)
-}
-
 func (a *App) runHotspots(args []string) int {
 	return workflowcmd.RunHotspots(workflowRuntime(a, 0, false), args)
 }

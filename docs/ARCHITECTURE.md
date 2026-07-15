@@ -100,7 +100,8 @@ This layer owns:
 
 - builtin profile registration
 - project-local profile overlays
-- profile ordering and precedence
+- user-defined declarative filter loading: global config `filters/` specs, then project `.szr/filters/` specs when `advanced.project_filters` is enabled
+- profile ordering and precedence: project rules, then builtins, then user filters; later sources may not shadow an earlier profile's name and are skipped with a warning
 - profile confidence
 - matching against invocation plus classification facts
 

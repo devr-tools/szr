@@ -87,42 +87,6 @@ func TestRecommendAndHotspotsCommands(t *testing.T) {
 		t.Fatalf("expected hotspot signals in payload, got %#v", payload)
 	}
 
-	code, stdout, stderr = testutil.RunApp(t, app, "discover")
-	if code != 0 || stderr != "" {
-		t.Fatalf("unexpected discover stdout=%q stderr=%q code=%d", stdout, stderr, code)
-	}
-	for _, want := range []string{
-		"discover: top",
-		"[budget] terraform plan",
-		"do: adjust the active budget to lines=",
-		"signals=repeated-passthrough,fallback-heavy,tee-heavy",
-		"score=",
-	} {
-		if !strings.Contains(stdout, want) {
-			t.Fatalf("expected discover output %q in %q", want, stdout)
-		}
-	}
-
-	code, stdout, stderr = testutil.RunApp(t, app, "discover", "--json")
-	if code != 0 || stderr != "" {
-		t.Fatalf("unexpected discover json stdout=%q stderr=%q code=%d", stdout, stderr, code)
-	}
-	var discoverPayload map[string]any
-	if err := json.Unmarshal([]byte(stdout), &discoverPayload); err != nil {
-		t.Fatalf("decode discover json: %v", err)
-	}
-	summary, ok := discoverPayload["summary"].(map[string]any)
-	if !ok || summary["recommendation_count"] == nil || summary["hotspot_count"] == nil {
-		t.Fatalf("expected discover summary in payload, got %#v", discoverPayload)
-	}
-	opportunities, ok := discoverPayload["opportunities"].([]any)
-	if !ok || len(opportunities) == 0 {
-		t.Fatalf("expected discover opportunities in payload, got %#v", discoverPayload)
-	}
-	first, ok := opportunities[0].(map[string]any)
-	if !ok || first["command"] != "terraform plan" || first["coverage_score"] == nil {
-		t.Fatalf("unexpected discover opportunity payload: %#v", discoverPayload)
-	}
 }
 
 func TestRecommendRoutingCoverageForFindAndGrep(t *testing.T) {

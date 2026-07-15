@@ -9,18 +9,22 @@ type Record struct {
 	Profile            string    `json:"profile"`
 	ProfileConfidence  string    `json:"profile_confidence,omitempty"`
 	Cwd                string    `json:"cwd"`
-	DurationMS         int64     `json:"duration_ms"`
-	ExitCode           int       `json:"exit_code"`
-	RawBytes           int       `json:"raw_bytes"`
-	FilteredBytes      int       `json:"filtered_bytes"`
-	RawBytesRead       int       `json:"raw_bytes_read,omitempty"`
-	BytesParsed        int       `json:"bytes_parsed,omitempty"`
-	BytesEmitted       int       `json:"bytes_emitted,omitempty"`
-	RawTokens          int       `json:"raw_tokens"`
-	FilteredTokens     int       `json:"filtered_tokens"`
-	SavedTokens        int       `json:"saved_tokens"`
-	SavingsPct         float64   `json:"savings_pct"`
-	FallbackUsed       bool      `json:"fallback_used,omitempty"`
+	// SessionScope carries the SZR_SESSION scope active when the command ran,
+	// letting usage correlate records to agent sessions exactly instead of by
+	// cwd + time window. Older records predate the field and leave it unset.
+	SessionScope   string  `json:"session_scope,omitempty"`
+	DurationMS     int64   `json:"duration_ms"`
+	ExitCode       int     `json:"exit_code"`
+	RawBytes       int     `json:"raw_bytes"`
+	FilteredBytes  int     `json:"filtered_bytes"`
+	RawBytesRead   int     `json:"raw_bytes_read,omitempty"`
+	BytesParsed    int     `json:"bytes_parsed,omitempty"`
+	BytesEmitted   int     `json:"bytes_emitted,omitempty"`
+	RawTokens      int     `json:"raw_tokens"`
+	FilteredTokens int     `json:"filtered_tokens"`
+	SavedTokens    int     `json:"saved_tokens"`
+	SavingsPct     float64 `json:"savings_pct"`
+	FallbackUsed   bool    `json:"fallback_used,omitempty"`
 	// EmptyResult marks runs whose profile produced an empty render (the
 	// command wrote nothing renderable), as opposed to a reducer-reported
 	// parse fallback. Older records predate the field and leave it unset.
