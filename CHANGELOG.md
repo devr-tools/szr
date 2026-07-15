@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.18.1](https://github.com/devr-tools/szr/compare/v0.18.0...v0.18.1) (2026-07-15)
+
+
+### Bug Fixes
+
+* keep exported Doctor signature stable via DoctorWithOptions ([65887ca](https://github.com/devr-tools/szr/commit/65887cad5711efcd277a12ac7b98886a58239527))
+* verify auto-update results and add self doctor --refresh ([52c32cf](https://github.com/devr-tools/szr/commit/52c32cfa55b4ec42d400c4ea9c6ad901e7999c40))
+* verify auto-update results and add self doctor --refresh ([83eb340](https://github.com/devr-tools/szr/commit/83eb3404b4ba7e597bb004225cb3c3166b4f103a))
+
 ## [0.18.0](https://github.com/devr-tools/szr/compare/v0.17.0...v0.18.0) (2026-07-15)
 
 
