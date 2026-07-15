@@ -74,8 +74,10 @@ func TestCommandErrorMatrix(t *testing.T) {
 		{"clear spread extra args", []string{"clear-spread", "now"}, 2, nil, []string{"clear-spread does not accept arguments"}},
 		{"reset history extra args", []string{"reset-history", "now"}, 2, nil, []string{"reset-history does not accept arguments"}},
 		{"discover bad flag", []string{"discover", "--bad"}, 2, nil, []string{"unknown discover flag"}},
-		{"discover missing limit", []string{"discover", "--limit"}, 2, nil, []string{"discover requires a value after --limit"}},
-		{"discover invalid limit", []string{"discover", "--limit", "0"}, 2, nil, []string{"invalid discover limit"}},
+		{"discover missing since", []string{"discover", "--since"}, 2, nil, []string{"discover requires a value after --since"}},
+		{"discover invalid since", []string{"discover", "--since", "0"}, 2, nil, []string{"invalid discover --since"}},
+		{"discover missing top", []string{"discover", "--top"}, 2, nil, []string{"discover requires a value after --top"}},
+		{"discover missing root", []string{"discover", "--root"}, 2, nil, []string{"discover requires a value after --root"}},
 	}
 
 	for _, tc := range errorCases {

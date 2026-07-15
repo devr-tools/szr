@@ -1,0 +1,44 @@
+> Task :core:compileJava
+> Task :core:processResources UP-TO-DATE
+> Task :core:classes
+> Task :core:jar
+> Task :model:compileJava UP-TO-DATE
+> Task :model:processResources NO-SOURCE
+> Task :model:classes UP-TO-DATE
+> Task :model:jar FROM-CACHE
+> Task :persistence:compileJava
+> Task :persistence:processResources
+> Task :persistence:classes
+> Task :persistence:jar
+> Task :app:processResources
+> Task :app:generateBuildInfo
+> Task :app:compileJava FAILED
+
+/workspace/ledgerkit/app/src/main/java/dev/ledgerkit/billing/InvoiceService.java:47: error: cannot find symbol
+        return repository.findByAccountIdd(accountId);
+                         ^
+  symbol:   method findByAccountIdd(long)
+  location: variable repository of type InvoiceRepository
+/workspace/ledgerkit/app/src/main/java/dev/ledgerkit/billing/InvoiceService.java:83: error: incompatible types: BigDecimal cannot be converted to long
+        long total = invoice.subtotal();
+                                    ^
+/workspace/ledgerkit/app/src/main/java/dev/ledgerkit/billing/ReceiptRenderer.java:19: error: package dev.ledgerkit.export does not exist
+import dev.ledgerkit.export.PdfWriter;
+                           ^
+3 errors
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileJava'.
+> Compilation failed; see the compiler error output for details.
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+
+* Get more help at https://help.gradle.org.
+
+BUILD FAILED in 42s
+14 actionable tasks: 12 executed, 1 from cache, 1 up-to-date

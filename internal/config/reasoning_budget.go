@@ -53,5 +53,8 @@ func Normalize(cfg Config) (Config, error) {
 	if cfg.TeeMaxDirMB <= 0 {
 		cfg.TeeMaxDirMB = DefaultTeeMaxDirMB
 	}
+	if cfg.CostRatePerMtok <= 0 {
+		cfg.CostRatePerMtok = DefaultCostRatePerMtok
+	}
 	return cfg, nil
 }

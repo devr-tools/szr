@@ -20,7 +20,11 @@ type Config struct {
 	// removes the oldest first.
 	TeeMaxDirFiles int `json:"tee_max_dir_files"`
 	// TeeMaxDirMB bounds the tee directory's total size in MiB.
-	TeeMaxDirMB         int         `json:"tee_max_dir_mb"`
+	TeeMaxDirMB int `json:"tee_max_dir_mb"`
+	// CostRatePerMtok prices input tokens in USD per million for spread cost
+	// reporting. The default approximates mainstream frontier-model input
+	// pricing; set it to match the model you actually run.
+	CostRatePerMtok     float64     `json:"cost_rate_per_mtok"`
 	MaxPreviewLines     int         `json:"max_preview_lines"`
 	MaxMatchGroups      int         `json:"max_match_groups"`
 	ReasoningBudgetMode string      `json:"reasoning_budget_mode"`
@@ -48,6 +52,10 @@ type Advanced struct {
 	// against the previous run's stored output when the digest is strictly
 	// cheaper. Rides on the session dedup store and window.
 	DeltaRender bool `json:"delta_render"`
+	// ProjectFilters enables loading declarative filter specs from the
+	// working directory's .szr/filters. Off by default because project
+	// files arrive with checkouts rather than from the user.
+	ProjectFilters bool `json:"project_filters"`
 }
 
 // DefaultSessionDedupWindowMinutes is the recency window used when the
@@ -61,6 +69,10 @@ const (
 	DefaultTeeMaxDirFiles = 200
 	DefaultTeeMaxDirMB    = 256
 )
+
+// DefaultCostRatePerMtok approximates a mainstream frontier-model input rate
+// in USD per million tokens; override via cost_rate_per_mtok or --rate.
+const DefaultCostRatePerMtok = 3.0
 
 type UpdateCheck struct {
 	Enabled       bool `json:"enabled"`
@@ -84,6 +96,7 @@ func Default() Config {
 		TeeMaxFileMB:        DefaultTeeMaxFileMB,
 		TeeMaxDirFiles:      DefaultTeeMaxDirFiles,
 		TeeMaxDirMB:         DefaultTeeMaxDirMB,
+		CostRatePerMtok:     DefaultCostRatePerMtok,
 		MaxPreviewLines:     12,
 		MaxMatchGroups:      8,
 		ReasoningBudgetMode: ReasoningBudgetStandard,

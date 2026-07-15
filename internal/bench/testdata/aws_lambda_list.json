@@ -1,0 +1,334 @@
+{
+    "Functions": [
+        {
+            "FunctionName": "invoice-webhook",
+            "FunctionArn": "arn:aws:lambda:us-east-1:000000000000:function:invoice-webhook",
+            "Runtime": "python3.12",
+            "Role": "arn:aws:iam::000000000000:role/invoice-webhook-role",
+            "Handler": "app.handler",
+            "CodeSize": 2312960,
+            "Description": "Receives payment provider webhooks and enqueues invoice updates",
+            "Timeout": 30,
+            "MemorySize": 512,
+            "LastModified": "2026-07-01T09:14:22.000+0000",
+            "CodeSha256": "b3f1a9c2d8e4f5061728394a5b6c7d8e9f0a1b2c3d4e5f60718293a4b5c6d7e",
+            "Version": "$LATEST",
+            "TracingConfig": {
+                "Mode": "PassThrough"
+            },
+            "RevisionId": "4f8a2b6c-1d3e-4a5b-8c7d-9e0f1a2b3c4d",
+            "PackageType": "Zip",
+            "Architectures": [
+                "arm64"
+            ],
+            "EphemeralStorage": {
+                "Size": 512
+            },
+            "SnapStart": {
+                "ApplyOn": "None",
+                "OptimizationStatus": "Off"
+            },
+            "LoggingConfig": {
+                "LogFormat": "Text",
+                "LogGroup": "/aws/lambda/invoice-webhook"
+            }
+        },
+        {
+            "FunctionName": "receipt-renderer",
+            "FunctionArn": "arn:aws:lambda:us-east-1:000000000000:function:receipt-renderer",
+            "Runtime": "python3.12",
+            "Role": "arn:aws:iam::000000000000:role/receipt-renderer-role",
+            "Handler": "render.handler",
+            "CodeSize": 48234496,
+            "Description": "Renders PDF receipts from invoice records",
+            "Timeout": 120,
+            "MemorySize": 2048,
+            "LastModified": "2026-06-28T17:40:03.000+0000",
+            "CodeSha256": "c4a2b8d1e9f3a5c7061829304b5c6d7e8f9a0b1c2d3e4f50617283940a5b6c7",
+            "Version": "$LATEST",
+            "TracingConfig": {
+                "Mode": "Active"
+            },
+            "RevisionId": "7c1d3e5f-2a4b-6c8d-0e1f-3a5b7c9d1e2f",
+            "PackageType": "Zip",
+            "Architectures": [
+                "x86_64"
+            ],
+            "EphemeralStorage": {
+                "Size": 2048
+            },
+            "SnapStart": {
+                "ApplyOn": "None",
+                "OptimizationStatus": "Off"
+            },
+            "LoggingConfig": {
+                "LogFormat": "JSON",
+                "LogGroup": "/aws/lambda/receipt-renderer"
+            }
+        },
+        {
+            "FunctionName": "ledger-reconciler",
+            "FunctionArn": "arn:aws:lambda:us-east-1:000000000000:function:ledger-reconciler",
+            "Runtime": "python3.11",
+            "Role": "arn:aws:iam::000000000000:role/ledger-reconciler-role",
+            "Handler": "reconcile.handler",
+            "CodeSize": 5643264,
+            "Description": "Nightly ledger reconciliation across payment providers",
+            "Timeout": 900,
+            "MemorySize": 1024,
+            "LastModified": "2026-06-30T02:00:41.000+0000",
+            "CodeSha256": "d5b3c9e2f0a4b6d8172930415c6d7e8f9a0b1c2d3e4f5061728394a5b6c7d8e",
+            "Version": "$LATEST",
+            "TracingConfig": {
+                "Mode": "PassThrough"
+            },
+            "RevisionId": "9e2f4a6b-3c5d-7e9f-1a2b-4c6d8e0f2a3b",
+            "PackageType": "Zip",
+            "Architectures": [
+                "arm64"
+            ],
+            "EphemeralStorage": {
+                "Size": 1024
+            },
+            "SnapStart": {
+                "ApplyOn": "None",
+                "OptimizationStatus": "Off"
+            },
+            "LoggingConfig": {
+                "LogFormat": "Text",
+                "LogGroup": "/aws/lambda/ledger-reconciler"
+            }
+        },
+        {
+            "FunctionName": "billing-alerts-router",
+            "FunctionArn": "arn:aws:lambda:us-east-1:000000000000:function:billing-alerts-router",
+            "Runtime": "nodejs20.x",
+            "Role": "arn:aws:iam::000000000000:role/billing-alerts-router-role",
+            "Handler": "index.handler",
+            "CodeSize": 1198080,
+            "Description": "Routes billing alarm notifications to the on-call channel",
+            "Timeout": 15,
+            "MemorySize": 256,
+            "LastModified": "2026-06-25T11:22:37.000+0000",
+            "CodeSha256": "e6c4d0f3a1b5c7e9283041526d7e8f9a0b1c2d3e4f50617283940a5b6c7d8e9",
+            "Version": "$LATEST",
+            "TracingConfig": {
+                "Mode": "PassThrough"
+            },
+            "RevisionId": "1a3b5c7d-4e6f-8a0b-2c3d-5e7f9a1b3c4d",
+            "PackageType": "Zip",
+            "Architectures": [
+                "arm64"
+            ],
+            "EphemeralStorage": {
+                "Size": 512
+            },
+            "SnapStart": {
+                "ApplyOn": "None",
+                "OptimizationStatus": "Off"
+            },
+            "LoggingConfig": {
+                "LogFormat": "Text",
+                "LogGroup": "/aws/lambda/billing-alerts-router"
+            }
+        },
+        {
+            "FunctionName": "invoice-export",
+            "FunctionArn": "arn:aws:lambda:us-east-1:000000000000:function:invoice-export",
+            "Runtime": "nodejs20.x",
+            "Role": "arn:aws:iam::000000000000:role/invoice-export-role",
+            "Handler": "export.handler",
+            "CodeSize": 3145728,
+            "Description": "Exports invoice batches to the finance data lake",
+            "Timeout": 300,
+            "MemorySize": 1536,
+            "LastModified": "2026-06-24T08:05:19.000+0000",
+            "CodeSha256": "f7d5e1a4b2c6d8f0394152637e8f9a0b1c2d3e4f5061728394a5b6c7d8e9f0a",
+            "Version": "$LATEST",
+            "TracingConfig": {
+                "Mode": "Active"
+            },
+            "RevisionId": "3c5d7e9f-6a8b-0c2d-4e5f-7a9b1c3d5e6f",
+            "PackageType": "Zip",
+            "Architectures": [
+                "x86_64"
+            ],
+            "EphemeralStorage": {
+                "Size": 512
+            },
+            "SnapStart": {
+                "ApplyOn": "None",
+                "OptimizationStatus": "Off"
+            },
+            "LoggingConfig": {
+                "LogFormat": "JSON",
+                "LogGroup": "/aws/lambda/invoice-export"
+            }
+        },
+        {
+            "FunctionName": "tax-rate-sync",
+            "FunctionArn": "arn:aws:lambda:us-east-1:000000000000:function:tax-rate-sync",
+            "Runtime": "python3.12",
+            "Role": "arn:aws:iam::000000000000:role/tax-rate-sync-role",
+            "Handler": "sync.handler",
+            "CodeSize": 887808,
+            "Description": "Syncs regional tax rate tables every six hours",
+            "Timeout": 60,
+            "MemorySize": 256,
+            "LastModified": "2026-06-22T14:48:55.000+0000",
+            "CodeSha256": "a8e6f2b5c3d7e9a1405263748f9a0b1c2d3e4f50617283940a5b6c7d8e9f0a1",
+            "Version": "$LATEST",
+            "TracingConfig": {
+                "Mode": "PassThrough"
+            },
+            "RevisionId": "5e7f9a1b-8c0d-2e4f-6a7b-9c1d3e5f7a8b",
+            "PackageType": "Zip",
+            "Architectures": [
+                "arm64"
+            ],
+            "EphemeralStorage": {
+                "Size": 512
+            },
+            "SnapStart": {
+                "ApplyOn": "None",
+                "OptimizationStatus": "Off"
+            },
+            "LoggingConfig": {
+                "LogFormat": "Text",
+                "LogGroup": "/aws/lambda/tax-rate-sync"
+            }
+        },
+        {
+            "FunctionName": "dunning-scheduler",
+            "FunctionArn": "arn:aws:lambda:us-east-1:000000000000:function:dunning-scheduler",
+            "Runtime": "python3.12",
+            "Role": "arn:aws:iam::000000000000:role/dunning-scheduler-role",
+            "Handler": "schedule.handler",
+            "CodeSize": 1572864,
+            "Description": "Schedules dunning emails for overdue invoices",
+            "Timeout": 45,
+            "MemorySize": 512,
+            "LastModified": "2026-06-20T10:31:08.000+0000",
+            "CodeSha256": "b9f7a3c6d4e8f0b2516374859a0b1c2d3e4f5061728394a5b6c7d8e9f0a1b2c",
+            "Version": "$LATEST",
+            "TracingConfig": {
+                "Mode": "PassThrough"
+            },
+            "RevisionId": "7a9b1c3d-0e2f-4a6b-8c9d-1e3f5a7b9c0d",
+            "PackageType": "Zip",
+            "Architectures": [
+                "arm64"
+            ],
+            "EphemeralStorage": {
+                "Size": 512
+            },
+            "SnapStart": {
+                "ApplyOn": "None",
+                "OptimizationStatus": "Off"
+            },
+            "LoggingConfig": {
+                "LogFormat": "Text",
+                "LogGroup": "/aws/lambda/dunning-scheduler"
+            }
+        },
+        {
+            "FunctionName": "currency-cache-warmer",
+            "FunctionArn": "arn:aws:lambda:us-east-1:000000000000:function:currency-cache-warmer",
+            "Runtime": "nodejs22.x",
+            "Role": "arn:aws:iam::000000000000:role/currency-cache-warmer-role",
+            "Handler": "warm.handler",
+            "CodeSize": 655360,
+            "Description": "Pre-warms exchange rate cache before market open",
+            "Timeout": 20,
+            "MemorySize": 128,
+            "LastModified": "2026-06-18T06:12:44.000+0000",
+            "CodeSha256": "c0a8b4d7e5f9a1c3627485960b1c2d3e4f50617283940a5b6c7d8e9f0a1b2c3",
+            "Version": "$LATEST",
+            "TracingConfig": {
+                "Mode": "PassThrough"
+            },
+            "RevisionId": "9c1d3e5f-2a4b-6c8d-0e1f-3a5b7c9d1e2a",
+            "PackageType": "Zip",
+            "Architectures": [
+                "arm64"
+            ],
+            "EphemeralStorage": {
+                "Size": 512
+            },
+            "SnapStart": {
+                "ApplyOn": "None",
+                "OptimizationStatus": "Off"
+            },
+            "LoggingConfig": {
+                "LogFormat": "Text",
+                "LogGroup": "/aws/lambda/currency-cache-warmer"
+            }
+        },
+        {
+            "FunctionName": "statement-archiver",
+            "FunctionArn": "arn:aws:lambda:us-east-1:000000000000:function:statement-archiver",
+            "Runtime": "java21",
+            "Role": "arn:aws:iam::000000000000:role/statement-archiver-role",
+            "Handler": "dev.ledgerkit.archive.Handler::handleRequest",
+            "CodeSize": 73400320,
+            "Description": "Archives monthly statements to cold storage",
+            "Timeout": 600,
+            "MemorySize": 3008,
+            "LastModified": "2026-06-15T21:57:30.000+0000",
+            "CodeSha256": "d1b9c5e8f6a0b2d4738596a7c1d2e3f4a5b60718293a4b5c6d7e8f9a0b1c2d3",
+            "Version": "$LATEST",
+            "TracingConfig": {
+                "Mode": "PassThrough"
+            },
+            "RevisionId": "1e3f5a7b-4c6d-8e0f-2a3b-5c7d9e1f3a4b",
+            "PackageType": "Zip",
+            "Architectures": [
+                "x86_64"
+            ],
+            "EphemeralStorage": {
+                "Size": 4096
+            },
+            "SnapStart": {
+                "ApplyOn": "PublishedVersions",
+                "OptimizationStatus": "On"
+            },
+            "LoggingConfig": {
+                "LogFormat": "JSON",
+                "LogGroup": "/aws/lambda/statement-archiver"
+            }
+        },
+        {
+            "FunctionName": "fraud-score-enricher",
+            "FunctionArn": "arn:aws:lambda:us-east-1:000000000000:function:fraud-score-enricher",
+            "Runtime": "python3.11",
+            "Role": "arn:aws:iam::000000000000:role/fraud-score-enricher-role",
+            "Handler": "enrich.handler",
+            "CodeSize": 15728640,
+            "Description": "Attaches fraud scores to incoming payment events",
+            "Timeout": 90,
+            "MemorySize": 768,
+            "LastModified": "2026-06-12T13:26:16.000+0000",
+            "CodeSha256": "e2c0d6f9a7b1c3e5849607b8d2e3f4a5b6c70819304a5b6c7d8e9f0a1b2c3d4",
+            "Version": "$LATEST",
+            "TracingConfig": {
+                "Mode": "Active"
+            },
+            "RevisionId": "3a5b7c9d-6e8f-0a2b-4c5d-7e9f1a3b5c6d",
+            "PackageType": "Zip",
+            "Architectures": [
+                "arm64"
+            ],
+            "EphemeralStorage": {
+                "Size": 1024
+            },
+            "SnapStart": {
+                "ApplyOn": "None",
+                "OptimizationStatus": "Off"
+            },
+            "LoggingConfig": {
+                "LogFormat": "JSON",
+                "LogGroup": "/aws/lambda/fraud-score-enricher"
+            }
+        }
+    ]
+}

@@ -14,12 +14,19 @@ type Engine struct {
 	profiles           []Profile
 	projectProfiles    []Profile
 	builtinProfiles    []Profile
+	userProfiles       []Profile
 	projectPreferences []rules.Preference
 }
 
 func New(cfg config.Config, paths config.Paths, store *history.Store, profiles []Profile) *Engine {
 	projectProfiles := annotateProfilesCapabilities(compileRuleProfiles(cfg))
 	builtinProfiles := annotateProfilesCapabilities(annotateProfilesSource(profiles, SourceBuiltin))
+	// User filters register after builtins so builtins win match conflicts.
+	userProfiles := annotateProfilesCapabilities(LoadUserFilterProfiles(
+		defaultUserFilterSources(cfg, paths),
+		cfg.MaxPreviewLines,
+		profileNameSet(projectProfiles, builtinProfiles),
+	))
 	var budgetAdapter BudgetAdapter
 	if cfg.Advanced.AdaptiveBudgets {
 		budgetAdapter = NewHistoryBudgetAdapter(store)
@@ -29,9 +36,10 @@ func New(cfg config.Config, paths config.Paths, store *history.Store, profiles [
 		paths:              paths,
 		history:            store,
 		budgetAdapter:      budgetAdapter,
-		profiles:           mergeProfiles(projectProfiles, builtinProfiles),
+		profiles:           append(mergeProfiles(projectProfiles, builtinProfiles), userProfiles...),
 		projectProfiles:    projectProfiles,
 		builtinProfiles:    builtinProfiles,
+		userProfiles:       userProfiles,
 		projectPreferences: append([]rules.Preference(nil), cfg.ProjectRules.Preferences...),
 	}
 }

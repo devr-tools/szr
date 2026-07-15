@@ -18,16 +18,13 @@ func (e *Engine) ExplainBudget(inv Invocation) (OutputBudget, *BudgetAdaptation)
 func (e *Engine) ExplainDecisions(inv Invocation) []ExplainDecision {
 	preparedInv, _ := e.prepareInvocation(inv)
 	selected := e.match(preparedInv)
-	decisions := make([]ExplainDecision, 0, len(e.projectProfiles)+len(e.builtinProfiles))
+	decisions := make([]ExplainDecision, 0, len(e.projectProfiles)+len(e.builtinProfiles)+len(e.userProfiles))
 
-	for _, profile := range e.projectProfiles {
-		if profile.Match != nil && profile.Match(preparedInv) {
-			decisions = append(decisions, explainDecision(profile, profile.Name == selected.Name && profile.Source == selected.Source))
-		}
-	}
-	for _, profile := range e.builtinProfiles {
-		if profile.Match != nil && profile.Match(preparedInv) {
-			decisions = append(decisions, explainDecision(profile, profile.Name == selected.Name && profile.Source == selected.Source))
+	for _, list := range [][]Profile{e.projectProfiles, e.builtinProfiles, e.userProfiles} {
+		for _, profile := range list {
+			if profile.Match != nil && profile.Match(preparedInv) {
+				decisions = append(decisions, explainDecision(profile, profile.Name == selected.Name && profile.Source == selected.Source))
+			}
 		}
 	}
 	if len(decisions) == 0 {
