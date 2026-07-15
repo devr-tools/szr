@@ -559,7 +559,7 @@ type stubUpdater struct {
 	autoCalls    int
 }
 
-func (s stubUpdater) Doctor(context.Context, string, config.UpdateCheck, ...updates.DoctorOption) updates.DoctorReport {
+func (s stubUpdater) DoctorWithOptions(context.Context, string, config.UpdateCheck, ...updates.DoctorOption) updates.DoctorReport {
 	return s.report
 }
 
@@ -578,7 +578,7 @@ type countingUpdater struct {
 	autoCalls int
 }
 
-func (u *countingUpdater) Doctor(context.Context, string, config.UpdateCheck, ...updates.DoctorOption) updates.DoctorReport {
+func (u *countingUpdater) DoctorWithOptions(context.Context, string, config.UpdateCheck, ...updates.DoctorOption) updates.DoctorReport {
 	return updates.DoctorReport{}
 }
 
@@ -589,4 +589,12 @@ func (u *countingUpdater) AutoUpdate(context.Context, string, config.UpdateCheck
 
 func (u *countingUpdater) SelfUpdate(context.Context, io.Writer, io.Writer) (updates.SelfUpdateResult, error) {
 	return updates.SelfUpdateResult{}, nil
+}
+
+func (s stubUpdater) Doctor(ctx context.Context, version string, cfg config.UpdateCheck) updates.DoctorReport {
+	return s.DoctorWithOptions(ctx, version, cfg)
+}
+
+func (u *countingUpdater) Doctor(ctx context.Context, version string, cfg config.UpdateCheck) updates.DoctorReport {
+	return u.DoctorWithOptions(ctx, version, cfg)
 }

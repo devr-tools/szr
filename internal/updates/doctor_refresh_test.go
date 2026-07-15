@@ -50,7 +50,7 @@ func TestDoctorRefreshBypassesFreshCache(t *testing.T) {
 		t.Fatalf("expected fresh cache to be served, got %#v calls=%d", report, fetchCalls)
 	}
 
-	report = svc.Doctor(context.Background(), "v0.1.0", cfg, WithRefresh())
+	report = svc.DoctorWithOptions(context.Background(), "v0.1.0", cfg, WithRefresh())
 	if report.FromCache || report.LatestVersion != latest || !report.UpdateAvailable {
 		t.Fatalf("expected live refresh report, got %#v", report)
 	}

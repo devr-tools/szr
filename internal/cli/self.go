@@ -50,7 +50,7 @@ func selfRuntime(a *App) selfcmd.Runtime {
 			if a.updater == nil {
 				return selfcmd.DoctorReport{}
 			}
-			report := a.updater.Doctor(ctx, a.version, cfg.UpdateCheck, opts...)
+			report := a.updater.DoctorWithOptions(ctx, a.version, cfg.UpdateCheck, opts...)
 			return selfcmd.DoctorReport(report)
 		},
 	}

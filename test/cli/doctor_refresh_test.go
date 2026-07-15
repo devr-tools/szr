@@ -21,7 +21,7 @@ type refreshRecordingUpdater struct {
 	refreshCalls []bool
 }
 
-func (u *refreshRecordingUpdater) Doctor(_ context.Context, _ string, _ config.UpdateCheck, opts ...updates.DoctorOption) updates.DoctorReport {
+func (u *refreshRecordingUpdater) DoctorWithOptions(_ context.Context, _ string, _ config.UpdateCheck, opts ...updates.DoctorOption) updates.DoctorReport {
 	var options updates.DoctorOptions
 	for _, opt := range opts {
 		opt(&options)
@@ -120,4 +120,8 @@ func TestDoctorAliasAcceptsRefreshFlag(t *testing.T) {
 	if len(updater.refreshCalls) != 1 || !updater.refreshCalls[0] {
 		t.Fatalf("expected one refreshed doctor call, got %v", updater.refreshCalls)
 	}
+}
+
+func (u *refreshRecordingUpdater) Doctor(ctx context.Context, version string, cfg config.UpdateCheck) updates.DoctorReport {
+	return u.DoctorWithOptions(ctx, version, cfg)
 }

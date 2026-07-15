@@ -127,7 +127,11 @@ func New(paths config.Paths) *Service {
 	return s
 }
 
-func (s *Service) Doctor(ctx context.Context, currentVersion string, cfg config.UpdateCheck, opts ...DoctorOption) DoctorReport {
+func (s *Service) Doctor(ctx context.Context, currentVersion string, cfg config.UpdateCheck) DoctorReport {
+	return s.DoctorWithOptions(ctx, currentVersion, cfg)
+}
+
+func (s *Service) DoctorWithOptions(ctx context.Context, currentVersion string, cfg config.UpdateCheck, opts ...DoctorOption) DoctorReport {
 	options := buildDoctorOptions(opts)
 	report := s.baseDoctorReport(cfg)
 	cache, cacheErr := s.loadCache()

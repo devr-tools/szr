@@ -23,7 +23,7 @@ type orderRecordingUpdater struct {
 	autoAfterCommand bool
 }
 
-func (u *orderRecordingUpdater) Doctor(context.Context, string, config.UpdateCheck, ...updates.DoctorOption) updates.DoctorReport {
+func (u *orderRecordingUpdater) DoctorWithOptions(context.Context, string, config.UpdateCheck, ...updates.DoctorOption) updates.DoctorReport {
 	return updates.DoctorReport{}
 }
 
@@ -71,7 +71,7 @@ type blockingUpdater struct {
 	autoCalls int
 }
 
-func (u *blockingUpdater) Doctor(ctx context.Context, _ string, _ config.UpdateCheck, _ ...updates.DoctorOption) updates.DoctorReport {
+func (u *blockingUpdater) DoctorWithOptions(ctx context.Context, _ string, _ config.UpdateCheck, _ ...updates.DoctorOption) updates.DoctorReport {
 	<-ctx.Done()
 	return updates.DoctorReport{}
 }
@@ -109,4 +109,12 @@ func TestUpdateFlowDoesNotBlockExitOnHungProbe(t *testing.T) {
 	if updater.autoCalls != 0 {
 		t.Fatalf("expected auto update to be skipped when the probe never finished, got %d calls", updater.autoCalls)
 	}
+}
+
+func (u *orderRecordingUpdater) Doctor(ctx context.Context, version string, cfg config.UpdateCheck) updates.DoctorReport {
+	return u.DoctorWithOptions(ctx, version, cfg)
+}
+
+func (u *blockingUpdater) Doctor(ctx context.Context, version string, cfg config.UpdateCheck) updates.DoctorReport {
+	return u.DoctorWithOptions(ctx, version, cfg)
 }
