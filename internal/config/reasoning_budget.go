@@ -44,5 +44,14 @@ func Normalize(cfg Config) (Config, error) {
 	if cfg.Advanced.SessionDedupWindowMinutes <= 0 {
 		cfg.Advanced.SessionDedupWindowMinutes = DefaultSessionDedupWindowMinutes
 	}
+	if cfg.TeeMaxFileMB <= 0 {
+		cfg.TeeMaxFileMB = DefaultTeeMaxFileMB
+	}
+	if cfg.TeeMaxDirFiles <= 0 {
+		cfg.TeeMaxDirFiles = DefaultTeeMaxDirFiles
+	}
+	if cfg.TeeMaxDirMB <= 0 {
+		cfg.TeeMaxDirMB = DefaultTeeMaxDirMB
+	}
 	return cfg, nil
 }

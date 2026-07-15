@@ -16,7 +16,10 @@ type runOptions struct {
 	teeDir       string
 	// retainRawCapture keeps the tee capture file after a successful exit so
 	// session dedup can hash and archive the full raw stream.
-	retainRawCapture   bool
+	retainRawCapture bool
+	// teeLimits bounds the capture file and the tee directory; zero fields
+	// resolve to the config defaults.
+	teeLimits          teeLimits
 	captureStdout      bool
 	captureStderr      bool
 	stopStdoutEarly    bool
@@ -204,7 +207,7 @@ func runCommand(ctx context.Context, args []string, cwd string, options runOptio
 		return runResult{}, err
 	}
 
-	tee, teeErr := newTeeCapture(options.teeDir, options.command, options.teeOnFailure || options.retainRawCapture, options.retainRawCapture)
+	tee, teeErr := newTeeCapture(options.teeDir, options.command, options.teeOnFailure || options.retainRawCapture, options.retainRawCapture, options.teeLimits)
 	if teeErr != nil {
 		tee = nil
 	}

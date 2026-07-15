@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/devr-tools/szr/internal/config"
 	"github.com/devr-tools/szr/internal/engine"
@@ -95,8 +96,8 @@ func (a *App) Run(ctx context.Context, args []string) int {
 		return 0
 	}
 
-	autoResult := a.maybeAutoUpdate(ctx, rest)
-	a.maybePrintUpdateNotice(ctx, rest, autoResult)
+	finishUpdateFlow := a.startUpdateFlow(ctx, rest)
+	defer finishUpdateFlow()
 
 	if code, ok := a.runBuiltInCommand(ctx, flags, rest); ok {
 		return code
@@ -104,11 +105,52 @@ func (a *App) Run(ctx context.Context, args []string) int {
 	return a.runExternal(ctx, flags, "run", rest, false)
 }
 
-func (a *App) maybeAutoUpdate(ctx context.Context, rest []string) updates.AutoUpdateResult {
-	if a.updater == nil || len(rest) == 0 {
-		return updates.AutoUpdateResult{}
+// updateFlowJoinTimeout bounds how long a finished command waits for the
+// background update probe. A probe still in flight defers its notice to a
+// later invocation instead of holding the process open.
+const updateFlowJoinTimeout = 2 * time.Second
+
+// startUpdateFlow moves the update check off the dispatch path. The doctor
+// probe — the only step that can hit the network — warms the release cache
+// in the background while the command runs; auto-update and the interactive
+// notice run after the command completes against the warmed cache, so their
+// output never interleaves with the command's.
+func (a *App) startUpdateFlow(ctx context.Context, rest []string) func() {
+	if !a.updateFlowWanted(rest) {
+		return func() {}
 	}
-	if rest[0] == "doctor" || (rest[0] == "self" && len(rest) > 1 && (rest[1] == "doctor" || rest[1] == "update")) {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		a.updater.Doctor(ctx, a.version, a.config.UpdateCheck)
+	}()
+	return func() {
+		select {
+		case <-done:
+		case <-time.After(updateFlowJoinTimeout):
+			return
+		}
+		autoResult := a.maybeAutoUpdate(ctx, rest)
+		a.maybePrintUpdateNotice(ctx, rest, autoResult)
+	}
+}
+
+// updateFlowWanted mirrors the gates of maybeAutoUpdate and
+// maybePrintUpdateNotice so the background probe never performs update
+// checks the previous inline flow would not have made.
+func (a *App) updateFlowWanted(rest []string) bool {
+	if a.updater == nil || !a.config.UpdateCheck.Enabled || len(rest) == 0 || isUpdateExemptCommand(rest) {
+		return false
+	}
+	return a.config.UpdateCheck.AutoUpdate || isInteractiveFile(os.Stderr)
+}
+
+func isUpdateExemptCommand(rest []string) bool {
+	return rest[0] == "doctor" || (rest[0] == "self" && len(rest) > 1 && (rest[1] == "doctor" || rest[1] == "update"))
+}
+
+func (a *App) maybeAutoUpdate(ctx context.Context, rest []string) updates.AutoUpdateResult {
+	if a.updater == nil || len(rest) == 0 || isUpdateExemptCommand(rest) {
 		return updates.AutoUpdateResult{}
 	}
 	return a.updater.AutoUpdate(ctx, a.version, a.config.UpdateCheck, os.Stdout, os.Stderr)
@@ -118,7 +160,7 @@ func (a *App) maybePrintUpdateNotice(ctx context.Context, rest []string, autoRes
 	if a.updater == nil || !a.config.UpdateCheck.Enabled || len(rest) == 0 || !isInteractiveFile(os.Stderr) {
 		return
 	}
-	if rest[0] == "doctor" || (rest[0] == "self" && len(rest) > 1 && (rest[1] == "doctor" || rest[1] == "update")) {
+	if isUpdateExemptCommand(rest) {
 		return
 	}
 	if autoResult.Updated {

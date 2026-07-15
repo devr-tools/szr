@@ -12,7 +12,15 @@ import (
 const appName = "szr"
 
 type Config struct {
-	TeeOnFailure        bool        `json:"tee_on_failure"`
+	TeeOnFailure bool `json:"tee_on_failure"`
+	// TeeMaxFileMB caps a single tee artifact file in MiB. A capture over the
+	// cap keeps the head and tail of the stream around a truncation marker.
+	TeeMaxFileMB int `json:"tee_max_file_mb"`
+	// TeeMaxDirFiles bounds how many tee artifacts stay on disk; pruning
+	// removes the oldest first.
+	TeeMaxDirFiles int `json:"tee_max_dir_files"`
+	// TeeMaxDirMB bounds the tee directory's total size in MiB.
+	TeeMaxDirMB         int         `json:"tee_max_dir_mb"`
 	MaxPreviewLines     int         `json:"max_preview_lines"`
 	MaxMatchGroups      int         `json:"max_match_groups"`
 	ReasoningBudgetMode string      `json:"reasoning_budget_mode"`
@@ -46,6 +54,14 @@ type Advanced struct {
 // configured window is missing or invalid.
 const DefaultSessionDedupWindowMinutes = 30
 
+// Tee retention defaults; zero or negative configured values fall back to
+// these rather than meaning "unlimited".
+const (
+	DefaultTeeMaxFileMB   = 4
+	DefaultTeeMaxDirFiles = 200
+	DefaultTeeMaxDirMB    = 256
+)
+
 type UpdateCheck struct {
 	Enabled       bool `json:"enabled"`
 	IntervalHours int  `json:"interval_hours"`
@@ -65,6 +81,9 @@ type Paths struct {
 func Default() Config {
 	return Config{
 		TeeOnFailure:        true,
+		TeeMaxFileMB:        DefaultTeeMaxFileMB,
+		TeeMaxDirFiles:      DefaultTeeMaxDirFiles,
+		TeeMaxDirMB:         DefaultTeeMaxDirMB,
 		MaxPreviewLines:     12,
 		MaxMatchGroups:      8,
 		ReasoningBudgetMode: ReasoningBudgetStandard,

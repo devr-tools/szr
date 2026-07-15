@@ -50,8 +50,8 @@ The target split is:
 3. External commands are converted into an `engine.Invocation`.
 4. The profile registry matches the invocation.
 5. The engine optionally rewrites the command for a better machine-readable form.
-6. The command runs and the selected renderer compresses the output.
-7. A local history record is appended for `szr spread`.
+6. The command runs and the selected renderer compresses the output; a final guard keeps the finished render at or below the raw output's token cost (ultra-compact mode excepted).
+7. A local history record is appended for `szr spread`, including whether the render fell back to raw and whether the command produced an empty result.
 8. On failures, raw output can be tee'd into the local data directory and indexed for later retrieval.
 9. Installer and benchmark commands reuse dedicated internal packages instead of embedding that logic in the core router.
 
@@ -78,7 +78,7 @@ This layer owns:
 
 - normalized command identity
 - command family and subcommand extraction
-- wrapper and toolchain normalization
+- wrapper and toolchain normalization, including transparent prefix stripping (`env KEY=VAL`, `env -u NAME`, `command`, `nice`, bare `time`, leading `VAR=value` assignments)
 - machine-readable mode detection
 - rewrite exemptions and safety guards
 - structured-output eligibility
@@ -149,6 +149,7 @@ Recovery answers "how can the user or agent retrieve hidden output deterministic
 This layer owns:
 
 - tee file creation policy
+- tee artifact size caps and directory retention pruning
 - continuation hints for truncated output
 - parse-failure fallback escape behavior
 - shared truncation policy and thresholds

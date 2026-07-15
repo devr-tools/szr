@@ -17,7 +17,8 @@ type Spec struct {
 }
 
 func Specs() []Spec {
-	return append([]Spec(nil), builtinSpecs...)
+	out := append([]Spec(nil), builtinSpecs...)
+	return append(out, listingSpecs...)
 }
 
 var builtinSpecs = []Spec{

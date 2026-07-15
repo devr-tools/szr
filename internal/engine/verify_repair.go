@@ -1,6 +1,10 @@
 package engine
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/devr-tools/szr/internal/history"
+)
 
 // retentionRepairHeader introduces the compact repair section the verifier
 // appends when a render dropped critical facts. The render itself is never
@@ -21,6 +25,7 @@ type retentionVerifyInput struct {
 	inv               Invocation
 	passthrough       bool
 	fastPathBypass    bool
+	memo              history.TokenMemo
 }
 
 // retentionOutcome is the verifier's per-emission telemetry.
@@ -60,7 +65,7 @@ func shouldRunRetentionVerifier(in retentionVerifyInput) bool {
 	if in.passthrough || !in.inv.Advanced.RetentionVerifier || in.fastPathBypass {
 		return false
 	}
-	return trueRawTokenCount(in.rawTokens, in.rawCombined) >= compressionContractMinRawTokens
+	return trueRawTokenCount(in.rawTokens, in.rawCombined, in.memo) >= compressionContractMinRawTokens
 }
 
 // retentionRawSource returns the raw text to verify against: the in-memory

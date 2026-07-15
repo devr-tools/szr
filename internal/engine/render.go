@@ -11,6 +11,7 @@ type renderResult struct {
 	text         string
 	bytesParsed  int
 	fallbackUsed bool
+	emptyResult  bool
 	recoveryPlan RecoveryPlan
 }
 
@@ -22,6 +23,7 @@ type RenderedExecution struct {
 	RawTokens       int
 	FilteredTokens  int
 	FallbackUsed    bool
+	EmptyResult     bool
 	VerifierRepairs int
 }
 
@@ -34,21 +36,11 @@ func renderProfile(profile Profile, inv Invocation, exec Execution, fallbackLine
 		}
 	}
 
+	budget := ResolveBudget(profile, inv, fallbackLines)
 	if profile.StreamRender != nil {
-		budget := ResolveBudget(profile, inv, fallbackLines)
 		reducer := profile.StreamRender(inv, budget)
 		if reducer != nil {
-			feedReducer(profile.StreamPreference, reducer, exec)
-			text := reducer.Result()
-			if strings.TrimSpace(text) == "" {
-				text = rawCombined
-			}
-			return renderResult{
-				text:         text,
-				bytesParsed:  maxInt(reducer.BytesParsed(), 0),
-				fallbackUsed: reducer.FallbackUsed() || profile.Name == "passthrough",
-				recoveryPlan: reducerRecoveryPlan(reducer),
-			}
+			return renderReducerProfile(profile, exec, reducer, budget, rawCombined)
 		}
 	}
 
@@ -57,9 +49,14 @@ func renderProfile(profile Profile, inv Invocation, exec Execution, fallbackLine
 		rendered = profile.Render(inv, exec)
 	}
 	fallbackUsed := false
+	emptyResult := false
+	if strings.TrimSpace(rendered) == "" {
+		rendered = renderPreferredStreamFallback(profile, exec, budget)
+	}
 	if strings.TrimSpace(rendered) == "" {
 		rendered = rawCombined
 		fallbackUsed = true
+		emptyResult = true
 	}
 	if profile.Name == "passthrough" {
 		fallbackUsed = true
@@ -72,12 +69,34 @@ func renderProfile(profile Profile, inv Invocation, exec Execution, fallbackLine
 		text:         rendered,
 		bytesParsed:  bytesParsed,
 		fallbackUsed: fallbackUsed,
+		emptyResult:  emptyResult,
+	}
+}
+
+func renderReducerProfile(profile Profile, exec Execution, reducer StreamReducer, budget OutputBudget, rawCombined string) renderResult {
+	feedReducer(profile.StreamPreference, reducer, exec)
+	text := reducer.Result()
+	emptyResult := false
+	if strings.TrimSpace(text) == "" {
+		text = renderPreferredStreamFallback(profile, exec, budget)
+	}
+	if strings.TrimSpace(text) == "" {
+		text = rawCombined
+		emptyResult = true
+	}
+	return renderResult{
+		text:         text,
+		bytesParsed:  maxInt(reducer.BytesParsed(), 0),
+		fallbackUsed: reducer.FallbackUsed() || profile.Name == "passthrough",
+		emptyResult:  emptyResult,
+		recoveryPlan: reducerRecoveryPlan(reducer),
 	}
 }
 
 func RenderExecution(profile Profile, inv Invocation, exec Execution, fallbackLines int, passthrough bool) RenderedExecution {
 	rawCombined := combineStreams(exec.Stdout, exec.Stderr)
-	rawTokens := history.EstimateTokens(rawCombined)
+	memo := history.TokenMemo{}
+	rawTokens := memo.Estimate(rawCombined)
 	budget := ResolveBudget(profile, inv, fallbackLines)
 	rendered := renderProfile(profile, inv, exec, fallbackLines, passthrough)
 	text := rendered.text
@@ -88,7 +107,7 @@ func RenderExecution(profile Profile, inv Invocation, exec Execution, fallbackLi
 		}
 	}
 	text = applyUltraCompactRender(inv, exec, text, rawCombined)
-	text, _, _ = enforceCompressionContract(text, rawCombined, rawTokens, budget, rendered.recoveryPlan, passthrough, inv.Advanced.CompressionContract)
+	text, _, _ = enforceCompressionContract(text, rawCombined, rawTokens, budget, rendered.recoveryPlan, passthrough, inv.Advanced.CompressionContract, memo)
 	text = ensureInformativeFailureRender(profile, inv, text, rawCombined, "", exec.ExitCode, passthrough, budget)
 	if shouldGuardSmallOutput(profile, passthrough) && !inv.UltraCompact {
 		text = preferRawSmallOutputForProfile(profile, text, rawCombined, exec.ExitCode)
@@ -102,15 +121,20 @@ func RenderExecution(profile Profile, inv Invocation, exec Execution, fallbackLi
 		budget:      budget,
 		inv:         inv,
 		passthrough: passthrough,
+		memo:        memo,
 	})
+	// Batch executions always hold the complete streams, so the final
+	// never-worse-than-raw invariant applies unconditionally.
+	text = enforceFinalNeverWorseThanRaw(text, rawCombined, passthrough, true, inv.UltraCompact, memo)
 	return RenderedExecution{
 		Text:            text,
 		RawCombined:     rawCombined,
 		BytesParsed:     rendered.bytesParsed,
 		BytesEmitted:    len(text),
 		RawTokens:       rawTokens,
-		FilteredTokens:  history.EstimateTokens(text),
+		FilteredTokens:  memo.Estimate(text),
 		FallbackUsed:    rendered.fallbackUsed,
+		EmptyResult:     rendered.emptyResult,
 		VerifierRepairs: verification.repairs,
 	}
 }

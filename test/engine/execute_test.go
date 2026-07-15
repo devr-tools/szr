@@ -129,8 +129,14 @@ func TestExecuteTeeOnFailure(t *testing.T) {
 		Display: []string{"failcmd", strings.Repeat("x", 60)},
 		Cwd:     root,
 	}, false)
-	if err != nil || failResult.ExitCode != 3 || failResult.TeePath == "" || !strings.Contains(failResult.Display, "[tee: ") {
+	if err != nil || failResult.ExitCode != 3 || failResult.TeePath == "" {
 		t.Fatalf("unexpected failing result: %#v err=%v", failResult, err)
+	}
+	// The complete tiny raw output is the cheapest faithful display; a tee
+	// suffix would push the final render past raw cost, so the
+	// never-worse-than-raw guard emits raw without the (redundant) pointer.
+	if failResult.Display != "stderr" {
+		t.Fatalf("expected raw display without artifact suffix, got %q", failResult.Display)
 	}
 	if _, statErr := os.Stat(failResult.TeePath); statErr != nil {
 		t.Fatalf("expected tee file: %v", statErr)

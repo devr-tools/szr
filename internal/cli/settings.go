@@ -170,6 +170,9 @@ func (a *App) settingsActions() map[string]settingsAction {
 				return enabledLabel(cfg.Advanced.DeltaRender)
 			})
 		},
+		"19": settingsTeeMaxFileAction,
+		"20": settingsTeeMaxDirFilesAction,
+		"21": settingsTeeMaxDirSizeAction,
 	}
 }
 
@@ -257,6 +260,9 @@ func (a *App) printSettingsMenu(w io.Writer, cfg config.Config, configFile strin
 	printSettingsRow(w, "16", "session dedup", enabledLabel(cfg.Advanced.SessionDedup))
 	printSettingsRow(w, "17", "session dedup window minutes", fmt.Sprintf("%d", cfg.Advanced.SessionDedupWindowMinutes))
 	printSettingsRow(w, "18", "delta rendering", enabledLabel(cfg.Advanced.DeltaRender))
+	printSettingsRow(w, "19", "tee max file mb", fmt.Sprintf("%d", cfg.TeeMaxFileMB))
+	printSettingsRow(w, "20", "tee max dir files", fmt.Sprintf("%d", cfg.TeeMaxDirFiles))
+	printSettingsRow(w, "21", "tee max dir mb", fmt.Sprintf("%d", cfg.TeeMaxDirMB))
 	fmt.Fprintln(w, strings.Repeat("-", 54))
 	printSettingsRow(w, "q", "save and exit", "")
 	fmt.Fprint(w, "> ")

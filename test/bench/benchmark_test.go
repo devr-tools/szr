@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/devr-tools/szr/internal/bench"
+	"github.com/devr-tools/szr/internal/config"
+	"github.com/devr-tools/szr/internal/engine"
 	"github.com/devr-tools/szr/internal/filters"
 	"github.com/devr-tools/szr/internal/history"
 )
@@ -21,6 +23,36 @@ func BenchmarkCompressionFixtures(b *testing.B) {
 		for _, fixture := range fixtures {
 			if _, err := harness.Measure(fixture); err != nil {
 				b.Fatalf("measure %s: %v", fixture.Name, err)
+			}
+		}
+	}
+}
+
+// BenchmarkRenderPipelineFixtures measures the full post-run render pipeline
+// (profile render, compression contract, guards, retention verifier) rather
+// than the profile renderers alone, with the default advanced options that
+// real invocations carry.
+func BenchmarkRenderPipelineFixtures(b *testing.B) {
+	fixtures, err := bench.Fixtures()
+	if err != nil {
+		b.Fatalf("fixtures: %v", err)
+	}
+
+	harness := bench.NewHarness(12)
+	advanced := config.Default().Advanced
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for _, fixture := range fixtures {
+			profile, ok := harness.Profile(fixture.ProfileName)
+			if !ok {
+				b.Fatalf("unknown profile %q", fixture.ProfileName)
+			}
+			inv := fixture.Invocation
+			inv.Advanced = advanced
+			rendered := engine.RenderExecution(profile, inv, fixture.Execution, 12, false)
+			if strings.TrimSpace(rendered.Text) == "" && strings.TrimSpace(fixture.RawCombined()) != "" {
+				b.Fatalf("empty render for %s", fixture.Name)
 			}
 		}
 	}

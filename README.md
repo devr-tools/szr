@@ -52,6 +52,8 @@ It keeps the useful signal, preserves the wrapped command's exit code, and helps
 
 **Fidelity is a runtime guarantee, not a promise.** A built-in retention verifier checks every render against the raw output — error lines, `file:line` anchors, diagnostic codes, failing test names — and repairs anything a filter dropped by appending the missing detail. Failing commands can never render content-free, explicit flags you pass are never overridden, and exit codes always match the wrapped command.
 
+**Compression is never worse than raw.** The finished display — retention repairs and artifact pointers included — never costs more tokens than relaying the raw output; when it would, szr emits the raw output instead. This holds for failure renders too: failure detail expansion stays within raw size. (Ultra-compact mode opts out — there the reshaped display is the point.) Profiles that read a single stream still surface the other stream's message when theirs is empty, so kubectl's `No resources found` on stderr renders as a compact line instead of a raw fallback.
+
 **Re-runs cost almost nothing.** Agents run `git status`, `git diff`, and test suites over and over. When output is byte-identical to a recent run, szr emits a two-line reference instead (`unchanged from previous run (39s ago, x3 identical) [ref: …]`) — and `szr expand <ref>` recovers the original byte-exact, on demand. The store is machine-level, so concurrent agents share it automatically: what one agent already saw, another can reference.
 
 - **Edit-test loops render as deltas.** When a rerun's output *changed* instead of repeating, szr can emit a compact change digest — `since last run (2m ago): +3 -1 lines` plus the changed lines themselves — but only when that is strictly cheaper than the normal summary, and never at the cost of a critical line: a newly-failing test always appears in the digest. The baseline stays one `szr expand <ref>` away.
@@ -110,6 +112,8 @@ szr go test ./...
 szr find . --name "*.py"
 ```
 
+Transparent wrapper prefixes — `env KEY=VAL`, `env -u NAME`, `command`, `nice [-n N]`, bare `time`, and leading `VAR=value` assignments — route to the inner command's profile, so `szr env -u GOROOT go test ./...` compresses like `szr go test ./...`. Prefixes stack, work inside `sh -c "..."` strings, and the wrapper words themselves always execute verbatim. A bare `env` with no wrapped command is a command of its own (the `env-print` profile compacts its dump and redacts secret-looking values).
+
 ## AI tool support
 
 AI bootstrap targets:
@@ -167,7 +171,7 @@ Use this surface when you want to:
 | `szr grep <pattern> <path>` | Group search matches by file via ripgrep-backed summaries with conservative repo-noise excludes. |
 | `szr run /usr/bin/grep ...` | Preserve exact grep semantics while still routing output through `szr`. |
 | `szr rewrite --json --command '<cmd>'` | Return the shared shell-routing decision for external agents and integrations. |
-| `szr spread` | Show token savings, usage patterns, and hotspot summaries. |
+| `szr spread` | Show token savings, usage patterns, hotspot summaries, and per-profile fallback and empty-result rates. |
 | `szr spread --history` | Inspect savings history across recent commands. |
 | `szr doctor [--json]` | Check runtime diagnostics and local history health. |
 | `szr self doctor [--json]` | Check install state, `PATH`, config, cache, and version details. |
@@ -201,6 +205,26 @@ Reasoning budget modes:
   }
 }
 ```
+
+## Tee artifact retention
+
+Full-output captures are tee'd into the local data directory so compressed renders stay recoverable. Retention is bounded by default:
+
+- a single artifact is capped at 4 MiB; a larger capture keeps the head and tail of the stream around a truncation marker that records how many bytes were omitted
+- the tee directory is pruned oldest-first past 200 files or 256 MiB total; the newest artifact always survives, and pruned files are dropped from the tee index so lookups never dangle
+- orphaned in-progress captures are cleaned up after one hour
+
+All three caps are adjustable via `szr settings` (`tee max file mb`, `tee max dir files`, `tee max dir mb`) or in the config file:
+
+```json
+{
+  "tee_max_file_mb": 4,
+  "tee_max_dir_files": 200,
+  "tee_max_dir_mb": 256
+}
+```
+
+Zero or negative values fall back to the defaults rather than meaning "unlimited".
 
 ## More docs
 

@@ -65,6 +65,7 @@ func Summarize(records []Record, limit int) Summary {
 	summary.FilteredSavingsPct = percent(summary.SavedTokens, summary.RawTokens-summary.PassthroughTokens)
 	summary.FailureRate = percent(summary.Failures, summary.Commands)
 	summary.FallbackRate = percent(summary.Fallbacks, summary.Commands)
+	summary.EmptyResultRate = percent(summary.EmptyResults, summary.Commands)
 	summary.TeeRate = percent(summary.TeeCount, summary.Commands)
 	summary.DurationP50MS = percentile(durations, 50)
 	summary.DurationP95MS = percentile(durations, 95)
@@ -98,6 +99,9 @@ func updateSummaryTotals(summary *Summary, rec Record) {
 	}
 	if rec.FallbackUsed {
 		summary.Fallbacks++
+	}
+	if rec.EmptyResult {
+		summary.EmptyResults++
 	}
 	if rec.TeePath != "" {
 		summary.TeeCount++
@@ -138,6 +142,9 @@ func updateSummaryProfile(profileStats map[string]*summaryProfileAccumulator, re
 	}
 	if rec.FallbackUsed {
 		profile.stat.Fallbacks++
+	}
+	if rec.EmptyResult {
+		profile.stat.EmptyResults++
 	}
 	if rec.TeePath != "" {
 		profile.stat.TeeCount++
