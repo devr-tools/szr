@@ -41,12 +41,33 @@ type SessionUsage struct {
 	CacheReadTokens     int       `json:"cache_read_tokens"`
 	OutputTokens        int       `json:"output_tokens"`
 	TranscriptFiles     int       `json:"transcript_files"`
+	// Main covers the session's own transcript only; Agents covers subagent
+	// transcripts with billed usage. Session totals equal Main plus all Agents.
+	Main   AgentUsage   `json:"main"`
+	Agents []AgentUsage `json:"agents,omitempty"`
 }
 
 // FreshInputTokens counts input the model processed anew: direct input plus
 // cache-creation input, excluding cache reads.
 func (s SessionUsage) FreshInputTokens() int {
 	return s.InputTokens + s.CacheCreationTokens
+}
+
+// AgentUsage aggregates the usage counters of one transcript file: a subagent
+// transcript, or the session's main transcript when AgentID is empty.
+type AgentUsage struct {
+	AgentID             string `json:"agent_id,omitempty"`
+	Turns               int    `json:"turns"`
+	InputTokens         int    `json:"input_tokens"`
+	CacheCreationTokens int    `json:"cache_creation_tokens"`
+	CacheReadTokens     int    `json:"cache_read_tokens"`
+	OutputTokens        int    `json:"output_tokens"`
+}
+
+// FreshInputTokens counts input the model processed anew: direct input plus
+// cache-creation input, excluding cache reads.
+func (a AgentUsage) FreshInputTokens() int {
+	return a.InputTokens + a.CacheCreationTokens
 }
 
 type usageLine struct {
@@ -71,11 +92,28 @@ type usageCounts struct {
 
 type sessionAccum struct {
 	usage SessionUsage
+	// transcripts accumulates per transcript file, keyed by agent id with ""
+	// for the session's main transcript.
+	transcripts map[string]*transcriptAccum
+}
+
+type transcriptAccum struct {
+	agentID string
 	// turns keeps the last usage payload seen per message id: streamed
 	// transcripts repeat one message across several lines with cumulative
-	// counters, so only the final payload for an id is billed once.
+	// counters, so only the final payload for an id is billed once. The map
+	// is scoped to one transcript file.
 	turns     map[string]usageCounts
 	synthetic int
+}
+
+func (a *sessionAccum) transcript(agentID string) *transcriptAccum {
+	accum, ok := a.transcripts[agentID]
+	if !ok {
+		accum = &transcriptAccum{agentID: agentID, turns: map[string]usageCounts{}}
+		a.transcripts[agentID] = accum
+	}
+	return accum
 }
 
 // ScanUsage aggregates model-reported token usage per session under Root.
@@ -87,7 +125,8 @@ func ScanUsage(opts UsageOptions) []SessionUsage {
 	sessions := map[string]*sessionAccum{}
 	for _, dir := range projectDirs(Options{Root: opts.Root, Project: opts.Project}) {
 		for _, file := range transcriptFiles(dir, cutoff) {
-			scanUsageFile(file, usageSession(sessions, dir, file))
+			session := usageSession(sessions, dir, file)
+			scanUsageFile(file, session, session.transcript(usageAgentID(dir, file)))
 		}
 	}
 	return finalizeUsage(sessions, opts.SessionPrefix)
@@ -110,8 +149,8 @@ func usageSession(sessions map[string]*sessionAccum, dir, file string) *sessionA
 	accum, ok := sessions[key]
 	if !ok {
 		accum = &sessionAccum{
-			usage: SessionUsage{SessionID: id, Project: project},
-			turns: map[string]usageCounts{},
+			usage:       SessionUsage{SessionID: id, Project: project},
+			transcripts: map[string]*transcriptAccum{},
 		}
 		sessions[key] = accum
 	}
@@ -134,7 +173,21 @@ func sessionIDForPath(dir, file string) string {
 	return parts[0]
 }
 
-func scanUsageFile(path string, accum *sessionAccum) {
+// usageAgentID maps a transcript file to its subagent id, derived from the
+// agent-*.jsonl filename; the session's main transcript maps to "".
+func usageAgentID(dir, file string) string {
+	rel, err := filepath.Rel(dir, file)
+	if err != nil || !strings.Contains(rel, string(filepath.Separator)) {
+		return ""
+	}
+	base := strings.TrimSuffix(filepath.Base(file), ".jsonl")
+	if id := strings.TrimPrefix(base, "agent-"); id != "" {
+		return id
+	}
+	return base
+}
+
+func scanUsageFile(path string, session *sessionAccum, transcript *transcriptAccum) {
 	file, err := os.Open(path)
 	if err != nil {
 		return
@@ -145,7 +198,7 @@ func scanUsageFile(path string, accum *sessionAccum) {
 	for {
 		line, readErr := reader.ReadBytes('\n')
 		if len(line) > 0 {
-			parseUsageLine(line, accum)
+			parseUsageLine(line, session, transcript)
 		}
 		if readErr != nil {
 			return
@@ -153,19 +206,19 @@ func scanUsageFile(path string, accum *sessionAccum) {
 	}
 }
 
-func parseUsageLine(line []byte, accum *sessionAccum) {
+func parseUsageLine(line []byte, session *sessionAccum, transcript *transcriptAccum) {
 	var entry usageLine
 	if err := json.Unmarshal(line, &entry); err != nil {
 		return
 	}
-	recordUsageTimestamp(accum, entry.Timestamp)
-	if accum.usage.Cwd == "" {
-		accum.usage.Cwd = entry.Cwd
+	recordUsageTimestamp(session, entry.Timestamp)
+	if session.usage.Cwd == "" {
+		session.usage.Cwd = entry.Cwd
 	}
 	if entry.Type != "assistant" || entry.Message.Usage == nil {
 		return
 	}
-	accum.turns[usageTurnKey(accum, entry)] = *entry.Message.Usage
+	transcript.turns[usageTurnKey(transcript, entry)] = *entry.Message.Usage
 }
 
 func recordUsageTimestamp(accum *sessionAccum, raw string) {
@@ -184,7 +237,7 @@ func recordUsageTimestamp(accum *sessionAccum, raw string) {
 	}
 }
 
-func usageTurnKey(accum *sessionAccum, entry usageLine) string {
+func usageTurnKey(accum *transcriptAccum, entry usageLine) string {
 	if entry.Message.ID != "" {
 		return entry.Message.ID
 	}
@@ -198,10 +251,11 @@ func usageTurnKey(accum *sessionAccum, entry usageLine) string {
 func finalizeUsage(sessions map[string]*sessionAccum, prefix string) []SessionUsage {
 	out := make([]SessionUsage, 0, len(sessions))
 	for _, accum := range sessions {
-		if len(accum.turns) == 0 || !strings.HasPrefix(accum.usage.SessionID, prefix) {
+		usage := sumSessionUsage(accum)
+		if usage.Turns == 0 || !strings.HasPrefix(usage.SessionID, prefix) {
 			continue
 		}
-		out = append(out, sumUsageTurns(accum))
+		out = append(out, usage)
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if !out[i].LastSeen.Equal(out[j].LastSeen) {
@@ -212,14 +266,42 @@ func finalizeUsage(sessions map[string]*sessionAccum, prefix string) []SessionUs
 	return out
 }
 
-func sumUsageTurns(accum *sessionAccum) SessionUsage {
+// sumSessionUsage folds every transcript into the session totals while keeping
+// the main transcript and each billed subagent distinguishable, so that the
+// totals always equal Main plus the sum of Agents.
+func sumSessionUsage(accum *sessionAccum) SessionUsage {
 	usage := accum.usage
-	usage.Turns = len(accum.turns)
-	for _, counts := range accum.turns {
-		usage.InputTokens += counts.InputTokens
-		usage.CacheCreationTokens += counts.CacheCreationInputTokens
-		usage.CacheReadTokens += counts.CacheReadInputTokens
-		usage.OutputTokens += counts.OutputTokens
+	for id, transcript := range accum.transcripts {
+		part := sumTranscriptTurns(transcript)
+		addAgentUsage(&usage, part)
+		switch {
+		case id == "":
+			usage.Main = part
+		case part.Turns > 0:
+			usage.Agents = append(usage.Agents, part)
+		}
 	}
+	sort.Slice(usage.Agents, func(i, j int) bool {
+		return usage.Agents[i].AgentID < usage.Agents[j].AgentID
+	})
 	return usage
+}
+
+func sumTranscriptTurns(accum *transcriptAccum) AgentUsage {
+	part := AgentUsage{AgentID: accum.agentID, Turns: len(accum.turns)}
+	for _, counts := range accum.turns {
+		part.InputTokens += counts.InputTokens
+		part.CacheCreationTokens += counts.CacheCreationInputTokens
+		part.CacheReadTokens += counts.CacheReadInputTokens
+		part.OutputTokens += counts.OutputTokens
+	}
+	return part
+}
+
+func addAgentUsage(usage *SessionUsage, part AgentUsage) {
+	usage.Turns += part.Turns
+	usage.InputTokens += part.InputTokens
+	usage.CacheCreationTokens += part.CacheCreationTokens
+	usage.CacheReadTokens += part.CacheReadTokens
+	usage.OutputTokens += part.OutputTokens
 }
