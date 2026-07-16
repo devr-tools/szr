@@ -8,6 +8,7 @@ Suggested repo policy:
 Use `szr` as the default entrypoint for noisy repository commands.
 
 - Use `./bin/szr <command...>` by default for normal agent inspection so szr can reduce noisy output.
+- Always use `./bin/szr git ...` for Git operations, including managing branches and worktrees, checking status and diffs, staging, committing, pulling, and pushing.
 - `./bin/szr proxy <command...>` is the raw-output escape hatch. Use it only when raw output or exact formatting matters, including when a downstream pipeline consumes that format.
 - `./bin/szr expand <ref>` is recovery, not execution. Use it only after szr returns a dedup or delta reference; it reads the stored byte-exact output without rerunning the command.
 - Prefer `./bin/szr git status`, `./bin/szr git diff`, `./bin/szr git log`, and `./bin/szr go test ./...` over raw shell commands.

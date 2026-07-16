@@ -351,6 +351,7 @@ func assertCommandChoiceGuidance(t *testing.T, content, binary string) {
 	t.Helper()
 	for _, want := range []string{
 		"`" + binary + " <command...>` by default for normal agent inspection",
+		"Always use `" + binary + " git ...` for Git operations, including managing branches and worktrees, checking status and diffs, staging, committing, pulling, and pushing",
 		"`" + binary + " proxy <command...>` is the raw-output escape hatch",
 		"`" + binary + " expand <ref>` is recovery, not execution",
 		"without rerunning the command",

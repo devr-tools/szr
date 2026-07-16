@@ -84,6 +84,7 @@ func renderCodexInstructionBody(paths Paths) string {
 func renderCommandChoiceGuidance(paths Paths) []string {
 	return []string{
 		fmt.Sprintf("- Use `%s <command...>` by default for normal agent inspection so szr can reduce noisy output.", paths.Binary),
+		fmt.Sprintf("- Always use `%s git ...` for Git operations, including managing branches and worktrees, checking status and diffs, staging, committing, pulling, and pushing.", paths.Binary),
 		fmt.Sprintf("- `%s proxy <command...>` is the raw-output escape hatch. Use it only when raw output or exact formatting matters, including when a downstream pipeline consumes that format.", paths.Binary),
 		fmt.Sprintf("- `%s expand <ref>` is recovery, not execution. Use it only after szr returns a dedup or delta reference; it reads the stored byte-exact output without rerunning the command.", paths.Binary),
 	}
