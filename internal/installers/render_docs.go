@@ -41,20 +41,21 @@ func renderInstructionBodyForHook(paths Paths, hookPath string) string {
 	lines := []string{
 		"Use `szr` as the default entrypoint for noisy repository commands.",
 		"",
+	}
+	lines = append(lines, renderCommandChoiceGuidance(paths)...)
+	lines = append(lines,
 		fmt.Sprintf("- Prefer `%s git status`, `%s git diff`, `%s git log`, and `%s go test ./...` over raw shell commands.", paths.Binary, paths.Binary, paths.Binary, paths.Binary),
 		fmt.Sprintf("- When using pipes or redirection, wrap the noisy producer instead of the whole pipeline, for example `%s proxy git diff --stat HEAD~1..HEAD 2>&1 | tail -80`.", paths.Binary),
 		fmt.Sprintf("- For git diff review loops, use `%s git diff ... --stat` or `%s proxy git diff ... -- path/to/file | head -200` rather than a raw piped `git diff` call.", paths.Binary, paths.Binary),
 		fmt.Sprintf("- Prefer `%s find <path> --name \"*.py\"` for file discovery, and `%s grep <pattern> <path>` or `%s rg <pattern> <path>` for grouped code search.", paths.Binary, paths.Binary, paths.Binary),
 		fmt.Sprintf("- When exact `/usr/bin/find` or `/usr/bin/grep` flags matter, wrap them explicitly with `%s run /usr/bin/find ...` or `%s run /usr/bin/grep ...` instead of expecting an auto-rewrite.", paths.Binary, paths.Binary),
 		fmt.Sprintf("- Use `%s explain <cmd...>` when you need to inspect the active profile before bypassing it.", paths.Binary),
-		fmt.Sprintf("- Use `%s proxy <cmd...>` when raw output matters more than compression.", paths.Binary),
-		fmt.Sprintf("- When output shows `unchanged from previous run [ref: <id>]`, it is byte-identical to a run you already saw - do not re-run the command; use `%s expand <id>` only if you need the full content again.", paths.Binary),
 		fmt.Sprintf("- A `since last run (...): +N -M lines` digest shows only what changed since the previous run; use `%s expand <id>` on the baseline ref if you need the full previous output. Orchestrators export `SZR_SESSION=<id>` so parallel agents share references.", paths.Binary),
 		"- A `missing detail:` section contains critical lines szr's retention verifier recovered from raw output - treat it as part of the command output.",
 		fmt.Sprintf("- For long agent loops, prefer the `agent` reasoning budget mode (`%s settings`) for tighter default budgets.", paths.Binary),
 		"- If `szr` reports a tee artifact for a failure, inspect that full artifact path instead of rerunning the command unfiltered.",
 		hookDescription,
-	}
+	)
 	return strings.Join(lines, "\n")
 }
 
@@ -62,6 +63,9 @@ func renderCodexInstructionBody(paths Paths) string {
 	lines := []string{
 		"Use `szr` as the default entrypoint for noisy repository commands.",
 		"",
+	}
+	lines = append(lines, renderCommandChoiceGuidance(paths)...)
+	lines = append(lines,
 		fmt.Sprintf("- Prefer `%s git status`, `%s git diff`, `%s git log`, and `%s go test ./...` over raw shell commands.", paths.Binary, paths.Binary, paths.Binary, paths.Binary),
 		fmt.Sprintf("- Codex does not install a Bash rewrite hook today, so tool calls must invoke `%s` explicitly.", paths.Binary),
 		fmt.Sprintf("- When using pipes, redirection, or absolute-path binaries, keep `%s` on the noisy command itself, for example `%s proxy git diff --stat HEAD~1..HEAD 2>&1 | head -200`.", paths.Binary, paths.Binary),
@@ -69,14 +73,20 @@ func renderCodexInstructionBody(paths Paths) string {
 		fmt.Sprintf("- Prefer `%s find <path> --name \"*.py\"` for file discovery, and `%s grep <pattern> <path>` or `%s rg <pattern> <path>` for grouped code search.", paths.Binary, paths.Binary, paths.Binary),
 		fmt.Sprintf("- If exact `/usr/bin/find` or `/usr/bin/grep` flags matter, wrap them explicitly with `%s run /usr/bin/find ...` or `%s run /usr/bin/grep ...`.", paths.Binary, paths.Binary),
 		fmt.Sprintf("- Use `%s explain <cmd...>` when you need to inspect the active profile before bypassing it.", paths.Binary),
-		fmt.Sprintf("- Use `%s proxy <cmd...>` when raw output matters more than compression.", paths.Binary),
-		fmt.Sprintf("- When output shows `unchanged from previous run [ref: <id>]`, it is byte-identical to a run you already saw - do not re-run the command; use `%s expand <id>` only if you need the full content again.", paths.Binary),
 		fmt.Sprintf("- A `since last run (...): +N -M lines` digest shows only what changed since the previous run; use `%s expand <id>` on the baseline ref if you need the full previous output. Orchestrators export `SZR_SESSION=<id>` so parallel agents share references.", paths.Binary),
 		"- A `missing detail:` section contains critical lines szr's retention verifier recovered from raw output - treat it as part of the command output.",
 		fmt.Sprintf("- For long agent loops, prefer the `agent` reasoning budget mode (`%s settings`) for tighter default budgets.", paths.Binary),
 		"- If `szr` reports a tee artifact for a failure, inspect that full artifact path instead of rerunning the command unfiltered.",
-	}
+	)
 	return strings.Join(lines, "\n")
+}
+
+func renderCommandChoiceGuidance(paths Paths) []string {
+	return []string{
+		fmt.Sprintf("- Use `%s <command...>` by default for normal agent inspection so szr can reduce noisy output.", paths.Binary),
+		fmt.Sprintf("- `%s proxy <command...>` is the raw-output escape hatch. Use it only when raw output or exact formatting matters, including when a downstream pipeline consumes that format.", paths.Binary),
+		fmt.Sprintf("- `%s expand <ref>` is recovery, not execution. Use it only after szr returns a dedup or delta reference; it reads the stored byte-exact output without rerunning the command.", paths.Binary),
+	}
 }
 
 func renderInstallDoc(paths Paths, target Target, title, instructionPath string) string {
