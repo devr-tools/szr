@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.1](https://github.com/devr-tools/szr/compare/v0.19.0...v0.19.1) (2026-07-17)
+
+
+### Bug Fixes
+
+* require szr for git workflow installer guidance ([edda75b](https://github.com/devr-tools/szr/commit/edda75b0f4b46fe24550bfed9322e92a8ba271e3))
+
 ## [0.19.0](https://github.com/devr-tools/szr/compare/v0.18.1...v0.19.0) (2026-07-15)
 
 
