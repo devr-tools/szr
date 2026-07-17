@@ -141,6 +141,7 @@ func assertInstallHookFile(t *testing.T, file installers.File) {
 
 func assertInstallDocFile(t *testing.T, file installers.File, target installers.Target) {
 	t.Helper()
+	assertCommandChoiceGuidance(t, file.Content, "./dev/szr")
 	if target == installers.TargetCodex {
 		if strings.Contains(file.Content, "Hook command:") {
 			t.Fatalf("unexpected codex install doc: %q", file.Content)
@@ -346,6 +347,36 @@ func assertInstallDefaultInstruction(t *testing.T, file installers.File) {
 	}
 }
 
+func assertCommandChoiceGuidance(t *testing.T, content, binary string) {
+	t.Helper()
+	for _, want := range []string{
+		"`" + binary + " <command...>` by default for normal agent inspection",
+		"Always use `" + binary + " git ...` for Git operations, including managing branches and worktrees, checking status and diffs, staging, committing, pulling, and pushing",
+		"`" + binary + " proxy <command...>` is the raw-output escape hatch",
+		"`" + binary + " expand <ref>` is recovery, not execution",
+		"without rerunning the command",
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("expected command-choice guidance %q in %q", want, content)
+		}
+	}
+}
+
+func TestTrackedCodexInstallDocGuidance(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join("..", "..", ".szr", "install", "codex.md")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read tracked Codex installer doc: %v", err)
+	}
+	content := string(data)
+	assertCommandChoiceGuidance(t, content, "./bin/szr")
+	if !strings.Contains(content, "Instruction file: ~/.codex/szr.md") || !strings.Contains(content, "Repo reference: ./AGENTS.md") {
+		t.Fatalf("tracked Codex installer doc still describes the legacy repo-local layout: %q", content)
+	}
+}
+
 func classifyInstallPlanFile(target installers.Target, path string) string {
 	if strings.HasSuffix(path, filepath.Join(".szr", "hooks", "pre-command.sh")) ||
 		strings.HasSuffix(path, filepath.Join(".claude", "hooks", "szr-rewrite.sh")) ||
@@ -390,7 +421,7 @@ func assertClaudeInstallFile(t *testing.T, key string, file installers.File) {
 	case "hook":
 		assertInstallHookFile(t, file)
 	case "install-doc":
-		return
+		assertCommandChoiceGuidance(t, file.Content, "szr")
 	case "szr":
 		if file.Strategy != installers.StrategyWrite || !strings.Contains(file.Content, "## szr for Claude Code") {
 			t.Fatalf("unexpected global szr.md file: %#v", file)
@@ -439,6 +470,7 @@ func assertInstallCodexInstruction(t *testing.T, file installers.File) {
 	t.Helper()
 	switch {
 	case strings.HasSuffix(file.Path, filepath.Join(".codex", "szr.md")):
+		assertCommandChoiceGuidance(t, file.Content, "./dev/szr")
 		if file.Strategy != installers.StrategyWrite || !strings.Contains(file.Content, "## szr for Codex") || !strings.Contains(file.Content, "Codex does not install a Bash rewrite hook today") || !strings.Contains(file.Content, "szr grep <pattern> <path>") || !strings.Contains(file.Content, "Orchestrators export `SZR_SESSION=<id>` so parallel agents share references") {
 			t.Fatalf("unexpected Codex shared file: %#v", file)
 		}
@@ -455,6 +487,7 @@ func assertInstallClaudeInstruction(t *testing.T, file installers.File) {
 	t.Helper()
 	switch {
 	case strings.HasSuffix(file.Path, filepath.Join(".claude", "szr.md")):
+		assertCommandChoiceGuidance(t, file.Content, "./dev/szr")
 		if file.Strategy != installers.StrategyWrite || !strings.Contains(file.Content, "## szr for Claude Code") {
 			t.Fatalf("unexpected Claude shared file: %#v", file)
 		}
