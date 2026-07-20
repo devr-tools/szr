@@ -7,12 +7,6 @@ import (
 	"strings"
 )
 
-func isPackageManagerTest(args []string) bool {
-	return len(args) >= 2 &&
-		(args[0] == "npm" || args[0] == "pnpm" || args[0] == "yarn") &&
-		(args[1] == "test" || len(args) >= 3 && args[1] == "run" && args[2] == "test")
-}
-
 func appendPackageManagerArgs(command []string, extra ...string) []string {
 	if len(command) == 0 || len(extra) == 0 {
 		return command

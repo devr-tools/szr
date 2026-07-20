@@ -806,12 +806,6 @@
       "message": "shell execution primitive should be reviewed"
     },
     {
-      "fingerprint": "1406628ea9458a65c5da78860fc294fe9d4f455d",
-      "rule_id": "quality.ai.dead-code",
-      "path": "internal/profiles/profiles.go",
-      "message": "private function \"parseCombined\" is declared but never referenced within its package"
-    },
-    {
       "fingerprint": "1420dc43d428c1a0f073e82a56d9b881ab0ac77e",
       "rule_id": "security.shell-execution",
       "path": ".cache/go-build/2c/2c82056299bc3efd06750d7a620d179dbf278a0ed97e91c2b3f10be7483c8345-d",
@@ -2346,12 +2340,6 @@
       "rule_id": "security.shell-execution",
       "path": ".cache/go-build/6b/6b88e9a6dcadf099adfe427bad0ab665f9ccbdeeab081a661e64581c1954e7e5-d",
       "message": "shell execution primitive should be reviewed"
-    },
-    {
-      "fingerprint": "36aeee136d8c5b0554e07e06062063bd46233484",
-      "rule_id": "quality.ai.dead-code",
-      "path": "internal/profiles/profiles.go",
-      "message": "private function \"parseStdout\" is declared but never referenced within its package"
     },
     {
       "fingerprint": "36de4492a4817a01e80186ec0a5e5155f4bfa33b",
@@ -4568,12 +4556,6 @@
       "message": "shell execution primitive should be reviewed"
     },
     {
-      "fingerprint": "6b8e047c76f1e2d9d6cafa3e341d3250d85fd365",
-      "rule_id": "quality.ai.dead-code",
-      "path": "internal/profiles/profiles.go",
-      "message": "private function \"latencyBudget\" is declared but never referenced within its package"
-    },
-    {
       "fingerprint": "6b90a93c9dad283f652b7507a4f0b6f90d7979de",
       "rule_id": "security.shell-execution",
       "path": ".cache/go-build/c2/c2af409fdff238e638eeb35b5ac9aea6898cd0f0d536921a9e8b8ed3620a9de9-d",
@@ -5244,12 +5226,6 @@
       "rule_id": "security.shell-execution",
       "path": ".cache/go-build/01/01cbf0ac010baa629ffc74f6d9067509eec450beff2ab1a34d223c5f2357bbcd-d",
       "message": "shell execution primitive should be reviewed"
-    },
-    {
-      "fingerprint": "7b25b403b1ab4ad570ab9624209a3deca0999c74",
-      "rule_id": "quality.ai.dead-code",
-      "path": "internal/profiles/javascript/workspace.go",
-      "message": "private function \"isJSWorkspaceCommand\" is declared but never referenced within its package"
     },
     {
       "fingerprint": "7b6d9a4a60a7f0e78c9319140370e58b919d7530",
@@ -7466,12 +7442,6 @@
       "message": "shell execution primitive should be reviewed"
     },
     {
-      "fingerprint": "af0d090743223a2cf2778a823f521047f1917d6f",
-      "rule_id": "quality.ai.dead-code",
-      "path": "internal/profiles/python/profile.go",
-      "message": "private function \"preparePytestCommand\" is declared but never referenced within its package"
-    },
-    {
       "fingerprint": "af38770e1efa9765159908ca5f82ed2343e44d66",
       "rule_id": "security.shell-execution",
       "path": ".cache/go-build/66/668d6c2262210e386c3d8b5f2b33ac6801660e97434bd1a6052657e3230ff932-d",
@@ -8276,12 +8246,6 @@
       "message": "shell execution primitive should be reviewed"
     },
     {
-      "fingerprint": "c3da2363ae059940394f2a3003185a3ac15a70dd",
-      "rule_id": "quality.ai.dead-code",
-      "path": "internal/profiles/profiles.go",
-      "message": "private function \"parseStderrFirst\" is declared but never referenced within its package"
-    },
-    {
       "fingerprint": "c3f7548a4caabd4e8b60f9f887057a8926fc51a3",
       "rule_id": "security.shell-execution",
       "path": ".cache/go-build/a5/a537daf64e757346a95f8c082dd6d5184607eb05e822299579c317eab09c038c-d",
@@ -8466,12 +8430,6 @@
       "rule_id": "quality.dependency-direction",
       "path": "test/filters/hygiene_test.go",
       "message": "non-CLI package imports internal implementation detail"
-    },
-    {
-      "fingerprint": "c6fd84eee00c5a5b8c6ff3790d8cef8d5f19f8c5",
-      "rule_id": "quality.duplicate-code",
-      "path": "internal/profiles/javascript/workspace.go",
-      "message": "duplicate normalized token sequence of 96 tokens also found in internal/engine/classification.go:336 (threshold 90)"
     },
     {
       "fingerprint": "c70e421dad0847ad596a54a2f5f453f60cc0503d",
@@ -10565,12 +10523,6 @@
       "rule_id": "security.shell-execution",
       "path": ".cache/go-build/66/668d6c2262210e386c3d8b5f2b33ac6801660e97434bd1a6052657e3230ff932-d",
       "message": "shell execution primitive should be reviewed"
-    },
-    {
-      "fingerprint": "f65707af13f5b7ecc25850811ed2d189e70226d7",
-      "rule_id": "quality.ai.dead-code",
-      "path": "internal/profiles/profiles.go",
-      "message": "private function \"outputBudget\" is declared but never referenced within its package"
     },
     {
       "fingerprint": "f674446446746df1a661091c58c4d776f2004dea",

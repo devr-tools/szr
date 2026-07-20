@@ -151,10 +151,6 @@ func detectPythonTool(command []string) string {
 	return ""
 }
 
-func preparePytestCommand(command []string) []string {
-	return preparePytestCommandWithMode(command, true)
-}
-
 func preparePytestCommandWithMode(command []string, aggressive bool) []string {
 	if len(command) == 0 {
 		return command
