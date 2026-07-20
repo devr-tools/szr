@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/devr-tools/szr/internal/config"
+	"github.com/devr-tools/szr/internal/diagnostics"
 	"github.com/devr-tools/szr/internal/engine"
 	"github.com/devr-tools/szr/internal/history"
 	"github.com/devr-tools/szr/internal/profiles"
@@ -19,6 +21,7 @@ type App struct {
 	config  config.Config
 	paths   config.Paths
 	history *history.Store
+	events  *diagnostics.Store
 	engine  *engine.Engine
 	updater updater
 }
@@ -58,9 +61,27 @@ func NewWithDependenciesAndUpdater(
 		config:  cfg,
 		paths:   paths,
 		history: store,
+		events:  newDiagnosticsStore(cfg, paths),
 		engine:  eng,
 		updater: updater,
 	}
+}
+
+func newDiagnosticsStore(cfg config.Config, paths config.Paths) *diagnostics.Store {
+	eventsPath := filepath.Join(paths.DataDir, "events.jsonl")
+	exporter, err := diagnostics.NewExporter(diagnostics.ExporterConfig{
+		Enabled:        cfg.Diagnostics.Enabled,
+		Endpoint:       cfg.Diagnostics.Endpoint,
+		OutboxPath:     filepath.Join(paths.DataDir, diagnosticsOutboxFile),
+		StatusPath:     filepath.Join(paths.DataDir, diagnosticsExporterStatusFile),
+		MaxOutboxBytes: int64(cfg.Diagnostics.MaxOutboxMB) << 20,
+	})
+	if err != nil {
+		// Config.Load rejects invalid enabled endpoints. Keep injected/test apps
+		// local-only rather than making diagnostics initialization fatal.
+		return diagnostics.New(eventsPath)
+	}
+	return diagnostics.NewWithExporter(eventsPath, exporter)
 }
 
 func NewWithLoader(
@@ -200,6 +221,9 @@ func (a *App) runBuiltInCommand(ctx context.Context, flags globalFlags, rest []s
 		"gain":          func() int { return a.runSpread(rest[1:]) },
 		"discover":      func() int { return a.runDiscover(rest[1:]) },
 		"usage":         func() int { return a.runUsage(rest[1:]) },
+		"watch":         func() int { return a.runWatch(ctx, rest[1:]) },
+		"diagnostics":   func() int { return a.runDiagnostics(rest[1:]) },
+		"gateway":       func() int { return a.runGateway(ctx, rest[1:]) },
 		"recommend":     func() int { return a.runRecommend(rest[1:]) },
 		"hotspots":      func() int { return a.runHotspots(rest[1:]) },
 		"profiles":      func() int { return a.runProfiles() },

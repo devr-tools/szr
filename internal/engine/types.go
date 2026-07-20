@@ -44,6 +44,9 @@ type Result struct {
 	RawBytesRead      int
 	BytesParsed       int
 	BytesEmitted      int
+	RawTokens         int
+	FilteredTokens    int
+	SavedTokens       int
 	// VerifierRepairs counts critical raw lines the retention verifier
 	// appended after the render dropped their identifying tokens.
 	VerifierRepairs int
@@ -57,6 +60,9 @@ type Result struct {
 	// DeltaRef is the baseline reference behind a delta digest render, set
 	// when the run rendered as a change digest against the previous run.
 	DeltaRef string
+	// BudgetAdaptation describes the local history or signed gateway hint that
+	// adjusted this run's budget, if any. It contains no command contents.
+	BudgetAdaptation *BudgetAdaptation
 }
 
 type Classification struct {

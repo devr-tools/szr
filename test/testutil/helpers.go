@@ -168,6 +168,11 @@ func EnsurePaths(t *testing.T, paths config.Paths) {
 func NewTestApp(t *testing.T) *cli.App {
 	t.Helper()
 	paths := Paths(t.TempDir())
+	return NewTestAppWithPaths(t, paths)
+}
+
+func NewTestAppWithPaths(t *testing.T, paths config.Paths) *cli.App {
+	t.Helper()
 	EnsurePaths(t, paths)
 	cfg := config.Default()
 	store := history.New(paths.HistoryFile)

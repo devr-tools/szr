@@ -1,7 +1,9 @@
 package config
 
 import (
+	"encoding/base64"
 	"fmt"
+	"net/url"
 	"strings"
 )
 
@@ -56,5 +58,39 @@ func Normalize(cfg Config) (Config, error) {
 	if cfg.CostRatePerMtok <= 0 {
 		cfg.CostRatePerMtok = DefaultCostRatePerMtok
 	}
+	if cfg.Diagnostics.MaxOutboxMB <= 0 {
+		cfg.Diagnostics.MaxOutboxMB = DefaultDiagnosticsMaxOutboxMB
+	}
+	if cfg.Diagnostics.Enabled {
+		endpoint, err := url.Parse(cfg.Diagnostics.Endpoint)
+		if err != nil || endpoint.Scheme != "https" || endpoint.Host == "" {
+			return Config{}, fmt.Errorf("diagnostics endpoint must be an explicit HTTPS URL when diagnostics are enabled")
+		}
+	}
+	if cfg.GatewayHints.Enabled {
+		endpoint, err := url.Parse(cfg.GatewayHints.Endpoint)
+		if err != nil || endpoint.Scheme != "https" || endpoint.Host == "" {
+			return Config{}, fmt.Errorf("gateway hint endpoint must be an explicit HTTPS URL when gateway hints are enabled")
+		}
+		if !validEnvironmentVariableName(cfg.GatewayHints.AuthTokenEnv) {
+			return Config{}, fmt.Errorf("gateway hint auth_token_env must name an environment variable when gateway hints are enabled")
+		}
+		key, err := base64.StdEncoding.DecodeString(cfg.GatewayHints.SigningPublicKey)
+		if err != nil || len(key) != 32 {
+			return Config{}, fmt.Errorf("gateway hint signing_public_key must be a base64 Ed25519 public key when gateway hints are enabled")
+		}
+	}
 	return cfg, nil
+}
+
+func validEnvironmentVariableName(value string) bool {
+	if value == "" {
+		return false
+	}
+	for i, r := range value {
+		if !(r == '_' || r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || (i > 0 && r >= '0' && r <= '9')) {
+			return false
+		}
+	}
+	return true
 }

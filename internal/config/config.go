@@ -9,54 +9,76 @@ import (
 	"github.com/devr-tools/szr/internal/rules"
 )
 
-const appName = "szr"
+type (
+	Config struct {
+		TeeOnFailure bool `json:"tee_on_failure"`
+		// TeeMaxFileMB caps a single tee artifact file in MiB. A capture over the
+		// cap keeps the head and tail of the stream around a truncation marker.
+		TeeMaxFileMB int `json:"tee_max_file_mb"`
+		// TeeMaxDirFiles bounds how many tee artifacts stay on disk; pruning
+		// removes the oldest first.
+		TeeMaxDirFiles int `json:"tee_max_dir_files"`
+		// TeeMaxDirMB bounds the tee directory's total size in MiB.
+		TeeMaxDirMB int `json:"tee_max_dir_mb"`
+		// CostRatePerMtok prices input tokens in USD per million for spread cost
+		// reporting. The default approximates mainstream frontier-model input
+		// pricing; set it to match the model you actually run.
+		CostRatePerMtok     float64 `json:"cost_rate_per_mtok"`
+		MaxPreviewLines     int     `json:"max_preview_lines"`
+		MaxMatchGroups      int     `json:"max_match_groups"`
+		ReasoningBudgetMode string  `json:"reasoning_budget_mode"`
+		// Diagnostics controls the optional export of already-sanitized execution
+		// measurements. It is disabled unless a user explicitly enables it.
+		Diagnostics Diagnostics `json:"diagnostics"`
+		// GatewayHints enables an explicitly configured, out-of-band gateway
+		// recommendation client. It never proxies command execution.
+		GatewayHints GatewayHints `json:"gateway_hints"`
+		Advanced     Advanced     `json:"advanced"`
+		UpdateCheck  UpdateCheck  `json:"update_check"`
+		ProjectRules rules.File   `json:"-"`
+	}
 
-type Config struct {
-	TeeOnFailure bool `json:"tee_on_failure"`
-	// TeeMaxFileMB caps a single tee artifact file in MiB. A capture over the
-	// cap keeps the head and tail of the stream around a truncation marker.
-	TeeMaxFileMB int `json:"tee_max_file_mb"`
-	// TeeMaxDirFiles bounds how many tee artifacts stay on disk; pruning
-	// removes the oldest first.
-	TeeMaxDirFiles int `json:"tee_max_dir_files"`
-	// TeeMaxDirMB bounds the tee directory's total size in MiB.
-	TeeMaxDirMB int `json:"tee_max_dir_mb"`
-	// CostRatePerMtok prices input tokens in USD per million for spread cost
-	// reporting. The default approximates mainstream frontier-model input
-	// pricing; set it to match the model you actually run.
-	CostRatePerMtok     float64     `json:"cost_rate_per_mtok"`
-	MaxPreviewLines     int         `json:"max_preview_lines"`
-	MaxMatchGroups      int         `json:"max_match_groups"`
-	ReasoningBudgetMode string      `json:"reasoning_budget_mode"`
-	Advanced            Advanced    `json:"advanced"`
-	UpdateCheck         UpdateCheck `json:"update_check"`
-	ProjectRules        rules.File  `json:"-"`
-}
+	Advanced struct {
+		AggressivePrepareRewrites bool `json:"aggressive_prepare_rewrites"`
+		NoisePrefiltering         bool `json:"noise_prefiltering"`
+		AdaptiveBudgets           bool `json:"adaptive_budgets"`
+		EarlyCaptureStop          bool `json:"early_capture_stop"`
+		SemanticCompaction        bool `json:"semantic_compaction"`
+		CompressionContract       bool `json:"compression_contract"`
+		CompactArtifactRefs       bool `json:"compact_artifact_refs"`
+		RetentionVerifier         bool `json:"retention_verifier"`
+		// SessionDedup replaces re-renders of byte-identical recent output with a
+		// short expandable reference.
+		SessionDedup bool `json:"session_dedup"`
+		// SessionDedupWindowMinutes bounds how far back an identical run may be
+		// referenced.
+		SessionDedupWindowMinutes int `json:"session_dedup_window_minutes"`
+		// DeltaRender replaces a rerun's render with a compact change digest
+		// against the previous run's stored output when the digest is strictly
+		// cheaper. Rides on the session dedup store and window.
+		DeltaRender bool `json:"delta_render"`
+		// ProjectFilters enables loading declarative filter specs from the
+		// working directory's .szr/filters. Off by default because project
+		// files arrive with checkouts rather than from the user.
+		ProjectFilters bool `json:"project_filters"`
+	}
 
-type Advanced struct {
-	AggressivePrepareRewrites bool `json:"aggressive_prepare_rewrites"`
-	NoisePrefiltering         bool `json:"noise_prefiltering"`
-	AdaptiveBudgets           bool `json:"adaptive_budgets"`
-	EarlyCaptureStop          bool `json:"early_capture_stop"`
-	SemanticCompaction        bool `json:"semantic_compaction"`
-	CompressionContract       bool `json:"compression_contract"`
-	CompactArtifactRefs       bool `json:"compact_artifact_refs"`
-	RetentionVerifier         bool `json:"retention_verifier"`
-	// SessionDedup replaces re-renders of byte-identical recent output with a
-	// short expandable reference.
-	SessionDedup bool `json:"session_dedup"`
-	// SessionDedupWindowMinutes bounds how far back an identical run may be
-	// referenced.
-	SessionDedupWindowMinutes int `json:"session_dedup_window_minutes"`
-	// DeltaRender replaces a rerun's render with a compact change digest
-	// against the previous run's stored output when the digest is strictly
-	// cheaper. Rides on the session dedup store and window.
-	DeltaRender bool `json:"delta_render"`
-	// ProjectFilters enables loading declarative filter specs from the
-	// working directory's .szr/filters. Off by default because project
-	// files arrive with checkouts rather than from the user.
-	ProjectFilters bool `json:"project_filters"`
-}
+	UpdateCheck struct {
+		Enabled       bool `json:"enabled"`
+		IntervalHours int  `json:"interval_hours"`
+		AutoUpdate    bool `json:"auto_update"`
+	}
+
+	Paths struct {
+		ConfigDir       string
+		ConfigFile      string
+		DataDir         string
+		HistoryFile     string
+		TeeDir          string
+		ProjectDir      string
+		ProjectRuleFile string
+	}
+)
 
 // DefaultSessionDedupWindowMinutes is the recency window used when the
 // configured window is missing or invalid.
@@ -74,22 +96,6 @@ const (
 // in USD per million tokens; override via cost_rate_per_mtok or --rate.
 const DefaultCostRatePerMtok = 3.0
 
-type UpdateCheck struct {
-	Enabled       bool `json:"enabled"`
-	IntervalHours int  `json:"interval_hours"`
-	AutoUpdate    bool `json:"auto_update"`
-}
-
-type Paths struct {
-	ConfigDir       string
-	ConfigFile      string
-	DataDir         string
-	HistoryFile     string
-	TeeDir          string
-	ProjectDir      string
-	ProjectRuleFile string
-}
-
 func Default() Config {
 	return Config{
 		TeeOnFailure:        true,
@@ -100,6 +106,10 @@ func Default() Config {
 		MaxPreviewLines:     12,
 		MaxMatchGroups:      8,
 		ReasoningBudgetMode: ReasoningBudgetStandard,
+		Diagnostics: Diagnostics{
+			Enabled:     false,
+			MaxOutboxMB: DefaultDiagnosticsMaxOutboxMB,
+		},
 		Advanced: Advanced{
 			AggressivePrepareRewrites: true,
 			NoisePrefiltering:         true,
@@ -227,75 +237,6 @@ func LoadWith(
 		return cfg, paths, nil
 	}
 	return attachProjectRules(cfg, paths, projectRuleFile, readFile)
-}
-
-func resolveAndEnsurePaths(
-	resolve func() (Paths, error),
-	ensure func(Paths) error,
-) (Paths, error) {
-	paths, err := resolve()
-	if err != nil {
-		return Paths{}, err
-	}
-	if err := ensure(paths); err != nil {
-		return Paths{}, err
-	}
-	return paths, nil
-}
-
-func loadUserConfig(configFile string, readFile func(string) ([]byte, error)) (Config, error) {
-	cfg := Default()
-	data, err := readFile(configFile)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return cfg, nil
-		}
-		return Config{}, err
-	}
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return Config{}, err
-	}
-	if err := applyConfigAliases(&cfg, data); err != nil {
-		return Config{}, err
-	}
-	return cfg, nil
-}
-
-func applyConfigAliases(cfg *Config, data []byte) error {
-	var aliases struct {
-		ReasoningBudget     string `json:"reasoning_budget"`
-		ReasoningBudgetMode string `json:"reasoning_budget_mode"`
-	}
-	if err := json.Unmarshal(data, &aliases); err != nil {
-		return err
-	}
-	if aliases.ReasoningBudget != "" && aliases.ReasoningBudgetMode != "" && aliases.ReasoningBudget != aliases.ReasoningBudgetMode {
-		return errors.New("config reasoning_budget and reasoning_budget_mode disagree")
-	}
-	if aliases.ReasoningBudget != "" {
-		cfg.ReasoningBudgetMode = aliases.ReasoningBudget
-	}
-	return nil
-}
-
-func attachProjectRules(
-	cfg Config,
-	paths Paths,
-	projectRuleFile string,
-	readFile func(string) ([]byte, error),
-) (Config, Paths, error) {
-	projectData, err := readFile(projectRuleFile)
-	if err != nil {
-		return Config{}, Paths{}, err
-	}
-	projectRules, err := rules.ParseFile(projectRuleFile, projectData)
-	if err != nil {
-		return Config{}, Paths{}, err
-	}
-	cfg.ProjectRules = projectRules
-	paths.ProjectDir = filepath.Dir(projectRuleFile)
-	paths.ProjectRuleFile = projectRuleFile
-	return cfg, paths, nil
 }
 
 func SaveWith(
