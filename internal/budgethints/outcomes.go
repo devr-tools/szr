@@ -31,8 +31,8 @@ func (s *OutcomeStore) Append(outcome Outcome) (err error) {
 		return err
 	}
 	defer func() {
-		if cerr := file.Close(); err == nil && cerr != nil {
-			err = cerr
+		if closeErr := file.Close(); err == nil && closeErr != nil {
+			err = closeErr
 		}
 	}()
 	body, err := json.Marshal(outcome)
