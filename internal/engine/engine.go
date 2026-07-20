@@ -1,6 +1,9 @@
 package engine
 
 import (
+	"path/filepath"
+
+	"github.com/devr-tools/szr/internal/budgethints"
 	"github.com/devr-tools/szr/internal/config"
 	"github.com/devr-tools/szr/internal/history"
 	"github.com/devr-tools/szr/internal/rules"
@@ -27,15 +30,22 @@ func New(cfg config.Config, paths config.Paths, store *history.Store, profiles [
 		cfg.MaxPreviewLines,
 		profileNameSet(projectProfiles, builtinProfiles),
 	))
-	var budgetAdapter BudgetAdapter
+	var adapters []BudgetAdapter
+	if cfg.GatewayHints.Enabled {
+		gateway := NewGatewayBudgetHintAdapterWithOptions(
+			budgethints.New(filepath.Join(paths.DataDir, "gateway-budget-hints.json")),
+			GatewayBudgetHintAdapterOptions{OutcomeStore: budgethints.NewOutcomeStore(filepath.Join(paths.DataDir, "gateway-budget-hint-outcomes.jsonl"))},
+		)
+		adapters = append(adapters, gateway)
+	}
 	if cfg.Advanced.AdaptiveBudgets {
-		budgetAdapter = NewHistoryBudgetAdapter(store)
+		adapters = append(adapters, NewHistoryBudgetAdapter(store))
 	}
 	return &Engine{
 		config:             cfg,
 		paths:              paths,
 		history:            store,
-		budgetAdapter:      budgetAdapter,
+		budgetAdapter:      NewFirstBudgetAdapter(adapters...),
 		profiles:           append(mergeProfiles(projectProfiles, builtinProfiles), userProfiles...),
 		projectProfiles:    projectProfiles,
 		builtinProfiles:    builtinProfiles,

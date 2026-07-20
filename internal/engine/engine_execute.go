@@ -23,11 +23,10 @@ func (e *Engine) ExecuteStreaming(
 		return Result{}, fmt.Errorf("missing command")
 	}
 
-	preparedInv, profile, command, budget, streamReducer, options, profileConfidence := e.prepareStreamingExecution(inv, passthrough, onPartial)
+	preparedInv, profile, command, budget, adaptation, streamReducer, options, profileConfidence := e.prepareStreamingExecution(inv, passthrough, onPartial)
 	runResult, execResult, fastPath, rawCombined, rawBytesRead, rawTokens, duration, err := e.runStreamingCommand(ctx, inv, command, profile, streamReducer, options)
 	commandRewritten := commandWasRewritten(executionBaselineCommand(preparedInv), command)
-	// One memo spans every render pass of this execution: the passes
-	// repeatedly re-estimate the same raw and rendered strings.
+	// Share token estimates across render passes in this execution.
 	memo := history.TokenMemo{}
 	rendered, fallbackUsed, emptyResult, recoveryPlan := renderStreamingOutput(profile, preparedInv, execResult, streamReducer, budget, rawCombined, rawTokens, passthrough, fastPath, rawBytesRead, runResult.captureTruncated, commandRewritten, runResult.teePath, memo)
 	teePath := e.ensureStreamingArtifactPath(runResult.teePath, execResult.ExitCode, rawCombined, command, profile, fallbackUsed, recoveryPlan, passthrough, options.retainRawCapture)
@@ -89,8 +88,17 @@ func (e *Engine) ExecuteStreaming(
 	record.DeltaRef = dedupOutcome.deltaRef
 	e.appendStreamingHistory(record)
 	result := buildStreamingResult(profile, profileConfidence, rendered, rawCombined, execResult.ExitCode, teePath, duration, fallbackUsed, fastPath, rawBytesRead, bytesParsed, bytesEmitted, verification)
+	result.RawTokens = record.RawTokens
+	result.FilteredTokens = record.FilteredTokens
+	result.SavedTokens = record.SavedTokens
 	result.DedupRef = dedupOutcome.ref
 	result.DeltaRef = dedupOutcome.deltaRef
+	result.BudgetAdaptation = adaptation
+	if recorder, ok := e.budgetAdapter.(interface {
+		RecordOutcome(*BudgetAdaptation, string, bool, int)
+	}); ok {
+		recorder.RecordOutcome(adaptation, profile.Name, fallbackUsed, verification.repairs)
+	}
 	publishFinalPartial(onPartial, result)
 	if err != nil {
 		return result, err
@@ -102,7 +110,7 @@ func (e *Engine) prepareStreamingExecution(
 	inv Invocation,
 	passthrough bool,
 	onPartial func(PartialResult),
-) (Invocation, Profile, []string, OutputBudget, StreamReducer, runOptions, string) {
+) (Invocation, Profile, []string, OutputBudget, *BudgetAdaptation, StreamReducer, runOptions, string) {
 	preparedInv, _ := e.prepareInvocation(inv)
 	profile := e.match(preparedInv)
 	command := preparedInv.Command
@@ -110,12 +118,11 @@ func (e *Engine) prepareStreamingExecution(
 		command = profile.Prepare(preparedInv)
 	}
 	if preparedInv.ShellWrap != nil {
-		// Matching ran against the unwrapped inner command; execution must
-		// run the user's wrapper argv, with Prepare rewrites translated back
-		// into the command string only when that is lossless.
+		// Preserve wrapper semantics: rewriting is permitted only when it can
+		// be translated back into the original wrapper invocation losslessly.
 		command = preparedInv.ShellWrap.execCommand(preparedInv.Command, command)
 	}
-	budget, _ := ResolveBudgetWithAdapter(profile, preparedInv, e.config.MaxPreviewLines, e.budgetAdapter)
+	budget, adaptation := ResolveBudgetWithAdapter(profile, preparedInv, e.config.MaxPreviewLines, e.budgetAdapter)
 	streamReducer := streamingReducer(profile, preparedInv, budget, passthrough)
 	profileConfidence := normalizedProfileConfidence(profile)
 	options := buildRunOptions(preparedInv, profile, passthrough, streamReducer)
@@ -125,7 +132,7 @@ func (e *Engine) prepareStreamingExecution(
 	options.teeLimits = e.teeLimits()
 	options.reducer = streamReducer
 	options.onPreview = previewPublisher(onPartial, profile.Name, profileConfidence)
-	return preparedInv, profile, command, budget, streamReducer, options, profileConfidence
+	return preparedInv, profile, command, budget, adaptation, streamReducer, options, profileConfidence
 }
 
 func streamingReducer(profile Profile, inv Invocation, budget OutputBudget, passthrough bool) StreamReducer {

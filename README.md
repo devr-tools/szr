@@ -169,6 +169,21 @@ See [docs/FILTERS.md](docs/FILTERS.md) for the spec format and a worked example.
 - **`szr spread --cost`** appends an estimated-cost section: dollars avoided at a USD-per-million-input-tokens rate, raw versus emitted output cost, and a `≈ N× a 200k-token context` anchor. The rate resolves from `--rate <usd-per-mtok>` first, then the `cost_rate_per_mtok` config key, then the default `3.00`; passing `--rate` implies `--cost`. With `--json`, the figures appear as a `cost` object. `szr gain` accepts the same flags.
 - **`szr discover`** scans local AI-agent session transcripts (`~/.claude/projects/`) for shell commands that ran *without* szr, routes each through szr's own profile matching, and estimates the missed token savings using your own per-profile history ratios (60% fallback for profiles without enough history). Read-only and local-only: transcripts are never modified or transmitted. By default it covers the current project's transcripts from the last 30 days; `--all` scans every project, `--since <days>` widens or narrows the window, `--top <n>` sizes the command table (default 15), and `--json` emits the full report.
 - **`szr usage`** joins the two sides: per agent session it reports the model-billed tokens recorded in the transcripts (fresh input, cache reads, output — exact, as recorded by the agent runtime) next to szr's estimated emitted and avoided tokens for that session, including szr's share of fresh input and how much larger fresh input would have been without szr, plus a per-subagent breakdown (an `agents` column, and a per-agent table when `--session` matches one session). Records are correlated by session scope when present (`SZR_SESSION`), otherwise by directory and session time window; cache reads are always excluded from the derived percentages. On a terminal, an interactive picker lets you drill into any listed session's agents (`--no-input` disables it). Flags: `--all`, `--since <days>` (default 7), `--session <id-prefix>`, `--json`, `--no-input`.
+- **`szr watch --jsonl`** streams local, sanitized execution events for agent or IDE integrations. Events contain reducer and token/latency measurements only—never commands, paths, rendered output, tee artifacts, or transcript content. Add `--once` for a snapshot instead of following the stream. See [the integration guide](docs/INTEGRATIONS.md) for the stable event contract and a minimal live-results consumer.
+- **Optional diagnostics export** can send the same allowlisted event schema to an HTTPS gateway. It is disabled by default; when enabled, szr queues events in a bounded, owner-only local outbox and retries them in background batches. Export failures never affect the wrapped command. Configure an explicit endpoint in `config.json`:
+
+  ```json
+  {
+    "diagnostics": {
+      "enabled": true,
+      "endpoint": "https://gateway.example/v1/events",
+      "max_outbox_mb": 8
+    }
+  }
+  ```
+
+  Gateway requests are JSON objects with `version` and an `events` array. Events never include command text, paths, output, tee artifacts, or transcript content. A gateway may emit a `provider_usage_aggregate` with only opaque gateway correlation and aggregate szr/provider token counters; it must not contain agent/provider session IDs, prompts, transcripts, model names, or account identifiers.
+- **`szr diagnostics status [--json]`** inspects local event and pending-export storage without making a network request, including exporter endpoint host, drops, last success/failure, and next retry. **`szr diagnostics flush`** is an explicit, five-second-bounded export attempt; it is never run on a wrapped-command path. **`szr diagnostics purge --yes`** explicitly removes local event, outbox, and exporter-status stores.
 
 ## Upcoming features
 
@@ -190,6 +205,11 @@ See [docs/FILTERS.md](docs/FILTERS.md) for the spec format and a worked example.
 | `szr spread --cost [--rate <usd-per-mtok>]` | Append estimated dollar figures and a 200k-context anchor to the savings summary. |
 | `szr discover [--all\|--since <n>\|--top <n>\|--json]` | Scan local agent transcripts read-only for commands that ran without szr and estimate the missed savings. |
 | `szr usage [--all\|--since <n>\|--session <id>\|--json\|--no-input]` | Compare model-billed tokens per agent session and subagent against szr-side emitted and avoided estimates. |
+| `szr watch --jsonl [--once]` | Stream sanitized local execution diagnostics as JSON Lines. |
+| `szr diagnostics status [--json]` | Inspect local diagnostics event and outbox health without network access. |
+| `szr diagnostics flush` | Explicitly attempt one bounded upload of the diagnostics outbox. |
+| `szr diagnostics purge --yes` | Explicitly remove local diagnostics events and pending exports. |
+| `szr gateway hints-refresh` | Fetch, verify, and atomically install signed gateway budget hints. |
 | `szr doctor [--json]` | Check runtime diagnostics and local history health. |
 | `szr self doctor [--json] [--refresh]` | Check install state, `PATH`, config, cache, and version details; `--refresh` bypasses the release-check cache for a live lookup. |
 | `szr settings` | Open the interactive settings menu for update checks, auto update, and other local preferences. |

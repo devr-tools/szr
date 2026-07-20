@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/devr-tools/szr/internal/diagnostics"
 	"github.com/devr-tools/szr/internal/engine"
 	"github.com/devr-tools/szr/internal/history"
 )
@@ -37,7 +38,11 @@ func (a *App) runExternal(ctx context.Context, flags globalFlags, name string, a
 		ReasoningBudgetMode: cfg.ReasoningBudgetMode,
 		Advanced:            cfg.Advanced,
 	}
-	result, err := a.engineForFlags(flags).Execute(ctx, inv, passthrough)
+	runID := diagnostics.NewRunID()
+	result, err := a.engineForFlags(flags).ExecuteStreaming(ctx, inv, passthrough, func(partial engine.PartialResult) {
+		a.appendProgressEvent(runID, partial)
+	})
+	a.appendFinalEvent(runID, result, passthrough, err)
 	if flags.verbose >= 2 {
 		fmt.Fprintf(
 			os.Stderr,
@@ -65,6 +70,56 @@ func (a *App) runExternal(ctx context.Context, flags globalFlags, name string, a
 		return 1
 	}
 	return result.ExitCode
+}
+
+func (a *App) appendProgressEvent(runID string, partial engine.PartialResult) {
+	if a.events == nil || partial.Final {
+		return
+	}
+	_ = a.events.Append(diagnostics.Event{
+		Version:           diagnostics.SchemaVersion,
+		Type:              diagnostics.EventRunProgress,
+		RunID:             runID,
+		Timestamp:         time.Now().UTC(),
+		Profile:           partial.ProfileName,
+		ProfileConfidence: partial.ProfileConfidence,
+		BytesParsed:       partial.BytesParsed,
+	})
+}
+
+//nolint:maintidx // Event construction mirrors the allowlisted schema field-for-field.
+func (a *App) appendFinalEvent(runID string, result engine.Result, passthrough bool, runErr error) {
+	if a.events == nil {
+		return
+	}
+	exitClass := "success"
+	if runErr != nil {
+		exitClass = "error"
+	} else if result.ExitCode != 0 {
+		exitClass = "failure"
+	}
+	_ = a.events.Append(diagnostics.Event{
+		Version:           diagnostics.SchemaVersion,
+		Type:              diagnostics.EventRunFinal,
+		RunID:             runID,
+		Timestamp:         time.Now().UTC(),
+		Profile:           result.ProfileName,
+		ProfileConfidence: result.ProfileConfidence,
+		BytesParsed:       result.BytesParsed,
+		RawBytesRead:      result.RawBytesRead,
+		BytesEmitted:      result.BytesEmitted,
+		RawTokensEst:      result.RawTokens,
+		EmittedTokensEst:  result.FilteredTokens,
+		SavedTokensEst:    result.SavedTokens,
+		DurationMS:        result.Duration.Milliseconds(),
+		ExitClass:         exitClass,
+		FallbackUsed:      result.FallbackUsed,
+		Passthrough:       passthrough,
+		VerifierRepairs:   result.VerifierRepairs,
+		VerifierSkipped:   result.VerifierSkipped,
+		DedupUsed:         result.DedupRef != "",
+		DeltaUsed:         result.DeltaRef != "",
+	})
 }
 
 func (a *App) runExplain(flags globalFlags, args []string) int {

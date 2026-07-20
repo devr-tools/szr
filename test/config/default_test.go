@@ -20,6 +20,9 @@ func TestDefault(t *testing.T) {
 	if !cfg.Advanced.DeltaRender {
 		t.Fatalf("unexpected delta render default: %#v", cfg.Advanced)
 	}
+	if cfg.Diagnostics.Enabled || cfg.Diagnostics.Endpoint != "" || cfg.Diagnostics.MaxOutboxMB != config.DefaultDiagnosticsMaxOutboxMB {
+		t.Fatalf("unexpected diagnostics defaults: %#v", cfg.Diagnostics)
+	}
 }
 
 func TestNormalizeSessionDedupWindow(t *testing.T) {

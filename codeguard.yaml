@@ -45,10 +45,23 @@ checks:
 exclude:
   - vendor/**
   - '**/testdata/**'
+  # Reproducible build products and local caches are not source code. Scanning
+  # them duplicates findings and can surface stale third-party binaries.
+  - .gocache/**
+  - .gocache-docker/**
+  - .cache/**
+  - .gobin/**
+  - .tmp*/**
+  - bin/**
+  - packaging/.staging/**
+  - packaging/npm/dist/**
 
 cache:
   enabled: true
   path: .codeguard/cache.json
+
+baseline:
+  path: codeguard-baseline.json
 
 output:
   format: text

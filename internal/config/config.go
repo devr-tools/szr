@@ -9,8 +9,6 @@ import (
 	"github.com/devr-tools/szr/internal/rules"
 )
 
-const appName = "szr"
-
 type Config struct {
 	TeeOnFailure bool `json:"tee_on_failure"`
 	// TeeMaxFileMB caps a single tee artifact file in MiB. A capture over the
@@ -24,16 +22,22 @@ type Config struct {
 	// CostRatePerMtok prices input tokens in USD per million for spread cost
 	// reporting. The default approximates mainstream frontier-model input
 	// pricing; set it to match the model you actually run.
-	CostRatePerMtok     float64     `json:"cost_rate_per_mtok"`
-	MaxPreviewLines     int         `json:"max_preview_lines"`
-	MaxMatchGroups      int         `json:"max_match_groups"`
-	ReasoningBudgetMode string      `json:"reasoning_budget_mode"`
-	Advanced            Advanced    `json:"advanced"`
-	UpdateCheck         UpdateCheck `json:"update_check"`
-	ProjectRules        rules.File  `json:"-"`
+	CostRatePerMtok     float64 `json:"cost_rate_per_mtok"`
+	MaxPreviewLines     int     `json:"max_preview_lines"`
+	MaxMatchGroups      int     `json:"max_match_groups"`
+	ReasoningBudgetMode string  `json:"reasoning_budget_mode"`
+	// Diagnostics controls the optional export of already-sanitized execution
+	// measurements. It is disabled unless a user explicitly enables it.
+	Diagnostics Diagnostics `json:"diagnostics"`
+	// GatewayHints enables an explicitly configured, out-of-band gateway
+	// recommendation client. It never proxies command execution.
+	GatewayHints GatewayHints `json:"gateway_hints"`
+	Advanced     Advanced     `json:"advanced"`
+	UpdateCheck  UpdateCheck  `json:"update_check"`
+	ProjectRules rules.File   `json:"-"`
 }
 
-type Advanced struct {
+/*type Advanced struct {
 	AggressivePrepareRewrites bool `json:"aggressive_prepare_rewrites"`
 	NoisePrefiltering         bool `json:"noise_prefiltering"`
 	AdaptiveBudgets           bool `json:"adaptive_budgets"`
@@ -79,6 +83,7 @@ type UpdateCheck struct {
 	IntervalHours int  `json:"interval_hours"`
 	AutoUpdate    bool `json:"auto_update"`
 }
+*/
 
 type Paths struct {
 	ConfigDir       string
@@ -100,6 +105,10 @@ func Default() Config {
 		MaxPreviewLines:     12,
 		MaxMatchGroups:      8,
 		ReasoningBudgetMode: ReasoningBudgetStandard,
+		Diagnostics: Diagnostics{
+			Enabled:     false,
+			MaxOutboxMB: DefaultDiagnosticsMaxOutboxMB,
+		},
 		Advanced: Advanced{
 			AggressivePrepareRewrites: true,
 			NoisePrefiltering:         true,
