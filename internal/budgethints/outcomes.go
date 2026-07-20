@@ -25,7 +25,7 @@ type OutcomeStore struct{ path string }
 
 func NewOutcomeStore(path string) *OutcomeStore { return &OutcomeStore{path: path} }
 
-func (s *OutcomeStore) Append(outcome Outcome) error {
+func (s *OutcomeStore) Append(outcome Outcome) (err error) {
 	if s == nil || strings.TrimSpace(s.path) == "" || outcome.At.IsZero() || outcome.Profile == "" || outcome.ExpiresAt.IsZero() {
 		return errors.New("invalid budget hint outcome")
 	}
@@ -36,7 +36,11 @@ func (s *OutcomeStore) Append(outcome Outcome) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); err == nil && closeErr != nil {
+			err = closeErr
+		}
+	}()
 	body, err := json.Marshal(outcome)
 	if err != nil {
 		return err
