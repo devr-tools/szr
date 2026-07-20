@@ -51,29 +51,51 @@ type unsignedEnvelope struct {
 }
 
 func NewClient(cfg ClientConfig) (*Client, error) {
-	endpoint, err := url.Parse(cfg.Endpoint)
-	if err != nil || endpoint.Scheme != "https" || endpoint.Host == "" {
-		return nil, errors.New("gateway hint client requires an explicit HTTPS endpoint")
-	}
 	if strings.TrimSpace(cfg.BearerToken) == "" {
 		return nil, errors.New("gateway hint client requires a bearer token")
-	}
-	key, err := base64.StdEncoding.DecodeString(cfg.SigningPublicKey)
-	if err != nil || len(key) != ed25519.PublicKeySize {
-		return nil, errors.New("gateway hint client requires a base64 Ed25519 public key")
 	}
 	if cfg.Store == nil {
 		return nil, errors.New("gateway hint client requires a local store")
 	}
-	client := cfg.HTTPClient
-	if client == nil {
-		client = &http.Client{Timeout: 5 * time.Second}
+	endpoint, err := gatewayEndpoint(cfg.Endpoint)
+	if err != nil {
+		return nil, err
 	}
-	now := cfg.Now
-	if now == nil {
-		now = time.Now
+	key, err := gatewayPublicKey(cfg.SigningPublicKey)
+	if err != nil {
+		return nil, err
 	}
-	return &Client{endpoint: endpoint.String(), token: cfg.BearerToken, publicKey: ed25519.PublicKey(key), store: cfg.Store, http: client, now: now}, nil
+	return &Client{endpoint: endpoint, token: cfg.BearerToken, publicKey: key, store: cfg.Store, http: configuredHTTPClient(cfg.HTTPClient), now: configuredNow(cfg.Now)}, nil
+}
+
+func gatewayEndpoint(raw string) (string, error) {
+	endpoint, err := url.Parse(raw)
+	if err != nil || endpoint.Scheme != "https" || endpoint.Host == "" {
+		return "", errors.New("gateway hint client requires an explicit HTTPS endpoint")
+	}
+	return endpoint.String(), nil
+}
+
+func gatewayPublicKey(encoded string) (ed25519.PublicKey, error) {
+	key, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil || len(key) != ed25519.PublicKeySize {
+		return nil, errors.New("gateway hint client requires a base64 Ed25519 public key")
+	}
+	return ed25519.PublicKey(key), nil
+}
+
+func configuredHTTPClient(client *http.Client) *http.Client {
+	if client != nil {
+		return client
+	}
+	return &http.Client{Timeout: 5 * time.Second}
+}
+
+func configuredNow(now func() time.Time) func() time.Time {
+	if now != nil {
+		return now
+	}
+	return time.Now
 }
 
 // Refresh fetches, verifies, validates, then atomically installs a complete
@@ -82,42 +104,65 @@ func (c *Client) Refresh(ctx context.Context) (int, error) {
 	if c == nil {
 		return 0, errors.New("gateway hint client is not configured")
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, c.endpoint, nil)
+	envelope, err := c.fetchEnvelope(ctx)
 	if err != nil {
 		return 0, err
-	}
-	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Authorization", "Bearer "+c.token)
-	response, err := c.http.Do(request)
-	if err != nil {
-		return 0, err
-	}
-	defer response.Body.Close()
-	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return 0, fmt.Errorf("gateway hint refresh returned HTTP %d", response.StatusCode)
-	}
-	var envelope Envelope
-	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&envelope); err != nil {
-		return 0, fmt.Errorf("decode gateway hints: %w", err)
 	}
 	if err := c.verify(envelope); err != nil {
 		return 0, err
 	}
-	for _, hint := range envelope.Hints {
-		if err := Validate(hint); err != nil {
-			return 0, err
-		}
-		if !hint.ExpiresAt.After(c.now()) {
-			return 0, errors.New("gateway hint is already expired")
-		}
-		if hint.ExpiresAt.After(c.now().Add(7 * 24 * time.Hour)) {
-			return 0, errors.New("gateway hint expiry exceeds seven-day limit")
-		}
+	if err := c.validateHints(envelope.Hints); err != nil {
+		return 0, err
 	}
 	if err := c.store.Replace(envelope.Hints); err != nil {
 		return 0, err
 	}
 	return len(envelope.Hints), nil
+}
+
+func (c *Client) fetchEnvelope(ctx context.Context) (Envelope, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, c.endpoint, nil)
+	if err != nil {
+		return Envelope{}, err
+	}
+	request.Header.Set("Accept", "application/json")
+	request.Header.Set("Authorization", "Bearer "+c.token)
+	response, err := c.http.Do(request)
+	if err != nil {
+		return Envelope{}, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		return Envelope{}, fmt.Errorf("gateway hint refresh returned HTTP %d", response.StatusCode)
+	}
+	var envelope Envelope
+	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&envelope); err != nil {
+		return Envelope{}, fmt.Errorf("decode gateway hints: %w", err)
+	}
+	return envelope, nil
+}
+
+func (c *Client) validateHints(hints []Hint) error {
+	for _, hint := range hints {
+		if err := Validate(hint); err != nil {
+			return err
+		}
+		if err := c.validateHintExpiry(hint); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Client) validateHintExpiry(hint Hint) error {
+	now := c.now()
+	if !hint.ExpiresAt.After(now) {
+		return errors.New("gateway hint is already expired")
+	}
+	if hint.ExpiresAt.After(now.Add(7 * 24 * time.Hour)) {
+		return errors.New("gateway hint expiry exceeds seven-day limit")
+	}
+	return nil
 }
 
 func (c *Client) verify(envelope Envelope) error {
