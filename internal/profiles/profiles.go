@@ -1,8 +1,6 @@
 package profiles
 
 import (
-	"time"
-
 	"github.com/devr-tools/szr/internal/engine"
 	buildprofiles "github.com/devr-tools/szr/internal/profiles/build"
 	cloudlistprofiles "github.com/devr-tools/szr/internal/profiles/cloudlist"
@@ -55,37 +53,4 @@ func Builtins(maxLines int) []engine.Profile {
 	list = append(list, sqlqueryprofiles.Profiles(maxLines)...)
 	list = append(list, tabularprofiles.Profiles(maxLines)...)
 	return list
-}
-
-func parseStdout(exec engine.Execution) int {
-	return len(exec.Stdout)
-}
-
-func parseCombined(exec engine.Execution) int {
-	return len(exec.Stdout) + len(exec.Stderr)
-}
-
-func parseStderrFirst(exec engine.Execution) int {
-	if exec.Stderr == "" {
-		return len(exec.Stdout)
-	}
-	return len(exec.Stderr) + len(exec.Stdout)
-}
-
-func outputBudget(lines int) engine.OutputBudget {
-	if lines <= 0 {
-		lines = 12
-	}
-	return engine.OutputBudget{
-		MaxLines:  lines,
-		MaxBytes:  lines * 160,
-		MaxTokens: lines * 32,
-	}
-}
-
-func latencyBudget(ms int) time.Duration {
-	if ms <= 0 {
-		return 0
-	}
-	return time.Duration(ms) * time.Millisecond
 }

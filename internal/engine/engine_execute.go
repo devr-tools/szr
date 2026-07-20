@@ -28,8 +28,22 @@ func (e *Engine) ExecuteStreaming(
 	commandRewritten := commandWasRewritten(executionBaselineCommand(preparedInv), command)
 	// Share token estimates across render passes in this execution.
 	memo := history.TokenMemo{}
-	rendered, fallbackUsed, emptyResult, recoveryPlan := renderStreamingOutput(profile, preparedInv, execResult, streamReducer, budget, rawCombined, rawTokens, passthrough, fastPath, rawBytesRead, runResult.captureTruncated, commandRewritten, runResult.teePath, memo)
-	teePath := e.ensureStreamingArtifactPath(runResult.teePath, execResult.ExitCode, rawCombined, command, profile, fallbackUsed, recoveryPlan, passthrough, options.retainRawCapture)
+	rendered, fallbackUsed, emptyResult, recoveryPlan := renderStreamingOutput(streamingRenderInput{
+		profile: profile, inv: preparedInv, exec: execResult, reducer: streamReducer, budget: budget,
+		raw: rawCombined, rawTokens: rawTokens, passthrough: passthrough, fastPath: fastPath, rawBytes: rawBytesRead,
+		captureTruncated: runResult.captureTruncated, commandRewritten: commandRewritten, artifactPath: runResult.teePath, memo: memo,
+	})
+	teePath := e.ensureStreamingArtifactPath(streamingArtifactInput{
+		teePath:        runResult.teePath,
+		exitCode:       execResult.ExitCode,
+		rawCombined:    rawCombined,
+		command:        command,
+		profile:        profile,
+		fallbackUsed:   fallbackUsed,
+		recoveryPlan:   recoveryPlan,
+		passthrough:    passthrough,
+		keepRawCapture: options.retainRawCapture,
+	})
 	rendered = renderedDisplayFinalizer{
 		profile:             profile,
 		exitCode:            execResult.ExitCode,
@@ -74,36 +88,14 @@ func (e *Engine) ExecuteStreaming(
 		budget:          budget,
 		commandText:     strings.Join(inv.Display, " "),
 	})
-	rendered = dedupOutcome.rendered
-	cleanupDedupCapture(runResult.teePath, teePath)
-	bytesParsed := streamingBytesParsed(streamReducer, profile, execResult, rawBytesRead)
-	bytesEmitted := len(rendered)
-	// The record's raw-token basis must use the same estimator as the
-	// filtered count whenever the capture is authoritative; otherwise a
-	// display equal to raw could still score negative savings.
-	record := buildStreamingHistoryRecord(inv, profile, profileConfidence, duration, execResult.ExitCode, rawBytesRead, bytesParsed, bytesEmitted, trueRawTokenCount(rawTokens, rawCombined, memo), fallbackUsed, emptyResult, passthrough, teePath, rendered, memo)
-	record.VerifierRepairs = verification.repairs
-	record.VerifierSkipped = verification.skipped
-	record.DedupRef = dedupOutcome.ref
-	record.DeltaRef = dedupOutcome.deltaRef
-	e.appendStreamingHistory(record)
-	result := buildStreamingResult(profile, profileConfidence, rendered, rawCombined, execResult.ExitCode, teePath, duration, fallbackUsed, fastPath, rawBytesRead, bytesParsed, bytesEmitted, verification)
-	result.RawTokens = record.RawTokens
-	result.FilteredTokens = record.FilteredTokens
-	result.SavedTokens = record.SavedTokens
-	result.DedupRef = dedupOutcome.ref
-	result.DeltaRef = dedupOutcome.deltaRef
-	result.BudgetAdaptation = adaptation
-	if recorder, ok := e.budgetAdapter.(interface {
-		RecordOutcome(*BudgetAdaptation, string, bool, int)
-	}); ok {
-		recorder.RecordOutcome(adaptation, profile.Name, fallbackUsed, verification.repairs)
-	}
-	publishFinalPartial(onPartial, result)
-	if err != nil {
-		return result, err
-	}
-	return result, nil
+	return e.completeStreamingExecution(streamingCompletionInput{
+		inv: inv, profile: profile, profileConfidence: profileConfidence, duration: duration,
+		exec: execResult, reducer: streamReducer, rawCombined: rawCombined, rawBytesRead: rawBytesRead,
+		rawTokens: rawTokens, memo: memo, fallbackUsed: fallbackUsed, emptyResult: emptyResult,
+		passthrough: passthrough, sourceTeePath: runResult.teePath, teePath: teePath, rendered: dedupOutcome.rendered,
+		verification: verification, dedupOutcome: dedupOutcome, adaptation: adaptation, fastPath: fastPath,
+		onPartial: onPartial, err: err,
+	})
 }
 
 func (e *Engine) prepareStreamingExecution(
