@@ -108,6 +108,11 @@ func NewWithLoader(
 }
 
 func (a *App) Run(ctx context.Context, args []string) int {
+	// szr is normally a one-command process. Closing here gives the optional
+	// diagnostics exporter a final delivery attempt after the final event is
+	// queued, rather than relying on a later CLI invocation to drain it.
+	defer a.events.Close()
+
 	flags, rest, err := parseGlobalFlags(args)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "szr: %v\n", err)
