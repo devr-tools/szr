@@ -83,16 +83,23 @@ szr self doctor
 
 ## Get started
 
-Put `szr` in front of a command you already run:
+Use the commands you already know—just add `szr` at the beginning.
 
 ```bash
+# Instead of: git status
 szr git status
+
+# Instead of: git diff
 szr git diff
+
+# Instead of: go test ./...
 szr go test ./...
+
+# Instead of: find . --name "*.py"
 szr find . --name "*.py"
 ```
 
-`szr` returns the same exit code as the command it runs. If a shorter result would lose important information, it shows the original output instead.
+Your command still succeeds or fails exactly as it normally would. szr only makes the output easier to scan; if it cannot safely shorten something, it shows the original output.
 
 ## Main commands
 
