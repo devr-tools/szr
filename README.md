@@ -83,23 +83,25 @@ szr self doctor
 
 ## Get started
 
-Use the commands you already know—just add `szr` at the beginning.
+If you use an AI coding assistant, set up its integration and it can use szr while it works:
 
 ```bash
-# Instead of: git status
+# Choose the assistant you use:
+szr install codex
+```
+
+Other options: `szr install claude-code`, `szr install cursor`, or `szr install gemini`. Use `szr uninstall <tool>` to remove an integration. The [user guide](docs/USER_GUIDE.md#ai-tool-integrations) explains what each setup changes.
+
+If you work directly in a terminal, you can also use szr yourself by adding it before a command:
+
+```bash
 szr git status
-
-# Instead of: git diff
 szr git diff
-
-# Instead of: go test ./...
 szr go test ./...
-
-# Instead of: find . --name "*.py"
 szr find . --name "*.py"
 ```
 
-Your command still succeeds or fails exactly as it normally would. szr only makes the output easier to scan; if it cannot safely shorten something, it shows the original output.
+Whether you or an assistant runs it, szr keeps the command's normal success or failure result. It only makes the output easier to scan; if it cannot safely shorten something, it shows the original output.
 
 ## Main commands
 
@@ -111,19 +113,6 @@ Your command still succeeds or fails exactly as it normally would. szr only make
 | `szr expand <ref>` | Recover the complete original output from a saved reference. |
 | `szr self doctor` | Check your installation, configuration, and updates. |
 | `szr settings` | Open interactive local settings. |
-
-## Works well with AI tools
-
-Set up your preferred assistant with one command:
-
-```bash
-szr install codex
-szr install claude-code
-szr install cursor
-szr install gemini
-```
-
-Use `szr uninstall <tool>` to remove an integration. See the [user guide](docs/USER_GUIDE.md#ai-tool-integrations) for what each integration changes.
 
 ## Learn more
 
