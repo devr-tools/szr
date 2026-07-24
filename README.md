@@ -26,7 +26,7 @@
 
 It is useful whether you are working in a terminal yourself or asking an AI coding tool to help.
 
-## Install
+## 1. Install szr
 
 Choose the option that fits your setup, then run `szr self doctor` to check that everything is ready.
 
@@ -81,9 +81,9 @@ szr self doctor
 
 </details>
 
-## Get started
+## 2. Connect szr to your agent
 
-If you use an AI coding assistant, set up its integration and it can use szr while it works:
+Choose the coding agent you use. This lets it use szr while it works:
 
 ```bash
 # Choose the assistant you use:
@@ -92,7 +92,9 @@ szr install codex
 
 Other options: `szr install claude-code`, `szr install cursor`, or `szr install gemini`. Use `szr uninstall <tool>` to remove an integration. The [user guide](docs/USER_GUIDE.md#ai-tool-integrations) explains what each setup changes.
 
-If you work directly in a terminal, you can also use szr yourself by adding it before a command:
+## 3. Use szr
+
+Your agent can now use szr when it runs terminal commands. If you work directly in a terminal, add `szr` before a command yourself:
 
 ```bash
 szr git status
@@ -102,6 +104,17 @@ szr find . --name "*.py"
 ```
 
 Whether you or an assistant runs it, szr keeps the command's normal success or failure result. It only makes the output easier to scan; if it cannot safely shorten something, it shows the original output.
+
+## 4. See what you saved
+
+After using szr, check how much output and how many tokens it has saved:
+
+```bash
+szr spread
+szr usage
+```
+
+`szr spread` shows savings from terminal output. `szr usage` compares that with the token usage recorded by supported local AI-agent sessions.
 
 ## Main commands
 
