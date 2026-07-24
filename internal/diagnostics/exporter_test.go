@@ -68,6 +68,48 @@ func TestExporterPostsAllowlistedEventsAndClearsOwnerOnlyOutbox(t *testing.T) {
 	}
 }
 
+func TestStoreCloseDeliversQueuedEvent(t *testing.T) {
+	var mu sync.Mutex
+	var received []diagnostics.Event
+	client := &http.Client{Transport: roundTripperFunc(func(request *http.Request) (*http.Response, error) {
+		var payload struct {
+			Events []diagnostics.Event `json:"events"`
+		}
+		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+			t.Errorf("decode payload: %v", err)
+		}
+		mu.Lock()
+		received = append(received, payload.Events...)
+		mu.Unlock()
+		return &http.Response{StatusCode: http.StatusNoContent, Body: io.NopCloser(strings.NewReader(""))}, nil
+	})}
+
+	outbox := filepath.Join(t.TempDir(), "diagnostics-outbox.jsonl")
+	exporter, err := diagnostics.NewExporter(diagnostics.ExporterConfig{
+		Enabled: true, Endpoint: "https://gateway.example/v1/events", OutboxPath: outbox, FlushInterval: time.Hour,
+	}, diagnostics.WithHTTPClient(client))
+	if err != nil {
+		t.Fatalf("new exporter: %v", err)
+	}
+	store := diagnostics.NewWithExporter(filepath.Join(filepath.Dir(outbox), "events.jsonl"), exporter)
+	event := diagnostics.Event{Version: diagnostics.SchemaVersion, Type: diagnostics.EventRunFinal, RunID: "final-run"}
+	if err := store.Append(event); err != nil {
+		t.Fatalf("append event: %v", err)
+	}
+
+	store.Close()
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(received) != 1 || received[0].RunID != event.RunID {
+		t.Fatalf("received = %#v, want queued final event", received)
+	}
+	data, err := os.ReadFile(outbox)
+	if err != nil || len(data) != 0 {
+		t.Fatalf("outbox after close = %q (%v), want empty", data, err)
+	}
+}
+
 type roundTripperFunc func(*http.Request) (*http.Response, error)
 
 func (fn roundTripperFunc) RoundTrip(request *http.Request) (*http.Response, error) {

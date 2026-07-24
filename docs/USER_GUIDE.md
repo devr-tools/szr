@@ -57,7 +57,7 @@ Use `szr tee --latest` to inspect the most recent saved artifact. Full-output re
 
 - `szr rewrite --json --command '<command>'` returns szr's routing decision for custom tools and hooks.
 - `szr watch --jsonl` streams sanitized local execution events for integrations. Add `--once` for one snapshot.
-- `szr diagnostics status` checks local diagnostics storage. Diagnostics export is disabled by default.
+- `szr diagnostics status` checks local diagnostics storage. Diagnostics export is disabled by default; when enabled, it uses a bounded local outbox and makes one final bounded delivery attempt on command exit. Export failures never change the wrapped command's result.
 - `SZR_SESSION=<id> szr <command>` shares deduplication and delta history across agents in one session.
 
 See [Integrations](INTEGRATIONS.md) for the stable event contract and routing details.

@@ -24,6 +24,16 @@ func NewWithExporter(path string, exporter *Exporter) *Store {
 	return &Store{path: path, exporter: exporter}
 }
 
+// Close performs the exporter's final bounded delivery attempt. Callers should
+// invoke it when a short-lived CLI process is about to exit so events queued
+// by its final command are not left waiting for a future invocation.
+func (s *Store) Close() {
+	if s == nil || s.exporter == nil {
+		return
+	}
+	s.exporter.Close()
+}
+
 func (s *Store) Append(event Event) error {
 	if s == nil || s.path == "" {
 		return nil
