@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.20.0](https://github.com/devr-tools/szr/compare/v0.19.1...v0.20.0) (2026-07-24)
+
+
+### Features
+
+* add privacy-safe diagnostics and gateway budget hints ([7e30306](https://github.com/devr-tools/szr/commit/7e3030620bce25d8fe411ebc871002d46f4c9248))
+* add privacy-safe diagnostics and gateway budget hints ([053d7d9](https://github.com/devr-tools/szr/commit/053d7d9f22c6aa9580637108e073801e00abd876))
+
+
+### Bug Fixes
+
+* **diagnostics:** flush exporter on command exit ([4848f81](https://github.com/devr-tools/szr/commit/4848f81f4eebf09f4c7f8d2513fbbe615fc59d99))
+* **diagnostics:** flush exporter on command exit ([b9dd8bb](https://github.com/devr-tools/szr/commit/b9dd8bbb49b228cbabb3dba3814c060081f6d473))
+* preserve config contracts and close errors ([8b50d02](https://github.com/devr-tools/szr/commit/8b50d02e3b7aa6fe1e30541fbf4d2d876d36455f))
+* preserve config contracts and close errors ([249c8df](https://github.com/devr-tools/szr/commit/249c8df6da5520739c31f1f0cef7560016d93b39))
+* satisfy gateway quality checks ([b0f1dfd](https://github.com/devr-tools/szr/commit/b0f1dfd77f1fb06830649bd7948ffdd1cba4ff41))
+* satisfy gateway quality checks ([b04c68f](https://github.com/devr-tools/szr/commit/b04c68f73a23e705cf2476d8fede7766868e490f))
+
 ## [0.19.1](https://github.com/devr-tools/szr/compare/v0.19.0...v0.19.1) (2026-07-17)
 
 
