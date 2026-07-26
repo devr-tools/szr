@@ -90,6 +90,16 @@ Choose the coding agent you use. This lets it use szr while it works:
 szr install codex --global
 ```
 
+This is a one-time setup for all existing and future repositories. It adds the szr guidance to `$CODEX_HOME/AGENTS.md` (normally `~/.codex/AGENTS.md`), so you do not need to install szr separately in every repository or add an `AGENTS.md` file to each one. Restart Codex after installing it.
+
+After downloading a newer szr release, refresh the installed binary and global guidance:
+
+```bash
+szr self install
+szr self doctor
+szr install codex --global
+```
+
 Use `szr install codex` for only the current repository; szr finds the nearest Git root when run from a nested folder. Use `szr install codex --root <path>` to select a repository explicitly. Other options are `szr install claude-code`, `szr install cursor`, or `szr install gemini`. Use `szr uninstall <tool>` to remove an integration. The [user guide](docs/USER_GUIDE.md#ai-tool-integrations) explains what each setup changes.
 
 ## 3. Use szr
