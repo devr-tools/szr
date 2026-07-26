@@ -21,10 +21,20 @@ Install an integration with `szr install <tool>` and remove it with `szr uninsta
 
 | Tool | Install command | What it sets up |
 | --- | --- | --- |
-| Codex | `szr install codex` | A Codex instruction file and a reference from the repository's `AGENTS.md`. |
+| Codex | `szr install codex --global` | Global szr guidance in `$CODEX_HOME/AGENTS.md` (normally `~/.codex/AGENTS.md`) for every repository. |
 | Claude Code | `szr install claude-code` | A Claude instruction file and hook registration. |
 | Cursor | `szr install cursor` | A Cursor pre-tool hook. |
 | Gemini | `szr install gemini` | A Gemini before-tool hook. |
+
+Codex also supports repository scopes:
+
+```bash
+szr install codex               # nearest Git root, or the current directory outside Git
+szr install codex --root <path> # one explicit repository
+szr uninstall codex --global    # remove only the global szr guidance
+```
+
+Global installation is recommended when you use Codex across several repositories. Repository-level installs remain useful when only selected projects should use szr or need local overrides.
 
 ## See your savings
 

@@ -55,6 +55,17 @@ func RenderAllUninstall(options Options) ([]Plan, error) {
 }
 
 func renderUninstallFiles(target Target, paths Paths, allTargets bool) ([]File, []string, error) {
+	if target == TargetCodex && paths.Global {
+		return []File{{
+				Path:        filepath.Join(paths.CodexDir, "AGENTS.md"),
+				Mode:        0o644,
+				Strategy:    StrategyUnmerge,
+				Marker:      "szr-codex-global",
+				Description: "remove Codex global instructions",
+			}}, []string{
+				fmt.Sprintf("Restart Codex after removing `%s` if it was already running.", codexGlobalDisplayPath(paths)),
+			}, nil
+	}
 	files := make([]File, 0, 3)
 	files = append(files, uninstallInstallDoc(paths, target))
 	if targetUsesSharedHook(target) && (allTargets || shouldRemoveSharedHook(paths, target)) {

@@ -372,8 +372,10 @@ func TestTrackedCodexInstallDocGuidance(t *testing.T) {
 	}
 	content := string(data)
 	assertCommandChoiceGuidance(t, content, "./bin/szr")
-	if !strings.Contains(content, "Instruction file: ~/.codex/szr.md") || !strings.Contains(content, "Repo reference: ./AGENTS.md") {
-		t.Fatalf("tracked Codex installer doc still describes the legacy repo-local layout: %q", content)
+	if !strings.Contains(content, "Global instruction file: ~/.codex/AGENTS.md") ||
+		!strings.Contains(content, "Repository instruction file: ./AGENTS.md") ||
+		!strings.Contains(content, "szr install codex --global") {
+		t.Fatalf("tracked Codex installer doc does not describe global and repository scopes: %q", content)
 	}
 }
 

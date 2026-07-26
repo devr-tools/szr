@@ -7,6 +7,25 @@ import (
 )
 
 func renderCodex(paths Paths) Plan {
+	if paths.Global {
+		agentsPath := filepath.Join(paths.CodexDir, "AGENTS.md")
+		return Plan{
+			Target: TargetCodex,
+			Title:  "Codex global installer",
+			Paths:  paths,
+			Files: []File{{
+				Path:        agentsPath,
+				Content:     renderCodexInstructionBody(paths),
+				Mode:        0o644,
+				Strategy:    StrategyMerge,
+				Marker:      "szr-codex-global",
+				Description: "Codex global instructions",
+			}},
+			ManualSteps: []string{
+				fmt.Sprintf("Restart Codex after updating `%s` if it was already running.", codexGlobalDisplayPath(paths)),
+			},
+		}
+	}
 	return Plan{
 		Target: TargetCodex,
 		Title:  "Codex installer",
@@ -182,4 +201,11 @@ func codexDisplayPath(paths Paths) string {
 		return filepath.ToSlash(filepath.Join(codexHome, "szr.md"))
 	}
 	return "~/.codex/szr.md"
+}
+
+func codexGlobalDisplayPath(paths Paths) string {
+	if codexHome := os.Getenv("CODEX_HOME"); codexHome != "" {
+		return filepath.ToSlash(filepath.Join(codexHome, "AGENTS.md"))
+	}
+	return "~/.codex/AGENTS.md"
 }

@@ -14,7 +14,7 @@ import (
 )
 
 func (a *App) runInstall(args []string) int {
-	allTargets, printOnly, targets, code := parseTargetArgs("install", args)
+	allTargets, printOnly, global, root, targets, code := parseTargetArgs("install", args)
 	if code != 0 {
 		return code
 	}
@@ -22,16 +22,22 @@ func (a *App) runInstall(args []string) int {
 		fmt.Fprintln(os.Stderr, "szr: install accepts either --all or explicit targets")
 		return 2
 	}
+	if code := validateInstallScope("install", global, root, targets); code != 0 {
+		return code
+	}
 	if !allTargets && len(targets) == 0 {
 		printInstallTargets()
 		return 0
 	}
 
-	cwd, code := installRepoRoot(allTargets)
+	cwd, code := installRepoRoot(allTargets, root)
 	if code != 0 {
 		return code
 	}
-	plans, code := renderInstallPlans(cwd, allTargets, targets)
+	if !global && root == "" && len(targets) == 1 && targets[0] == installers.TargetCodex {
+		cwd = detectProjectRoot(cwd)
+	}
+	plans, code := renderInstallPlans(cwd, allTargets, global, targets)
 	if code != 0 {
 		return code
 	}
@@ -44,7 +50,7 @@ func (a *App) runUninstall(args []string) int {
 		return a.runSelfUninstall(args)
 	}
 
-	allTargets, printOnly, targets, code := parseTargetArgs("uninstall", args)
+	allTargets, printOnly, global, root, targets, code := parseTargetArgs("uninstall", args)
 	if code != 0 {
 		return code
 	}
@@ -52,16 +58,22 @@ func (a *App) runUninstall(args []string) int {
 		fmt.Fprintln(os.Stderr, "szr: uninstall accepts either --all or explicit targets")
 		return 2
 	}
+	if code := validateInstallScope("uninstall", global, root, targets); code != 0 {
+		return code
+	}
 	if !allTargets && len(targets) == 0 {
 		printUninstallTargets()
 		return 0
 	}
 
-	cwd, code := installRepoRoot(allTargets)
+	cwd, code := installRepoRoot(allTargets, root)
 	if code != 0 {
 		return code
 	}
-	plans, code := renderUninstallPlans(cwd, allTargets, targets)
+	if !global && root == "" && len(targets) == 1 && targets[0] == installers.TargetCodex {
+		cwd = detectProjectRoot(cwd)
+	}
+	plans, code := renderUninstallPlans(cwd, allTargets, global, targets)
 	if code != 0 {
 		return code
 	}
@@ -90,28 +102,68 @@ func isRepoInstallTarget(arg string) bool {
 	return false
 }
 
-func parseTargetArgs(verb string, args []string) (bool, bool, []installers.Target, int) {
+func parseTargetArgs(verb string, args []string) (bool, bool, bool, string, []installers.Target, int) {
 	allTargets := false
 	printOnly := false
+	global := false
+	root := ""
 	targets := make([]installers.Target, 0, len(args))
-	for _, arg := range args {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
 		switch arg {
 		case "--all":
 			allTargets = true
 		case "--print":
 			printOnly = true
+		case "--global":
+			global = true
+		case "--root":
+			if i+1 >= len(args) {
+				fmt.Fprintf(os.Stderr, "szr: %s requires a directory after --root\n", verb)
+				return false, false, false, "", nil, 2
+			}
+			i++
+			root = args[i]
 		default:
 			if strings.HasPrefix(arg, "-") {
 				fmt.Fprintf(os.Stderr, "szr: unknown %s flag %s\n", verb, arg)
-				return false, false, nil, 2
+				return false, false, false, "", nil, 2
 			}
 			targets = append(targets, installers.Target(arg))
 		}
 	}
-	return allTargets, printOnly, targets, 0
+	return allTargets, printOnly, global, root, targets, 0
 }
 
-func installRepoRoot(allTargets bool) (string, int) {
+func validateInstallScope(verb string, global bool, root string, targets []installers.Target) int {
+	if global && root != "" {
+		fmt.Fprintf(os.Stderr, "szr: %s accepts either --global or --root, not both\n", verb)
+		return 2
+	}
+	if (global || root != "") && (len(targets) != 1 || targets[0] != installers.TargetCodex) {
+		flag := "--root"
+		if global {
+			flag = "--global"
+		}
+		fmt.Fprintf(os.Stderr, "szr: %s %s requires codex as the only target\n", verb, flag)
+		return 2
+	}
+	return 0
+}
+
+func installRepoRoot(allTargets bool, root string) (string, int) {
+	if root != "" {
+		absRoot, err := filepath.Abs(root)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "szr: %v\n", err)
+			return "", installPathErrorCode(allTargets)
+		}
+		if info, err := os.Stat(absRoot); err != nil || !info.IsDir() {
+			fmt.Fprintf(os.Stderr, "szr: --root must name an existing directory: %s\n", absRoot)
+			return "", installPathErrorCode(allTargets)
+		}
+		return absRoot, 0
+	}
 	cwd, err := os.Getwd()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "szr: %v\n", err)
@@ -124,6 +176,20 @@ func installRepoRoot(allTargets bool) (string, int) {
 	return cwd, 0
 }
 
+func detectProjectRoot(start string) string {
+	current := filepath.Clean(start)
+	for {
+		if _, err := os.Stat(filepath.Join(current, ".git")); err == nil {
+			return current
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return start
+		}
+		current = parent
+	}
+}
+
 func installPathErrorCode(allTargets bool) int {
 	if allTargets {
 		return 1
@@ -131,7 +197,7 @@ func installPathErrorCode(allTargets bool) int {
 	return 2
 }
 
-func renderInstallPlans(cwd string, allTargets bool, targets []installers.Target) ([]installers.Plan, int) {
+func renderInstallPlans(cwd string, allTargets, global bool, targets []installers.Target) ([]installers.Plan, int) {
 	homeDir := resolveInstallHome()
 	if allTargets {
 		plans, err := installers.RenderAll(installers.Options{RepoRoot: cwd, HomeDir: homeDir})
@@ -147,6 +213,7 @@ func renderInstallPlans(cwd string, allTargets bool, targets []installers.Target
 		plan, err := installers.Render(target, installers.Options{
 			RepoRoot: cwd,
 			HomeDir:  homeDir,
+			Global:   global,
 		})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "szr: %v\n", err)
@@ -157,7 +224,7 @@ func renderInstallPlans(cwd string, allTargets bool, targets []installers.Target
 	return plans, 0
 }
 
-func renderUninstallPlans(cwd string, allTargets bool, targets []installers.Target) ([]installers.Plan, int) {
+func renderUninstallPlans(cwd string, allTargets, global bool, targets []installers.Target) ([]installers.Plan, int) {
 	homeDir := resolveInstallHome()
 	if allTargets {
 		plans, err := installers.RenderAllUninstall(installers.Options{RepoRoot: cwd, HomeDir: homeDir})
@@ -173,6 +240,7 @@ func renderUninstallPlans(cwd string, allTargets bool, targets []installers.Targ
 		plan, err := installers.RenderUninstall(target, installers.Options{
 			RepoRoot: cwd,
 			HomeDir:  homeDir,
+			Global:   global,
 		})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "szr: %v\n", err)
@@ -489,6 +557,8 @@ func printInstallTargets() {
 	}
 	fmt.Println()
 	fmt.Printf("use: szr install <%s>\n", strings.Join(names, "|"))
+	fmt.Println("all repos: szr install codex --global")
+	fmt.Println("one repo:  szr install codex --root <path>")
 	fmt.Println("or:  szr install --all")
 }
 
@@ -504,6 +574,7 @@ func printUninstallTargets() {
 	}
 	fmt.Println()
 	fmt.Printf("use: szr uninstall <%s>\n", strings.Join(names, "|"))
+	fmt.Println("global: szr uninstall codex --global")
 	fmt.Println("or:  szr uninstall --all")
 }
 
