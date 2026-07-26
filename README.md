@@ -86,11 +86,11 @@ szr self doctor
 Choose the coding agent you use. This lets it use szr while it works:
 
 ```bash
-# Choose the assistant you use:
-szr install codex
+# Recommended for Codex users working across multiple repositories:
+szr install codex --global
 ```
 
-Other options: `szr install claude-code`, `szr install cursor`, or `szr install gemini`. Use `szr uninstall <tool>` to remove an integration. The [user guide](docs/USER_GUIDE.md#ai-tool-integrations) explains what each setup changes.
+Use `szr install codex` for only the current repository; szr finds the nearest Git root when run from a nested folder. Use `szr install codex --root <path>` to select a repository explicitly. Other options are `szr install claude-code`, `szr install cursor`, or `szr install gemini`. Use `szr uninstall <tool>` to remove an integration. The [user guide](docs/USER_GUIDE.md#ai-tool-integrations) explains what each setup changes.
 
 ## 3. Use szr
 

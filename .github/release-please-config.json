@@ -7,7 +7,9 @@
       "package-name": "szr",
       "include-component-in-tag": false,
       "changelog-path": "CHANGELOG.md",
-      "include-v-in-tag": true
+      "include-v-in-tag": true,
+      "draft": true,
+      "force-tag-creation": true
     }
   }
 }

@@ -1,7 +1,7 @@
 # Codex installer
 
-Instruction file: ~/.codex/szr.md
-Repo reference: ./AGENTS.md
+Global instruction file: ~/.codex/AGENTS.md
+Repository instruction file: ./AGENTS.md
 
 Suggested repo policy:
 
@@ -23,4 +23,4 @@ Use `szr` as the default entrypoint for noisy repository commands.
 - For long agent loops, prefer the `agent` reasoning budget mode (`./bin/szr settings`) for tighter default budgets.
 - If `szr` reports a tee artifact for a failure, inspect that full artifact path instead of rerunning the command unfiltered.
 
-Current installs write shared Codex guidance under the Codex home directory and reference it from the repository's AGENTS.md file.
+Use `szr install codex --global` to merge this guidance into `$CODEX_HOME/AGENTS.md` for every repository. Use `szr install codex` for the nearest Git root, or `szr install codex --root <path>` for one explicit repository.

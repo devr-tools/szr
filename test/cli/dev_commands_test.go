@@ -314,17 +314,74 @@ func TestInstallAllAndUninstallAllPrint(t *testing.T) {
 	}
 }
 
-func TestInstallClaudeGlobalFlagRejected(t *testing.T) {
+func TestInstallCodexGlobalAndExplicitRoot(t *testing.T) {
+	app := testutil.NewTestApp(t)
+	home := t.TempDir()
+	repo := t.TempDir()
+	nested := filepath.Join(repo, "internal", "nested")
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatalf("mkdir nested directory: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatalf("mkdir git marker: %v", err)
+	}
+	restore := testutil.Chdir(t, nested)
+	defer restore()
+
+	code, stdout, stderr := testutil.RunApp(t, app, "install", "codex", "--global")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected global Codex install stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	globalAgents := filepath.Join(home, ".codex", "AGENTS.md")
+	globalContent := string(testutil.MustReadFile(t, globalAgents))
+	if !strings.Contains(globalContent, "Use `szr` as the default entrypoint") {
+		t.Fatalf("global Codex instructions missing from %s: %q", globalAgents, globalContent)
+	}
+	if _, err := os.Stat(filepath.Join(nested, "AGENTS.md")); !os.IsNotExist(err) {
+		t.Fatalf("global install unexpectedly wrote nested AGENTS.md: %v", err)
+	}
+
+	code, stdout, stderr = testutil.RunApp(t, app, "install", "codex")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected detected-root Codex install stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	if _, err := os.Stat(filepath.Join(repo, "AGENTS.md")); err != nil {
+		t.Fatalf("expected AGENTS.md at detected Git root: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(nested, "AGENTS.md")); !os.IsNotExist(err) {
+		t.Fatalf("detected-root install unexpectedly wrote nested AGENTS.md: %v", err)
+	}
+
+	code, stdout, stderr = testutil.RunApp(t, app, "install", "codex", "--root", repo)
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected rooted Codex install stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	repoContent := string(testutil.MustReadFile(t, filepath.Join(repo, "AGENTS.md")))
+	if !strings.Contains(repoContent, "Use szr as the default wrapper") {
+		t.Fatalf("repository Codex instructions missing: %q", repoContent)
+	}
+
+	code, stdout, stderr = testutil.RunApp(t, app, "uninstall", "codex", "--global")
+	if code != 0 || stderr != "" {
+		t.Fatalf("unexpected global Codex uninstall stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	}
+	if _, err := os.Stat(globalAgents); !os.IsNotExist(err) {
+		t.Fatalf("expected global AGENTS.md removal, got %v", err)
+	}
+}
+
+func TestInstallScopeFlagsRejectUnsupportedTargets(t *testing.T) {
 	app := testutil.NewTestApp(t)
 
 	code, stdout, stderr := testutil.RunApp(t, app, "install", "--global", "claude-code")
-	if code != 2 || stdout != "" || !strings.Contains(stderr, "unknown install flag --global") {
+	if code != 2 || stdout != "" || !strings.Contains(stderr, "--global requires codex") {
 		t.Fatalf("unexpected global install flag handling stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
 
-	code, stdout, stderr = testutil.RunApp(t, app, "uninstall", "--global", "claude-code")
-	if code != 2 || stdout != "" || !strings.Contains(stderr, "unknown uninstall flag --global") {
-		t.Fatalf("unexpected global uninstall flag handling stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	code, stdout, stderr = testutil.RunApp(t, app, "install", "--root", t.TempDir(), "cursor")
+	if code != 2 || stdout != "" || !strings.Contains(stderr, "--root requires codex") {
+		t.Fatalf("unexpected rooted install flag handling stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
 }
 

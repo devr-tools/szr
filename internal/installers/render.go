@@ -57,6 +57,9 @@ func detectRenderPaths(target Target, options Options) (Paths, error) {
 	case TargetClaude, TargetCursor, TargetGemini:
 		return DetectClaudeGlobalPaths(homeDir)
 	case TargetCodex:
+		if options.Global {
+			return DetectClaudeGlobalPaths(homeDir)
+		}
 		repoPaths, err := DetectPaths(options.RepoRoot)
 		if err != nil {
 			return Paths{}, err
