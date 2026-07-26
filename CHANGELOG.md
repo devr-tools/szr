@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.21.0](https://github.com/devr-tools/szr/compare/v0.20.0...v0.21.0) (2026-07-26)
+
+
+### Features
+
+* **install:** add Codex guidance scopes ([ba630d1](https://github.com/devr-tools/szr/commit/ba630d1cc3cb3ff30719431985b49d469ff14afc))
+
+
+### Bug Fixes
+
+* **ci:** align CodeGuard versions ([dc27b99](https://github.com/devr-tools/szr/commit/dc27b99281de6c0e25bf62a2c14d1b990bef0fe4))
+* **ci:** restore CodeGuard policy version ([4eff67b](https://github.com/devr-tools/szr/commit/4eff67b4ccf5c8522200bc54e80b9a74e94dd377))
+* **release:** support immutable GitHub releases ([0c6ec0e](https://github.com/devr-tools/szr/commit/0c6ec0e5f66178e1804d0476daac3d8ae18becce))
+* **release:** support immutable GitHub releases ([c83ccf1](https://github.com/devr-tools/szr/commit/c83ccf1f3246f71213153f17d0d03616d6a98d75))
+
 ## [0.20.0](https://github.com/devr-tools/szr/compare/v0.19.1...v0.20.0) (2026-07-24)
 
 
