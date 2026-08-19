@@ -275,7 +275,23 @@ func rewriteStructuredCommand(prefix string, args []string, ok bool) (routePlan,
 	if !ok {
 		return routePlan{}, false
 	}
-	return routePlan{command: prefix + " " + strings.Join(args, " "), structured: true}, true
+	quotedArgs := make([]string, len(args))
+	for i, arg := range args {
+		quotedArgs[i] = shellQuote(arg)
+	}
+	return routePlan{command: prefix + " " + strings.Join(quotedArgs, " "), structured: true}, true
+}
+
+func shellQuote(word string) string {
+	if word != "" && strings.IndexFunc(word, func(r rune) bool {
+		return !((r >= 'a' && r <= 'z') ||
+			(r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') ||
+			strings.ContainsRune("_@%+=:,./-", r))
+	}) == -1 {
+		return word
+	}
+	return "'" + strings.ReplaceAll(word, "'", "'\\''") + "'"
 }
 
 func isGitStructured(words []string) bool {

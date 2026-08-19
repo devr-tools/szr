@@ -32,6 +32,11 @@ func TestAnalyze(t *testing.T) {
 		{name: "fd exec remains unsupported", command: "fd needle src -x rm {}", checkHint: true, wantHint: true},
 		{name: "ls structured direct", command: "ls ./internal", autoRewrite: true, rewriteCommand: "szr ls ./internal"},
 		{name: "tree rewrites to ls", command: "tree ./internal", autoRewrite: true, rewriteCommand: "szr ls ./internal"},
+		{name: "ls quoted metacharacters remain data", command: "ls 'repo-file; touch /tmp/szr_pwn'", autoRewrite: true, rewriteCommand: "szr ls 'repo-file; touch /tmp/szr_pwn'"},
+		{name: "tree command substitution remains data", command: "tree '$(touch /tmp/szr_pwn)'", autoRewrite: true, rewriteCommand: "szr ls '$(touch /tmp/szr_pwn)'"},
+		{name: "grep quoted path remains data", command: "grep needle 'repo; touch /tmp/szr_pwn'", autoRewrite: true, rewriteCommand: "szr grep needle 'repo; touch /tmp/szr_pwn'"},
+		{name: "find quoted name remains data", command: "find . -name 'file; touch /tmp/szr_pwn'", autoRewrite: true, rewriteCommand: "szr find . --name 'file; touch /tmp/szr_pwn'"},
+		{name: "embedded single quote is escaped", command: `ls "repo's file"`, autoRewrite: true, rewriteCommand: `szr ls 'repo'\''s file'`},
 		{name: "ls flags remain unsupported", command: "ls -la", checkHint: true, wantHint: true},
 		{name: "npx tsc direct", command: "npx tsc --noEmit", autoRewrite: true, rewriteCommand: "szr tsc --noEmit"},
 	}
