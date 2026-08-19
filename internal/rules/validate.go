@@ -65,6 +65,9 @@ func validateRewrite(profile Profile) error {
 }
 
 func validatePreference(preference Preference) error {
+	if preference.Rewrite.Mode == "replace" {
+		return fmt.Errorf("preference %q: rewrite mode %q is not allowed", preference.Name, preference.Rewrite.Mode)
+	}
 	return validateRewriteSpec("preference", preference.Name, preference.Rewrite, true)
 }
 
