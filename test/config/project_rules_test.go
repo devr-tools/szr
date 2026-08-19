@@ -22,7 +22,7 @@ func TestLoadWithProjectRules(t *testing.T) {
 	if err := os.MkdirAll(paths.ConfigDir, 0o755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
 	}
-	testutil.MustWriteFile(t, paths.ConfigFile, `{"max_preview_lines":9}`)
+	testutil.MustWriteFile(t, paths.ConfigFile, `{"max_preview_lines":9,"advanced":{"project_rules":true}}`)
 
 	ruleFile := filepath.Join(projectRoot, ".szr.json")
 	testutil.MustWriteFile(t, ruleFile, `{"version":1,"profiles":[{"name":"local-node","match":{"command_prefix":["npm","test"]},"rewrite":{"mode":"append","args":["--runInBand"]},"render":{"mode":"failure","max_lines":5}}]}`)
@@ -63,7 +63,7 @@ func TestLoadWithProjectRules(t *testing.T) {
 	}
 }
 
-func TestLoadWithProjectRulesWithoutUserConfig(t *testing.T) {
+func TestLoadDoesNotTrustProjectRulesWithoutUserOptIn(t *testing.T) {
 	root := t.TempDir()
 	projectRoot := filepath.Join(root, "repo")
 	if err := os.MkdirAll(projectRoot, 0o755); err != nil {
@@ -72,7 +72,7 @@ func TestLoadWithProjectRulesWithoutUserConfig(t *testing.T) {
 
 	paths := testutil.Paths(root)
 	ruleFile := filepath.Join(projectRoot, ".szr.json")
-	testutil.MustWriteFile(t, ruleFile, `{"profiles":[{"name":"local","match":{"command_prefix":["pnpm","lint"]}}]}`)
+	testutil.MustWriteFile(t, ruleFile, `{"profiles":[{"name":"local","match":{"command_prefix":["git","status"]},"rewrite":{"mode":"replace","args":["sh","-c","malicious-command"]}}]}`)
 
 	cfg, gotPaths, err := config.LoadWith(
 		func() (config.Paths, error) { return paths, nil },
@@ -84,10 +84,10 @@ func TestLoadWithProjectRulesWithoutUserConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load with project-only rules: %v", err)
 	}
-	if !cfg.TeeOnFailure || len(cfg.ProjectRules.Profiles) != 1 {
-		t.Fatalf("unexpected config with project-only rules: %#v", cfg)
+	if !cfg.TeeOnFailure || len(cfg.ProjectRules.Profiles) != 0 {
+		t.Fatalf("unexpected config with untrusted project rules: %#v", cfg)
 	}
-	if gotPaths.ProjectRuleFile != ruleFile {
+	if gotPaths.ProjectRuleFile != "" {
 		t.Fatalf("unexpected project rule path: %#v", gotPaths)
 	}
 }
@@ -100,6 +100,10 @@ func TestLoadWithProjectRuleErrors(t *testing.T) {
 	}
 
 	paths := testutil.Paths(root)
+	if err := os.MkdirAll(paths.ConfigDir, 0o755); err != nil {
+		t.Fatalf("mkdir config dir: %v", err)
+	}
+	testutil.MustWriteFile(t, paths.ConfigFile, `{"advanced":{"project_rules":true}}`)
 	yamlFile := filepath.Join(projectRoot, ".szr.yaml")
 	testutil.MustWriteFile(t, yamlFile, `profiles:
   - name: local-yaml

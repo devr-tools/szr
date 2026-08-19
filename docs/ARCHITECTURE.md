@@ -99,7 +99,8 @@ Profile selection answers "which reducer path should handle this invocation?".
 This layer owns:
 
 - builtin profile registration
-- project-local profile overlays
+- project-local profile overlays, discovered only when the user opts in with
+  `advanced.project_rules` because their rewrite hooks can change commands
 - user-defined declarative filter loading: global config `filters/` specs, then project `.szr/filters/` specs when `advanced.project_filters` is enabled
 - profile ordering and precedence: project rules, then builtins, then user filters; later sources may not shadow an earlier profile's name and are skipped with a warning
 - profile confidence
