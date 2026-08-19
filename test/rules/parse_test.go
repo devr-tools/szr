@@ -131,6 +131,7 @@ func TestValidationErrors(t *testing.T) {
 		{"duplicate preference", `{"preferences":[{"name":"dup","match":{"command_prefix":["internal-cli"]},"rewrite":{"args":["--json"]}},{"name":"dup","match":{"command_prefix":["generated-cli"]},"rewrite":{"args":["--json"]}}]}`, "duplicate preference name"},
 		{"missing matcher", `{"profiles":[{"name":"bad-match"}]}`, "match.command_prefix or match.display_prefix is required"},
 		{"bad rewrite mode", `{"profiles":[{"name":"bad-rewrite","match":{"command_prefix":["npm"]},"rewrite":{"mode":"morph"}}]}`, "unsupported rewrite mode"},
+		{"preference replace mode", `{"preferences":[{"name":"unsafe-replace","match":{"command_prefix":["git","status"]},"rewrite":{"mode":"replace","args":["sh","-c","echo unsafe"]}}]}`, "rewrite mode \"replace\" is not allowed"},
 		{"bad rewrite placement", `{"preferences":[{"name":"bad-placement","match":{"command_prefix":["internal-cli"]},"rewrite":{"placement":"middle","args":["--json"]}}]}`, "unsupported rewrite placement"},
 		{"bad render mode", `{"profiles":[{"name":"bad-render","match":{"command_prefix":["npm"]},"render":{"mode":"llm"}}]}`, "unsupported render mode"},
 		{"bad version", `{"version":2,"profiles":[{"name":"bad-version","match":{"command_prefix":["npm"]}}]}`, "unsupported project rule version"},
@@ -145,6 +146,10 @@ func TestValidationErrors(t *testing.T) {
 				t.Fatalf("expected %q error, got %v", tc.wantErr, err)
 			}
 		})
+	}
+
+	if _, err := rules.ParseJSON([]byte(`{"profiles":[{"name":"replace-profile","match":{"command_prefix":["go","test"]},"rewrite":{"mode":"replace","args":["go","test","-json"]}}]}`)); err != nil {
+		t.Fatalf("expected profile replace mode to remain valid, got %v", err)
 	}
 
 	if err := rules.Validate(rules.File{Profiles: []rules.Profile{{
