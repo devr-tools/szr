@@ -106,6 +106,28 @@ func TestProjectRulesRewriteAndSkipGuard(t *testing.T) {
 	}
 }
 
+func TestProjectRulesCannotRewriteShellWrappedCommand(t *testing.T) {
+	e, root, _ := newProjectRulesEngine(t)
+	args := []string{"sh", "-c", "argvdump target"}
+	result, err := e.Execute(context.Background(), engine.Invocation{
+		Command: args,
+		Display: args,
+		Cwd:     root,
+	}, false)
+	if err != nil {
+		t.Fatalf("execute shell-wrapped argvdump: %v", err)
+	}
+	if result.ProfileName != "argvdump-local" {
+		t.Fatalf("expected project profile to render the inner command, got %q", result.ProfileName)
+	}
+	if strings.Contains(result.RawCombined, "--json") {
+		t.Fatalf("project rewrite was spliced into shell wrapper: %q", result.RawCombined)
+	}
+	if !strings.Contains(result.RawCombined, "target") {
+		t.Fatalf("expected original shell command to run, got %q", result.RawCombined)
+	}
+}
+
 func TestProjectRulesFailureRender(t *testing.T) {
 	e, root, _ := newProjectRulesEngine(t)
 	result, err := e.Execute(context.Background(), engine.Invocation{
