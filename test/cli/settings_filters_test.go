@@ -56,6 +56,27 @@ func TestSettingsProjectFiltersPersisted(t *testing.T) {
 	}
 }
 
+func TestSettingsProjectRulesPersisted(t *testing.T) {
+	paths := testutil.Paths(t.TempDir())
+	testutil.EnsurePaths(t, paths)
+	cfg := config.Default()
+	store := history.New(paths.HistoryFile)
+	eng := engine.New(cfg, paths, store, profiles.Builtins(cfg.MaxPreviewLines))
+	app := cli.NewWithDependencies("test", cfg, paths, store, eng)
+
+	testutil.WithStdin(t, "23\n1\nq\n", func() {
+		testutil.RunApp(t, app, "settings")
+	})
+
+	var saved config.Config
+	if err := json.Unmarshal(testutil.MustReadFile(t, paths.ConfigFile), &saved); err != nil {
+		t.Fatalf("decode saved config: %v", err)
+	}
+	if !saved.Advanced.ProjectRules {
+		t.Fatalf("expected advanced.project_rules enabled, got %#v", saved.Advanced)
+	}
+}
+
 func TestProfilesListsUserFilterWithSource(t *testing.T) {
 	paths := testutil.Paths(t.TempDir())
 	testutil.EnsurePaths(t, paths)
