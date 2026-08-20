@@ -174,6 +174,7 @@ func (a *App) settingsActions() map[string]settingsAction {
 		"20": settingsTeeMaxDirFilesAction,
 		"21": settingsTeeMaxDirSizeAction,
 		"22": settingsProjectFiltersAction,
+		"23": settingsProjectRulesAction,
 	}
 }
 
@@ -265,6 +266,7 @@ func (a *App) printSettingsMenu(w io.Writer, cfg config.Config, configFile strin
 	printSettingsRow(w, "20", "tee max dir files", fmt.Sprintf("%d", cfg.TeeMaxDirFiles))
 	printSettingsRow(w, "21", "tee max dir mb", fmt.Sprintf("%d", cfg.TeeMaxDirMB))
 	printSettingsRow(w, "22", "project filters", enabledLabel(cfg.Advanced.ProjectFilters))
+	printSettingsRow(w, "23", "project rules", enabledLabel(cfg.Advanced.ProjectRules))
 	fmt.Fprintln(w, strings.Repeat("-", 54))
 	printSettingsRow(w, "q", "save and exit", "")
 	fmt.Fprint(w, "> ")
