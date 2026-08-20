@@ -106,7 +106,12 @@ func (e *Engine) prepareStreamingExecution(
 	preparedInv, _ := e.prepareInvocation(inv)
 	profile := e.match(preparedInv)
 	command := preparedInv.Command
-	if profile.Prepare != nil {
+	// Project-local rules are repository-controlled. They may still select a
+	// renderer for an unwrapped shell command, but must not rewrite that command
+	// and splice repository-controlled argv back into the user's `sh -c` string.
+	projectShellRewrite := profile.Source == SourceProject &&
+		preparedInv.ShellWrap != nil && preparedInv.ShellWrap.CommandArg >= 0
+	if profile.Prepare != nil && !projectShellRewrite {
 		command = profile.Prepare(preparedInv)
 	}
 	if preparedInv.ShellWrap != nil {
