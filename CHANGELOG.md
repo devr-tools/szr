@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.22.0](https://github.com/devr-tools/szr/compare/v0.21.0...v0.22.0) (2026-08-20)
+
+
+### Features
+
+* **settings:** expose project rules opt-in ([#85](https://github.com/devr-tools/szr/issues/85)) ([045b07a](https://github.com/devr-tools/szr/commit/045b07a31767f1a25d4eb206d38d2c5722cf8eeb))
+
+
+### Bug Fixes
+
+* **engine:** block project rewrites in shell wrappers ([5189a2b](https://github.com/devr-tools/szr/commit/5189a2bd10a598a18a7e5d2dfd4358497cc2329a))
+* reject command replacement preferences ([#89](https://github.com/devr-tools/szr/issues/89)) ([1c827f4](https://github.com/devr-tools/szr/commit/1c827f43354fe2fa3ce4845206bdd8e6fb7ef046))
+* require opt-in for project rules ([816fb20](https://github.com/devr-tools/szr/commit/816fb20dc5a6714ff0777947df9f77ccbcf11319))
+* **rewrite:** quote structured shell arguments ([#86](https://github.com/devr-tools/szr/issues/86)) ([36d0626](https://github.com/devr-tools/szr/commit/36d06263f422596aa84cd96cecc62d66c4eb0596))
+
 ## [0.21.0](https://github.com/devr-tools/szr/compare/v0.20.0...v0.21.0) (2026-07-26)
 
 
