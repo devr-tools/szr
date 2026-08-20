@@ -61,6 +61,10 @@ type (
 		// working directory's .szr/filters. Off by default because project
 		// files arrive with checkouts rather than from the user.
 		ProjectFilters bool `json:"project_filters"`
+		// ProjectRules enables loading .szr rule files discovered from the
+		// working directory. Off by default because rules can rewrite commands
+		// and project files may come from an untrusted checkout.
+		ProjectRules bool `json:"project_rules"`
 	}
 
 	UpdateCheck struct {
@@ -224,10 +228,12 @@ func LoadWith(
 	if err != nil {
 		return Config{}, Paths{}, err
 	}
-
 	cwd, err := getwd()
 	if err != nil {
 		return Config{}, Paths{}, err
+	}
+	if !cfg.Advanced.ProjectRules {
+		return cfg, paths, nil
 	}
 	projectRuleFile, _, err := rules.DiscoverWith(cwd, stat)
 	if err != nil {

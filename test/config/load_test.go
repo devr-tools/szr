@@ -187,6 +187,10 @@ func loadConfigFixture(t *testing.T, paths config.Paths, root string, resolveErr
 func TestLoadEdgeErrors(t *testing.T) {
 	root := t.TempDir()
 	paths := testutil.Paths(root)
+	if err := os.MkdirAll(paths.ConfigDir, 0o755); err != nil {
+		t.Fatalf("mkdir config dir: %v", err)
+	}
+	testutil.MustWriteFile(t, paths.ConfigFile, `{"advanced":{"project_rules":true}}`)
 
 	_, _, err := config.LoadWith(
 		func() (config.Paths, error) { return paths, nil },
@@ -204,7 +208,7 @@ func TestLoadEdgeErrors(t *testing.T) {
 		func(config.Paths) error { return nil },
 		func() (string, error) { return root, nil },
 		func(string) (os.FileInfo, error) { return nil, errors.New("stat fail") },
-		func(string) ([]byte, error) { return nil, os.ErrNotExist },
+		os.ReadFile,
 	)
 	if err == nil || !strings.Contains(err.Error(), "stat fail") {
 		t.Fatalf("expected discover stat error, got %v", err)
@@ -225,7 +229,7 @@ func TestLoadEdgeErrors(t *testing.T) {
 			if strings.HasSuffix(name, ".szr.json") {
 				return nil, errors.New("project read fail")
 			}
-			return nil, os.ErrNotExist
+			return os.ReadFile(name)
 		},
 	)
 	if err == nil || !strings.Contains(err.Error(), "project read fail") {
