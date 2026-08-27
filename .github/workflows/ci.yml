@@ -239,7 +239,7 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Run Devr Codeguard
-        uses: devr-tools/codeguard@v1.3.9
+        uses: devr-tools/codeguard@v1.7.0
         with:
           config: codeguard.yaml
           mode: diff
