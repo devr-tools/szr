@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.22.1](https://github.com/devr-tools/szr/compare/v0.22.0...v0.22.1) (2026-09-01)
+
+
+### Bug Fixes
+
+* **history:** stop one long command from breaking history reads and shrinking reported savings ([1a7a0cb](https://github.com/devr-tools/szr/commit/1a7a0cb373a3ad754e101b2b5aa7222221964f16))
+
 ## [0.22.0](https://github.com/devr-tools/szr/compare/v0.21.0...v0.22.0) (2026-08-20)
 
 
