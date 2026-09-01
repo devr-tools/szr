@@ -3,6 +3,7 @@ package teeindex_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -143,4 +144,43 @@ func newSeededTeeStore(t *testing.T) (*teeindex.Store, string, string) {
 	}
 
 	return store, firstPath, secondPath
+}
+
+func TestLoadAllSkipsOversizedLinesAndClipsCommands(t *testing.T) {
+	dir := t.TempDir()
+	store := teeindex.New(dir)
+	logPath := filepath.Join(dir, "100_first.log")
+	if err := os.WriteFile(logPath, []byte("first\n"), 0o644); err != nil {
+		t.Fatalf("write tee log: %v", err)
+	}
+
+	command := "szr rg needle " + strings.Repeat("path/to/file ", 100_000)
+	if err := store.Append(teeindex.Entry{
+		Timestamp: time.Date(2026, 5, 21, 10, 0, 0, 0, time.UTC),
+		Path:      logPath,
+		Command:   command,
+		Profile:   "rg",
+	}); err != nil {
+		t.Fatalf("append oversized command: %v", err)
+	}
+	indexPath := filepath.Join(dir, "index.jsonl")
+	file, err := os.OpenFile(indexPath, os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		t.Fatalf("open index: %v", err)
+	}
+	if _, err := file.WriteString(strings.Repeat("x", 2<<20) + "\n"); err != nil {
+		t.Fatalf("write oversized line: %v", err)
+	}
+	_ = file.Close()
+
+	entries, err := store.LoadAll()
+	if err != nil {
+		t.Fatalf("load all: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected the clipped entry to survive, got %#v", entries)
+	}
+	if len(entries[0].Command) >= len(command) || !strings.HasPrefix(entries[0].Command, "szr rg needle ") {
+		t.Fatalf("expected the command clipped to its leading tokens, got %d bytes", len(entries[0].Command))
+	}
 }
