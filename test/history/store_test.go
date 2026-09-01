@@ -227,16 +227,35 @@ func TestStoreClear(t *testing.T) {
 	}
 }
 
-func TestLoadAllScannerError(t *testing.T) {
-	longLine := strings.Repeat("x", 70*1024)
+func TestLoadAllSkipsOversizedLines(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "long.jsonl")
-	if err := os.WriteFile(path, []byte(longLine), 0o644); err != nil {
+	lines := []string{
+		`{"command":"git status","profile":"git-status","raw_tokens":10,"filtered_tokens":4}`,
+		strings.Repeat("x", 70*1024),
+		strings.Repeat("y", 2<<20),
+		`{"command":"go build ./...","profile":"go-build","raw_tokens":20,"filtered_tokens":8}`,
+	}
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
 		t.Fatalf("write long file: %v", err)
 	}
 
 	store := history.New(path)
+	records, err := store.LoadAll()
+	if err != nil {
+		t.Fatalf("expected oversized lines to be skipped, got error: %v", err)
+	}
+	if len(records) != 2 {
+		t.Fatalf("expected the two parseable records, got %d", len(records))
+	}
+	if records[0].Command != "git status" || records[1].Command != "go build ./..." {
+		t.Fatalf("unexpected surviving records: %q, %q", records[0].Command, records[1].Command)
+	}
+}
+
+func TestLoadAllErrorsOnUnreadableFile(t *testing.T) {
+	store := history.New(t.TempDir())
 	if _, err := store.LoadAll(); err == nil {
-		t.Fatal("expected scanner error for long line")
+		t.Fatal("expected a read error for a directory history path")
 	}
 }
 
