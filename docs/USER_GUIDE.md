@@ -46,8 +46,6 @@ szr spread --history
 szr spread --cost --rate 3.00
 ```
 
-Totals are lifetime figures. szr trims its history file once it grows past a few megabytes, and folds the runs it removes into a small totals file beside it, so command counts, token savings, and cost estimates keep accumulating instead of resetting each time the file is trimmed. Duration percentiles, the per-command tables, and the hotspot lists describe only the runs still on disk; when older runs have been archived, `szr spread` says so and reports how many runs the tables cover. `szr clear-spread` discards both the history and the archived totals.
-
 `szr discover` can scan local AI-agent transcripts, without changing or uploading them, to estimate savings from commands that did not use szr. `szr usage` compares recorded agent token use with szr's estimates.
 
 ```bash

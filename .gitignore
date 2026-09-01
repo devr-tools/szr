@@ -34,8 +34,6 @@ go.work.sum
 # local build cache
 .gocache/
 .gocache-docker/
-.gomodcache/
-.gobin/
 .cache/
 .codeguard/
 

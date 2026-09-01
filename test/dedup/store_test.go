@@ -291,36 +291,3 @@ func entryFixture(hashSeed string, at time.Time) dedup.Entry {
 func rawHashFor(seed string) string {
 	return (seed + strings.Repeat("0", 64))[:64]
 }
-
-func TestLoadAllSkipsOversizedLinesAndClipsCommands(t *testing.T) {
-	t.Parallel()
-	dataDir := t.TempDir()
-	store := dedup.New(dataDir)
-
-	entry := entryFixture("aaaa1111", time.Now())
-	command := "szr grep needle " + strings.Repeat("path/to/file ", 100_000)
-	entry.Command = command
-	if err := store.Append(entry); err != nil {
-		t.Fatalf("append: %v", err)
-	}
-	indexPath := filepath.Join(dataDir, dedup.DirName, "index.jsonl")
-	file, err := os.OpenFile(indexPath, os.O_APPEND|os.O_WRONLY, 0o644)
-	if err != nil {
-		t.Fatalf("open index: %v", err)
-	}
-	if _, err := file.WriteString(strings.Repeat("x", 2<<20) + "\n"); err != nil {
-		t.Fatalf("write oversized line: %v", err)
-	}
-	_ = file.Close()
-
-	entries, err := store.LoadAll()
-	if err != nil {
-		t.Fatalf("expected the oversized line to be skipped, got error: %v", err)
-	}
-	if len(entries) != 1 || entries[0].RawHash != rawHashFor("aaaa1111") {
-		t.Fatalf("expected the clipped entry to survive: %#v", entries)
-	}
-	if len(entries[0].Command) >= len(command) {
-		t.Fatalf("expected the command to be clipped, kept %d bytes", len(entries[0].Command))
-	}
-}

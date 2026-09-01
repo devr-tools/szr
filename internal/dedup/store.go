@@ -7,6 +7,7 @@
 package dedup
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -16,8 +17,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/devr-tools/szr/internal/jsonl"
 )
 
 const (
@@ -36,10 +35,6 @@ const (
 	compactMaxIndexBytes = 1 << 20
 	// compactRetainEntries caps how many recent entries a compaction keeps.
 	compactRetainEntries = 1500
-	// maxCommandBytes bounds the command text stored per entry so an
-	// unbounded command line cannot produce a line past compactMaxIndexBytes,
-	// which readers would have to drop.
-	maxCommandBytes = 8 << 10
 )
 
 // ScopeEnv is the environment variable that namespaces the dedup and delta
@@ -122,7 +117,6 @@ func (s *Store) Append(entry Entry) error {
 	if err := os.MkdirAll(s.dir, 0o755); err != nil {
 		return err
 	}
-	entry.Command = jsonl.Clip(entry.Command, maxCommandBytes)
 	line, err := json.Marshal(entry)
 	if err != nil {
 		return err
@@ -172,13 +166,20 @@ func (s *Store) LoadAll() ([]Entry, error) {
 
 func scanIndexEntries(reader io.Reader) ([]Entry, error) {
 	var entries []Entry
-	if _, err := jsonl.Scan(reader, compactMaxIndexBytes, func(line []byte) {
+	scanner := bufio.NewScanner(reader)
+	scanner.Buffer(make([]byte, 64*1024), compactMaxIndexBytes)
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
 		var entry Entry
 		if err := json.Unmarshal(line, &entry); err != nil {
-			return
+			continue
 		}
 		entries = append(entries, entry)
-	}); err != nil {
+	}
+	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
 	return entries, nil

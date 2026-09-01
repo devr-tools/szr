@@ -1,13 +1,10 @@
 package history
 
 import (
+	"bufio"
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"sync/atomic"
-	"time"
-
-	"github.com/devr-tools/szr/internal/jsonl"
 )
 
 // History compaction keeps history.jsonl bounded. Design choice: rather than
@@ -23,29 +20,15 @@ const (
 	// DefaultCompactRetainRecords caps how many of the most recent records a
 	// compaction pass keeps.
 	DefaultCompactRetainRecords = 2500
-	// maxRecordLineBytes is the longest single history line readers will
-	// parse. Longer lines are dropped rather than failing the read, and
-	// compaction rewrites the file without them so it stops paying for
-	// records nothing can use.
-	maxRecordLineBytes = 1 << 20
-	// maxCommandBytes bounds the command text stored per record. Command
-	// lines are unbounded in practice - an agent can run a grep over
-	// hundreds of paths - while readers only ever display the first few
-	// tokens, so clipping on write keeps records well under
-	// maxRecordLineBytes.
-	maxCommandBytes = 8 << 10
+	// compactMaxLineBytes is the longest single history line compaction will
+	// tolerate; longer lines abort compaction and leave the file untouched.
+	compactMaxLineBytes = 1 << 20
 )
 
 type Store struct {
 	path          string
 	maxFileBytes  int64
 	retainRecords int
-	// repairPending records that a read in this process found a line needing
-	// repair, so the next Append compacts even below the size trigger.
-	// Without it an oversized line would sit in the file - and be re-parsed
-	// by every command that reads history - until the file happened to cross
-	// maxFileBytes.
-	repairPending atomic.Bool
 }
 
 func New(path string) *Store {
@@ -66,7 +49,6 @@ func NewWithLimits(path string, maxFileBytes int64, retainRecords int) *Store {
 }
 
 func (s *Store) Append(record Record) error {
-	record.Command = jsonl.Clip(record.Command, maxCommandBytes)
 	file, err := os.OpenFile(s.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return err
@@ -82,55 +64,108 @@ func (s *Store) Append(record Record) error {
 	if appendErr != nil {
 		return appendErr
 	}
-	if size > s.maxFileBytes || s.repairPending.Load() {
+	if size > s.maxFileBytes {
 		s.compact()
 	}
 	return nil
 }
 
-// compact rewrites the history file keeping only the most recent records, and
-// folds everything it removes into the archived totals so lifetime reporting
-// stays whole. It is best-effort and crash-safe: retained lines are written to
-// a temp file in the same directory and atomically renamed over the original,
-// so a crash or error mid-compaction leaves the previous file intact.
+// compact rewrites the history file keeping only the most recent records.
+// It is best-effort and crash-safe: retained lines are written to a temp file
+// in the same directory and atomically renamed over the original, so a crash
+// or error mid-compaction leaves the previous file intact.
 func (s *Store) compact() {
-	// Clear first: a failed pass leaves the line in place, and the next read
-	// flags it again, so a broken rewrite retries rather than looping here.
-	s.repairPending.Store(false)
-	lines, stats, ok := s.readHistoryLines()
+	retained, ok := s.retainedLines()
 	if !ok {
-		return
-	}
-	start := retainStart(lines, s.retainRecords, s.maxFileBytes/2)
-	// Repaired and dropped lines are reason enough to rewrite: the file is
-	// carrying bytes no reader can use, and leaving them means never
-	// compacting again.
-	if start == 0 && stats.repaired == 0 && stats.dropped == 0 {
 		return
 	}
 	tmp, err := os.CreateTemp(filepath.Dir(s.path), "history-compact-*.tmp")
 	if err != nil {
 		return
 	}
-	if !writeCompactedLines(tmp, lines[start:]) {
+	if !writeCompactedLines(tmp, retained) {
 		_ = os.Remove(tmp.Name())
 		return
 	}
 	_ = os.Chmod(tmp.Name(), 0o644)
 	if err := os.Rename(tmp.Name(), s.path); err != nil {
 		_ = os.Remove(tmp.Name())
-		return
 	}
-	s.archive(archivedRecords(lines[:start]), stats.dropped, time.Now())
 }
 
-// archivedRecords collects the records compaction dropped from the file.
-func archivedRecords(lines []historyLine) []Record {
-	records := make([]Record, 0, len(lines))
-	for _, line := range lines {
-		records = append(records, line.record)
+// retainedLines returns the newest history lines that fit within both the
+// retained-record cap and half the size cap, so the compacted file has room
+// to grow before the next compaction. It returns ok=false when compaction
+// should be skipped (read error, oversized line, or nothing to drop).
+func (s *Store) retainedLines() ([][]byte, bool) {
+	lines, ok := s.readHistoryLines()
+	if !ok {
+		return nil, false
 	}
-	return records
+	start := retainStart(lines, s.retainRecords, s.maxFileBytes/2)
+	if start == 0 {
+		return nil, false
+	}
+	return lines[start:], true
+}
+
+// readHistoryLines reads every non-empty line of the history file. It returns
+// ok=false on open or scan errors (including oversized lines).
+func (s *Store) readHistoryLines() ([][]byte, bool) {
+	file, err := os.Open(s.path)
+	if err != nil {
+		return nil, false
+	}
+	defer file.Close()
+
+	var lines [][]byte
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 64*1024), compactMaxLineBytes)
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+		lines = append(lines, append([]byte(nil), line...))
+	}
+	return lines, scanner.Err() == nil
+}
+
+// retainStart walks backward from the newest line and returns the index of
+// the oldest line to keep. The newest line is always kept; older lines are
+// added until the record cap is reached or the byte budget (line length plus
+// trailing newline) would be exceeded.
+func retainStart(lines [][]byte, retainRecords int, retainBytes int64) int {
+	total := int64(0)
+	start := len(lines)
+	for start > 0 && len(lines)-start < retainRecords {
+		lineBytes := int64(len(lines[start-1]) + 1)
+		if start < len(lines) && total+lineBytes > retainBytes {
+			break
+		}
+		total += lineBytes
+		start--
+	}
+	return start
+}
+
+func writeCompactedLines(file *os.File, lines [][]byte) bool {
+	writer := bufio.NewWriter(file)
+	for _, line := range lines {
+		if _, err := writer.Write(line); err != nil {
+			_ = file.Close()
+			return false
+		}
+		if err := writer.WriteByte('\n'); err != nil {
+			_ = file.Close()
+			return false
+		}
+	}
+	if err := writer.Flush(); err != nil {
+		_ = file.Close()
+		return false
+	}
+	return file.Close() == nil
 }
 
 func (s *Store) LoadAll() ([]Record, error) {
@@ -143,39 +178,28 @@ func (s *Store) LoadAll() ([]Record, error) {
 	}
 	defer file.Close()
 
-	// An oversized record still reports real measurements, so it counts here
-	// with its command clipped, and the read schedules a compaction to
-	// persist the clipped form.
 	var records []Record
-	repaired := 0
-	if _, err := jsonl.Scan(file, repairMaxLineBytes, func(line []byte) {
-		rec, oversized, ok := decodeRecord(line)
-		if !ok {
-			return
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
 		}
-		if oversized {
-			repaired++
+		var rec Record
+		if err := json.Unmarshal(line, &rec); err != nil {
+			continue
 		}
 		records = append(records, hydrateRecord(rec))
-	}); err != nil {
-		return nil, err
 	}
-	if repaired > 0 {
-		s.repairPending.Store(true)
+	if err := scanner.Err(); err != nil {
+		return nil, err
 	}
 	return records, nil
 }
 
-// Clear empties the history file and discards the archived totals, so a
-// cleared store reports nothing rather than lifetime counters with no records
-// behind them.
 func (s *Store) Clear() error {
 	file, err := os.OpenFile(s.path, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
-		return err
-	}
-	if err := os.Remove(s.totalsPath()); err != nil && !os.IsNotExist(err) {
-		_ = file.Close()
 		return err
 	}
 	return file.Close()

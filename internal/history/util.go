@@ -71,22 +71,6 @@ func normalizeCommand(command string) string {
 	return strings.Join(fields, " ")
 }
 
-// SavingsExcludedCommand reports commands kept out of savings reporting. A
-// one-off `szr uninstall` moves enough bytes to distort every average, and it
-// must be excluded identically whether the run is still on disk or has been
-// folded into the archived totals - otherwise compaction would visibly change
-// the reported numbers.
-func SavingsExcludedCommand(command string) bool {
-	fields := strings.Fields(strings.ToLower(command))
-	if len(fields) == 0 {
-		return false
-	}
-	if fields[0] == "szr" && len(fields) > 1 {
-		fields = fields[1:]
-	}
-	return fields[0] == "uninstall"
-}
-
 func Fingerprint(command string) string {
 	normalized := strings.ToLower(strings.Join(strings.Fields(command), " "))
 	if normalized == "" {

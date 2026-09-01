@@ -1,6 +1,7 @@
 package teeindex
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -8,20 +9,9 @@ import (
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/devr-tools/szr/internal/jsonl"
 )
 
 const indexFileName = "index.jsonl"
-
-const (
-	// maxEntryLineBytes is the longest single index line readers will parse;
-	// longer lines are dropped instead of failing the whole read.
-	maxEntryLineBytes = 1 << 20
-	// maxCommandBytes bounds the command text stored per entry so an
-	// unbounded command line cannot produce an entry readers must drop.
-	maxCommandBytes = 8 << 10
-)
 
 type Entry struct {
 	ID                 string    `json:"id"`
@@ -63,7 +53,6 @@ func (s *Store) Append(entry Entry) error {
 	}
 	defer file.Close()
 
-	entry.Command = jsonl.Clip(entry.Command, maxCommandBytes)
 	enc := json.NewEncoder(file)
 	return enc.Encode(entry)
 }
@@ -82,13 +71,19 @@ func (s *Store) LoadAll() ([]Entry, error) {
 	defer file.Close()
 
 	var entries []Entry
-	if _, err := jsonl.Scan(file, maxEntryLineBytes, func(line []byte) {
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
 		var entry Entry
 		if err := json.Unmarshal(line, &entry); err != nil {
-			return
+			continue
 		}
 		entries = append(entries, hydrateEntry(entry))
-	}); err != nil {
+	}
+	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
 	return entries, nil

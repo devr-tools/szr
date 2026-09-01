@@ -22,7 +22,7 @@ func (a *App) runSpread(args []string) int {
 		return 1
 	}
 	summaryRecords := filterSpreadRecords(records)
-	summary := a.history.Totals().Combine(history.Summarize(summaryRecords, 8))
+	summary := history.Summarize(summaryRecords, 8)
 	cost := a.spreadCostReport(summary, opts)
 	if opts.asJSON {
 		enc := json.NewEncoder(os.Stdout)
@@ -58,7 +58,6 @@ func (a *App) runSpread(args []string) int {
 	ui.metric("empty results", emptyResultRate, withBar(summary.EmptyResultRate, emptyResultRate, ui.color, false))
 	ui.metric("tee usage", teeRate, withBar(summary.TeeRate, teeRate, ui.color, false))
 	renderSpreadPassthrough(ui, summary)
-	renderSpreadArchived(ui, summary)
 	renderSpreadTopCommands(ui, summary.TopCommands)
 	renderSpreadProfiles(ui, summary.ProfileStats)
 	renderSpreadHotspots(ui, summary.CommandHotspots)
@@ -124,7 +123,14 @@ func filterSpreadRecords(records []history.Record) []history.Record {
 }
 
 func isSpreadExcludedCommand(command string) bool {
-	return history.SavingsExcludedCommand(command)
+	fields := strings.Fields(strings.ToLower(command))
+	if len(fields) == 0 {
+		return false
+	}
+	if fields[0] == "szr" && len(fields) > 1 {
+		fields = fields[1:]
+	}
+	return fields[0] == "uninstall"
 }
 
 func spreadSavedTokensDisplay(summary history.Summary) string {
