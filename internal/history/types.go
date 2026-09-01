@@ -38,35 +38,42 @@ type Record struct {
 }
 
 type Summary struct {
-	Commands            int                `json:"commands"`
-	AveragePct          float64            `json:"average_pct"`
-	SavedTokens         int                `json:"saved_tokens"`
-	RawTokens           int                `json:"raw_tokens"`
-	FilteredTokens      int                `json:"filtered_tokens"`
-	TotalDurationMS     int64              `json:"total_duration_ms"`
-	Failures            int                `json:"failures"`
-	FailureRate         float64            `json:"failure_rate"`
-	Fallbacks           int                `json:"fallbacks"`
-	FallbackRate        float64            `json:"fallback_rate"`
-	EmptyResults        int                `json:"empty_results"`
-	EmptyResultRate     float64            `json:"empty_result_rate"`
-	TeeCount            int                `json:"tee_count"`
-	TeeRate             float64            `json:"tee_rate"`
-	PassthroughCommands int                `json:"passthrough_commands,omitempty"`
-	PassthroughTokens   int                `json:"passthrough_tokens,omitempty"`
-	FilteredSavingsPct  float64            `json:"filtered_savings_pct"`
-	DurationP50MS       int64              `json:"duration_p50_ms"`
-	DurationP95MS       int64              `json:"duration_p95_ms"`
-	RawBytesRead        int                `json:"raw_bytes_read"`
-	BytesParsed         int                `json:"bytes_parsed"`
-	BytesEmitted        int                `json:"bytes_emitted"`
-	TopCommands         []CommandStat      `json:"top_commands"`
-	Recent              []Record           `json:"recent"`
-	Profiles            map[string]int     `json:"profiles"`
-	ProfileStats        []ProfileStat      `json:"profile_stats"`
-	CommandHotspots     []CommandHotspot   `json:"command_hotspots"`
-	FingerprintHotspots []FingerprintStat  `json:"fingerprint_hotspots"`
-	BudgetSuggestions   []BudgetSuggestion `json:"budget_suggestions"`
+	Commands        int     `json:"commands"`
+	AveragePct      float64 `json:"average_pct"`
+	SavedTokens     int     `json:"saved_tokens"`
+	RawTokens       int     `json:"raw_tokens"`
+	FilteredTokens  int     `json:"filtered_tokens"`
+	TotalDurationMS int64   `json:"total_duration_ms"`
+	Failures        int     `json:"failures"`
+	FailureRate     float64 `json:"failure_rate"`
+	Fallbacks       int     `json:"fallbacks"`
+	FallbackRate    float64 `json:"fallback_rate"`
+	EmptyResults    int     `json:"empty_results"`
+	EmptyResultRate float64 `json:"empty_result_rate"`
+	TeeCount        int     `json:"tee_count"`
+	TeeRate         float64 `json:"tee_rate"`
+	// ArchivedCommands counts runs folded into the totals by compaction and no
+	// longer present as records. The additive fields above include them; the
+	// percentiles, tables, and hotspots below do not.
+	ArchivedCommands int `json:"archived_commands,omitempty"`
+	// ArchivedDroppedRecords counts lines compaction could not parse, so a
+	// report can admit the gap instead of implying complete coverage.
+	ArchivedDroppedRecords int                `json:"archived_dropped_records,omitempty"`
+	PassthroughCommands    int                `json:"passthrough_commands,omitempty"`
+	PassthroughTokens      int                `json:"passthrough_tokens,omitempty"`
+	FilteredSavingsPct     float64            `json:"filtered_savings_pct"`
+	DurationP50MS          int64              `json:"duration_p50_ms"`
+	DurationP95MS          int64              `json:"duration_p95_ms"`
+	RawBytesRead           int                `json:"raw_bytes_read"`
+	BytesParsed            int                `json:"bytes_parsed"`
+	BytesEmitted           int                `json:"bytes_emitted"`
+	TopCommands            []CommandStat      `json:"top_commands"`
+	Recent                 []Record           `json:"recent"`
+	Profiles               map[string]int     `json:"profiles"`
+	ProfileStats           []ProfileStat      `json:"profile_stats"`
+	CommandHotspots        []CommandHotspot   `json:"command_hotspots"`
+	FingerprintHotspots    []FingerprintStat  `json:"fingerprint_hotspots"`
+	BudgetSuggestions      []BudgetSuggestion `json:"budget_suggestions"`
 }
 
 type CommandStat struct {

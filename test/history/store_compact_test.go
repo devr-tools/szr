@@ -127,7 +127,7 @@ func TestAppendKeepsSmallHistoryIntact(t *testing.T) {
 	}
 }
 
-func TestAppendCompactionSkipsUnscannableHistory(t *testing.T) {
+func TestAppendCompactionDropsUnscannableHistory(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "history.jsonl")
 	store := history.NewWithLimits(path, 512, 4)
 
@@ -146,11 +146,19 @@ func TestAppendCompactionSkipsUnscannableHistory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat history: %v", err)
 	}
-	if info.Size() < int64(len(oversized)) {
-		t.Fatalf("expected compaction to leave unscannable history untouched, size %d", info.Size())
+	// Nothing can parse the oversized line, so compaction must rewrite the
+	// file without it instead of leaving history permanently uncompactable.
+	if info.Size() >= int64(len(oversized)) {
+		t.Fatalf("expected compaction to drop the unscannable line, size %d", info.Size())
+	}
+	records, err := store.LoadAll()
+	if err != nil {
+		t.Fatalf("load after compaction: %v", err)
+	}
+	if len(records) != 1 || records[0].Command != compactionCommand(0) {
+		t.Fatalf("expected the appended record to survive, got %#v", records)
 	}
 }
-
 func assertNewestContiguousRecords(t *testing.T, records []history.Record, total int) {
 	t.Helper()
 	start := total - len(records)
