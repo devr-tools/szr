@@ -9,7 +9,7 @@ GO="${GO:-go}"
 GOCACHE="${GOCACHE:-${ROOT_DIR}/.gocache}"
 MIN_INTERNAL_COVERAGE="${MIN_INTERNAL_COVERAGE:-80.0}"
 GOLANGCI_LINT_VERSION="${GOLANGCI_LINT_VERSION:-v2.12.2}"
-CODEGUARD_VERSION="${CODEGUARD_VERSION:-v0.2.0}"
+CODEGUARD_VERSION="${CODEGUARD_VERSION:-v1.9.0}"
 CODEGUARD_CONFIG="${CODEGUARD_CONFIG:-codeguard.yaml}"
 SMOKE_HOME="${SMOKE_HOME:-${ROOT_DIR}/.tmp-home}"
 COVERFILE="${COVERFILE:-.coverage.internal.out}"
@@ -41,20 +41,39 @@ sanitize_go_env() {
 sanitize_go_env
 GO_BIN_DIR="$("${GO}" env GOPATH)/bin"
 
+# tool_version_matches reports whether an already-present binary is the pinned
+# version. Both codeguard ("v1.9.0") and golangci-lint ("golangci-lint has
+# version 2.12.2 ...") embed the bare number, so comparing against the pin with
+# its leading "v" stripped works for both.
+tool_version_matches() {
+	local binary="$1"
+	local version="$2"
+	local output
+
+	output="$("${binary}" version 2>/dev/null || true)"
+	if [[ -z "${output}" ]]; then
+		output="$("${binary}" --version 2>/dev/null || true)"
+	fi
+
+	[[ -n "${output}" && "${output}" == *"${version#v}"* ]]
+}
+
+# ensure_go_tool resolves a pinned tool, preferring an existing binary only when
+# it is already the pinned version. Accepting whatever happens to be on PATH is
+# how a stale pin survives unnoticed: every developer runs their own build while
+# CI installs the pin on a clean runner, so the two silently diverge.
 ensure_go_tool() {
 	local binary="$1"
 	local module="$2"
 	local version="$3"
+	local candidate
 
-	if command -v "${binary}" >/dev/null 2>&1; then
-		command -v "${binary}"
-		return 0
-	fi
-
-	if [[ -x "${GO_BIN_DIR}/${binary}" ]]; then
-		printf '%s\n' "${GO_BIN_DIR}/${binary}"
-		return 0
-	fi
+	for candidate in "$(command -v "${binary}" 2>/dev/null || true)" "${GO_BIN_DIR}/${binary}"; do
+		if [[ -n "${candidate}" && -x "${candidate}" ]] && tool_version_matches "${candidate}" "${version}"; then
+			printf '%s\n' "${candidate}"
+			return 0
+		fi
+	done
 
 	env GOCACHE="${GOCACHE}" "${GO}" install "${module}@${version}" >/dev/null
 	[[ -x "${GO_BIN_DIR}/${binary}" ]] || die "failed to install ${binary} (${module}@${version})"

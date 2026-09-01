@@ -15,6 +15,9 @@ checks:
   security: true
   prompts: true
   ci: false
+  # szr sits in the execution path of every wrapped command, so allocation and
+  # blocking-I/O regressions show up as latency the user feels on every call.
+  performance: true
 
   quality_rules:
     max_file_lines: 400

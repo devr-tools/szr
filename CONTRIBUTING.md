@@ -6,7 +6,7 @@
 
 - Check existing issues and docs first so work does not duplicate an active thread.
 - Prefer small, reviewable pull requests over large multi-theme batches.
-- Follow the expectations in [CODE_OF_CONDUCT.md](/Users/alex/Documents/GitHub/szr/CODE_OF_CONDUCT.md) in issues, reviews, and PR discussion.
+- Follow the expectations in [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) in issues, reviews, and PR discussion.
 - If the change affects command behavior, update tests in `test/` with the code change.
 - If the change affects installation, releases, or contributor workflow, update the relevant docs in `README.md` or `docs/`.
 
@@ -44,12 +44,11 @@ Use `make commit` if you want an interactive helper that runs `git add .`, asks 
 
 Relevant architecture docs:
 
-- [docs/ARCHITECTURE.md](/Users/alex/Documents/GitHub/szr/docs/ARCHITECTURE.md)
-- [docs/PROFILES.MD](/Users/alex/Documents/GitHub/szr/docs/PROFILES.MD)
-- [docs/PROFILE_REFACTOR_TASKS.md](/Users/alex/Documents/GitHub/szr/docs/PROFILE_REFACTOR_TASKS.md)
-- [docs/profile-families/git.md](/Users/alex/Documents/GitHub/szr/docs/profile-families/git.md)
-- [docs/profile-families/javascript.md](/Users/alex/Documents/GitHub/szr/docs/profile-families/javascript.md)
-- [docs/profile-families/fallback-reducers.md](/Users/alex/Documents/GitHub/szr/docs/profile-families/fallback-reducers.md)
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- [docs/PROFILES.MD](docs/PROFILES.MD)
+- [docs/profile-families/git.md](docs/profile-families/git.md)
+- [docs/profile-families/javascript.md](docs/profile-families/javascript.md)
+- [docs/profile-families/fallback-reducers.md](docs/profile-families/fallback-reducers.md)
 
 ## Coding expectations
 

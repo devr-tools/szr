@@ -15,7 +15,7 @@ env:
   GOCACHE: ${{ github.workspace }}/.gocache
   GO111MODULE: "on"
   GOLANGCI_LINT_VERSION: v2.12.2
-  CODEGUARD_VERSION: v0.2.0
+  CODEGUARD_VERSION: v1.9.0
   MIN_INTERNAL_COVERAGE: "80.0"
 
 concurrency:
@@ -239,7 +239,7 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Run Devr Codeguard
-        uses: devr-tools/codeguard@v1.7.0
+        uses: devr-tools/codeguard@v1.9.0
         with:
           config: codeguard.yaml
           mode: diff
