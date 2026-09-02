@@ -244,9 +244,8 @@ Do not:
 
 ## Related Docs
 
-- [ROADMAP.md](/Users/alex/Documents/GitHub/szr/docs/ROADMAP.md)
-- [PROFILES.MD](/Users/alex/Documents/GitHub/szr/docs/PROFILES.MD)
-- [PROFILE_REFACTOR_TASKS.md](/Users/alex/Documents/GitHub/szr/docs/PROFILE_REFACTOR_TASKS.md)
-- [profile-families/git.md](/Users/alex/Documents/GitHub/szr/docs/profile-families/git.md)
-- [profile-families/javascript.md](/Users/alex/Documents/GitHub/szr/docs/profile-families/javascript.md)
-- [profile-families/fallback-reducers.md](/Users/alex/Documents/GitHub/szr/docs/profile-families/fallback-reducers.md)
+- [ROADMAP.md](ROADMAP.md)
+- [PROFILES.MD](PROFILES.MD)
+- [profile-families/git.md](profile-families/git.md)
+- [profile-families/javascript.md](profile-families/javascript.md)
+- [profile-families/fallback-reducers.md](profile-families/fallback-reducers.md)

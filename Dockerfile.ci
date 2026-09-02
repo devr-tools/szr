@@ -1,7 +1,7 @@
 FROM golang:1.26.3-bookworm
 
 ARG GOLANGCI_LINT_VERSION=v2.12.2
-ARG CODEGUARD_VERSION=v0.2.0
+ARG CODEGUARD_VERSION=v1.9.0
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PATH=/usr/local/go/bin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
